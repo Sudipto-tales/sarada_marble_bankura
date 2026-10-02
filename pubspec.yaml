@@ -1,0 +1,28 @@
+name: maa_sarada
+description: "Maa Sarada — Marble & Sanitation. Premium marble e-commerce, 3D room visualization and cost calculator."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/brand/
+    - assets/images/rooms/
+    - assets/images/categories/
+    - assets/images/banners/
+    - assets/images/products/
+    - assets/images/inspiration/
+    - assets/textures/marble/

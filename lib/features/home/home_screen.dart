@@ -1,0 +1,257 @@
+import 'package:flutter/material.dart';
+
+import '../../core/config/feature_flags.dart';
+import '../../core/routing/routes.dart';
+import '../../core/state/app_scope.dart';
+import '../../core/theme/app_dimens.dart';
+import '../../core/widgets/brand_widgets.dart';
+import '../../core/widgets/state_views.dart';
+import '../../data/models/category.dart';
+import '../../data/models/coupon.dart';
+import '../../data/models/product.dart';
+import '../catalog/widgets/product_card.dart';
+import 'widgets/banner_carousel.dart';
+import 'widgets/home_header.dart';
+import 'widgets/home_sections.dart';
+
+/// Everything the home screen needs, fetched once so there is a single
+/// loading / error / retry surface instead of fifteen.
+class HomeFeed {
+  const HomeFeed({
+    required this.banners,
+    required this.categories,
+    required this.featured,
+    required this.trending,
+    required this.bestSellers,
+    required this.offers,
+    required this.inspiration,
+    required this.recentlyViewed,
+    required this.deals,
+  });
+
+  final List<PromoBanner> banners;
+  final List<Category> categories;
+  final List<Product> featured;
+  final List<Product> trending;
+  final List<Product> bestSellers;
+  final List<Offer> offers;
+  final List<PromoBanner> inspiration;
+  final List<Product> recentlyViewed;
+  final List<Product> deals;
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen>
+    with AutomaticKeepAliveClientMixin {
+  late Future<HomeFeed> _future;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<HomeFeed> _load() async {
+    final deps = AppScope.read(context);
+    final results = await Future.wait([
+      deps.promos.banners(),
+      deps.categories.all(),
+      deps.products.featured(),
+      deps.products.trending(),
+      deps.products.bestSellers(),
+      deps.promos.offers(),
+      deps.promos.inspiration(),
+      deps.products.byIds(deps.browsing.recentlyViewed),
+      deps.products.all(),
+    ]);
+    final all = results[8] as List<Product>;
+    final deals = all.where((p) => p.discount >= 25).toList()
+      ..sort((a, b) => b.discount.compareTo(a.discount));
+    return HomeFeed(
+      banners: results[0] as List<PromoBanner>,
+      categories: results[1] as List<Category>,
+      featured: results[2] as List<Product>,
+      trending: results[3] as List<Product>,
+      bestSellers: results[4] as List<Product>,
+      offers: results[5] as List<Offer>,
+      inspiration: results[6] as List<PromoBanner>,
+      recentlyViewed: results[7] as List<Product>,
+      deals: deals.take(8).toList(),
+    );
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _future = _load());
+    await _future;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: FutureBuilder<HomeFeed>(
+          future: _future,
+          builder: (context, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const CustomScrollView(slivers: [
+                HomeHeader(),
+                SliverToBoxAdapter(child: _HomeSkeleton()),
+              ]);
+            }
+            if (snap.hasError) {
+              return CustomScrollView(slivers: [
+                const HomeHeader(),
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: ErrorView(onRetry: _refresh),
+                ),
+              ]);
+            }
+            return _HomeContent(feed: snap.data!);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeContent extends StatelessWidget {
+  const _HomeContent({required this.feed});
+
+  final HomeFeed feed;
+
+  @override
+  Widget build(BuildContext context) {
+    final deps = AppScope.of(context);
+    return CustomScrollView(
+      slivers: [
+        const HomeHeader(),
+        SliverList.list(children: [
+          const SizedBox(height: AppDimens.sm),
+          BannerCarousel(banners: feed.banners),
+          const SectionGap(),
+          SectionHeader(
+            title: 'Shop by category',
+            subtitle: 'Marble, granite and imported stone',
+            actionLabel: 'All',
+            onAction: () => Navigator.pushNamed(context, Routes.catalog,
+                arguments: const CatalogArgs()),
+          ),
+          CategoryStrip(categories: feed.categories),
+          const SectionGap(),
+          const ModuleShortcuts(),
+          const SectionGap(),
+          SectionHeader(
+            title: 'Featured collection',
+            subtitle: 'Hand-picked slabs from this month',
+            actionLabel: 'See all',
+            onAction: () => Navigator.pushNamed(context, Routes.catalog,
+                arguments: const CatalogArgs(title: 'Featured')),
+          ),
+          ProductRail(products: feed.featured),
+          const SectionGap(),
+          SectionHeader(
+            title: 'Offers for you',
+            subtitle: 'Coupons applied at checkout',
+            actionLabel: 'Coupons',
+            onAction: () => Navigator.pushNamed(context, Routes.coupons),
+          ),
+          OfferStrip(offers: feed.offers),
+          const SectionGap(),
+          if (feed.deals.isNotEmpty) ...[
+            const SectionHeader(
+              title: 'Biggest discounts',
+              subtitle: 'Lots clearing at 25% off or more',
+            ),
+            ProductRail(products: feed.deals),
+            const SectionGap(),
+          ],
+          if (FeatureFlags.visualizationEnabled) ...[
+            const VisualizerPromo(),
+            const SectionGap(),
+          ],
+          const SectionHeader(
+            title: 'Trending now',
+            subtitle: 'What other buyers are viewing this week',
+          ),
+          ProductRail(products: feed.trending),
+          const SectionGap(),
+          const SectionHeader(
+            title: 'Get the look',
+            subtitle: 'Real rooms, shoppable stone',
+          ),
+          InspirationRail(items: feed.inspiration),
+          const SectionGap(),
+          const SectionHeader(
+            title: 'Best sellers',
+            subtitle: 'Consistently reordered by contractors',
+          ),
+          ProductRail(products: feed.bestSellers),
+          const SectionGap(),
+          const TrustStrip(),
+          const SectionGap(),
+          if (feed.recentlyViewed.isNotEmpty) ...[
+            SectionHeader(
+              title: 'Recently viewed',
+              actionLabel: 'Clear',
+              onAction: deps.browsing.clearRecent,
+            ),
+            RecentlyViewedRail(products: feed.recentlyViewed),
+            const SectionGap(),
+          ],
+          const SupportCard(),
+          const SizedBox(height: AppDimens.xxxl),
+        ]),
+      ],
+    );
+  }
+}
+
+class _HomeSkeleton extends StatelessWidget {
+  const _HomeSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppDimens.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: AppDimens.screenPad,
+            child: Container(
+              height: 196,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppDimens.xl),
+          SizedBox(
+            height: 292,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: AppDimens.screenPad,
+              itemCount: 4,
+              separatorBuilder: (_, _) => const SizedBox(width: AppDimens.md),
+              itemBuilder: (context, _) =>
+                  const ProductCardSkeleton(width: 168),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

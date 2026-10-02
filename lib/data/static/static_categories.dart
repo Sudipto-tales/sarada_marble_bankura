@@ -1,0 +1,68 @@
+import '../models/category.dart';
+
+const List<Category> kCategories = [
+  Category(
+    id: 'white_marble',
+    name: 'White Marble',
+    image: 'assets/images/categories/white_marble.webp',
+    description: 'Bright, timeless whites and cool greys for open interiors.',
+    productCount: 2,
+    accent: 0xFFEFF4F6,
+  ),
+  Category(
+    id: 'black_marble',
+    name: 'Black Marble',
+    image: 'assets/images/categories/black_marble.webp',
+    description: 'High-contrast dark stone for accents and statement walls.',
+    productCount: 1,
+    accent: 0xFF1B1F24,
+  ),
+  Category(
+    id: 'beige_marble',
+    name: 'Beige Marble',
+    image: 'assets/images/categories/beige_marble.webp',
+    description: 'Warm neutrals that hide traffic and pair with any timber.',
+    productCount: 3,
+    accent: 0xFFEDE0C8,
+  ),
+  Category(
+    id: 'green_marble',
+    name: 'Green Marble',
+    image: 'assets/images/categories/green_marble.webp',
+    description: 'Deep serpentine greens for feature walls and temple work.',
+    productCount: 2,
+    accent: 0xFF23443A,
+  ),
+  Category(
+    id: 'italian_marble',
+    name: 'Italian Marble',
+    image: 'assets/images/categories/italian_marble.webp',
+    description: 'Carrara, Statuario and Calacatta, imported by the slab.',
+    productCount: 3,
+    accent: 0xFFF6F3EC,
+  ),
+  Category(
+    id: 'indian_marble',
+    name: 'Indian Marble',
+    image: 'assets/images/categories/indian_marble.webp',
+    description: 'Makrana, Ambaji, Katni — quarried and finished in India.',
+    productCount: 4,
+    accent: 0xFFF2EEE6,
+  ),
+  Category(
+    id: 'premium_marble',
+    name: 'Premium & Onyx',
+    image: 'assets/images/categories/premium_marble.webp',
+    description: 'Rare stone: back-lit onyx, travertine, dark Emperador.',
+    productCount: 3,
+    accent: 0xFFE0B676,
+  ),
+  Category(
+    id: 'granite',
+    name: 'Granite',
+    image: 'assets/images/categories/granite.webp',
+    description: 'Hard-wearing counters and floors that resist heat and acid.',
+    productCount: 2,
+    accent: 0xFF2A2D33,
+  ),
+];

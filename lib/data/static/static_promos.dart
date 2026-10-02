@@ -1,0 +1,146 @@
+import '../models/coupon.dart';
+
+final List<Coupon> kCoupons = [
+  Coupon(
+    code: 'MARBLE10',
+    title: '10% off your first order',
+    description: 'Flat 10% off on orders above ₹20,000. Max discount ₹5,000.',
+    percentOff: 10,
+    maxDiscount: 5000,
+    minOrder: 20000,
+    expiresOn: _inDays(24),
+  ),
+  Coupon(
+    code: 'ITALIAN15',
+    title: '15% off imported Italian marble',
+    description: 'Applies on orders above ₹75,000. Max discount ₹18,000.',
+    percentOff: 15,
+    maxDiscount: 18000,
+    minOrder: 75000,
+    expiresOn: _inDays(12),
+  ),
+  Coupon(
+    code: 'FLAT2500',
+    title: '₹2,500 off',
+    description: 'Flat ₹2,500 off on orders above ₹30,000.',
+    percentOff: 0,
+    flatOff: 2500,
+    maxDiscount: 2500,
+    minOrder: 30000,
+    expiresOn: _inDays(40),
+  ),
+  Coupon(
+    code: 'BULK20',
+    title: '20% off bulk projects',
+    description: 'For orders above ₹2,00,000. Max discount ₹45,000.',
+    percentOff: 20,
+    maxDiscount: 45000,
+    minOrder: 200000,
+    expiresOn: _inDays(58),
+  ),
+  Coupon(
+    code: 'GRANITE8',
+    title: '8% off granite counters',
+    description: 'Flat 8% on orders above ₹15,000. Max discount ₹3,000.',
+    percentOff: 8,
+    maxDiscount: 3000,
+    minOrder: 15000,
+    expiresOn: _inDays(19),
+  ),
+];
+
+const List<Offer> kOffers = [
+  Offer(
+    id: 'o1',
+    title: 'Monsoon Interior Sale',
+    subtitle: 'Up to 30% off on Italian marble',
+    image: 'assets/images/banners/offer_1.webp',
+    couponCode: 'ITALIAN15',
+    categoryId: 'italian_marble',
+  ),
+  Offer(
+    id: 'o2',
+    title: 'Kitchen Counter Days',
+    subtitle: 'Granite tops from ₹240 / sq.ft',
+    image: 'assets/images/banners/offer_2.webp',
+    couponCode: 'GRANITE8',
+    categoryId: 'granite',
+  ),
+  Offer(
+    id: 'o3',
+    title: 'Bulk Project Pricing',
+    subtitle: 'Extra 20% off above ₹2 lakh',
+    image: 'assets/images/banners/offer_3.webp',
+    couponCode: 'BULK20',
+  ),
+  Offer(
+    id: 'o4',
+    title: 'Heritage Indian Stone',
+    subtitle: 'Makrana & Ambaji at quarry rates',
+    image: 'assets/images/banners/offer_4.webp',
+    couponCode: 'MARBLE10',
+    categoryId: 'indian_marble',
+  ),
+  Offer(
+    id: 'o5',
+    title: 'Onyx Feature Week',
+    subtitle: 'Back-lit panels, free design consult',
+    image: 'assets/images/banners/offer_5.webp',
+    categoryId: 'premium_marble',
+  ),
+];
+
+const List<PromoBanner> kBanners = [
+  PromoBanner(
+    id: 'b1',
+    title: 'Marble that makes the room',
+    subtitle: 'Hand-picked Italian & Indian slabs, delivered to site',
+    image: 'assets/images/banners/hero_1.webp',
+    ctaLabel: 'Shop premium',
+    categoryId: 'italian_marble',
+  ),
+  PromoBanner(
+    id: 'b2',
+    title: 'Lobby-grade stone',
+    subtitle: 'Mirror-polished Nero Marquina & back-lit onyx',
+    image: 'assets/images/banners/hero_2.webp',
+    ctaLabel: 'Explore',
+    categoryId: 'premium_marble',
+  ),
+  PromoBanner(
+    id: 'b3',
+    title: 'Built for real kitchens',
+    subtitle: 'Heat, acid and knife resistant granite tops',
+    image: 'assets/images/banners/hero_3.webp',
+    ctaLabel: 'Shop granite',
+    categoryId: 'granite',
+  ),
+  PromoBanner(
+    id: 'b4',
+    title: 'See it before you buy it',
+    subtitle: 'Preview any stone in a 3D room, then order',
+    image: 'assets/images/banners/hero_4.webp',
+    ctaLabel: 'Try 3D preview',
+  ),
+  PromoBanner(
+    id: 'b5',
+    title: 'Villa & farmhouse collection',
+    subtitle: 'Warm travertine and beige fields',
+    image: 'assets/images/banners/hero_5.webp',
+    ctaLabel: 'View collection',
+    categoryId: 'beige_marble',
+  ),
+];
+
+/// Editorial "get the look" strip on the home screen.
+const List<PromoBanner> kInspiration = [
+  PromoBanner(id: 'i1', title: 'Statuario living room', subtitle: 'White field, gold accents', image: 'assets/images/inspiration/insp_living.webp', ctaLabel: 'Get the look', productId: 'p_statuario'),
+  PromoBanner(id: 'i2', title: 'Black galaxy kitchen', subtitle: 'Dark counters, warm wood', image: 'assets/images/inspiration/insp_kitchen.webp', ctaLabel: 'Get the look', productId: 'p_black_galaxy'),
+  PromoBanner(id: 'i3', title: 'Onyx reception', subtitle: 'Back-lit stone that glows', image: 'assets/images/inspiration/insp_lobby.webp', ctaLabel: 'Get the look', productId: 'p_onyx_honey'),
+  PromoBanner(id: 'i4', title: 'Crema bedroom', subtitle: 'Cream floor, dark headboard', image: 'assets/images/inspiration/insp_bedroom.webp', ctaLabel: 'Get the look', productId: 'p_crema_marfil'),
+  PromoBanner(id: 'i5', title: 'Carrara bathroom', subtitle: 'Cool white, brass fittings', image: 'assets/images/inspiration/insp_bath.webp', ctaLabel: 'Get the look', productId: 'p_carrara_white'),
+  PromoBanner(id: 'i6', title: 'Green study wall', subtitle: 'Imperial green feature', image: 'assets/images/inspiration/insp_office.webp', ctaLabel: 'Get the look', productId: 'p_imperial_green'),
+  PromoBanner(id: 'i7', title: 'Travertine villa hall', subtitle: 'Honed, matt, glare-free', image: 'assets/images/inspiration/insp_villa.webp', ctaLabel: 'Get the look', productId: 'p_travertine_classic'),
+];
+
+DateTime _inDays(int d) => DateTime.now().add(Duration(days: d));
