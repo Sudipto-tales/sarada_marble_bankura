@@ -1,0 +1,72 @@
+name: Product releases
+on:
+  push:
+    tags: ['website-v*', 'mobile-v*']
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  website:
+    if: startsWith(github.ref_name, 'website-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create website release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
+  mobile:
+    if: startsWith(github.ref_name, 'mobile-v')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.7'
+          channel: stable
+          cache: true
+      - name: Validate release version and signing secrets
+        env:
+          TAG: ${{ github.ref_name }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^version: \([^+]*\).*/\1/p' pubspec.yaml)" = "${TAG#mobile-v}"
+          : "${ANDROID_KEYSTORE_BASE64:?Missing signing keystore}"
+          : "${ANDROID_KEYSTORE_PASSWORD:?Missing store password}"
+          : "${ANDROID_KEY_PASSWORD:?Missing key password}"
+          : "${ANDROID_KEY_ALIAS:?Missing key alias}"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - name: Build signed APK and AAB
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+      - name: Publish mobile release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --generate-notes --title "$TAG"
+          gh release upload "$TAG" build/app/outputs/flutter-apk/app-release.apk build/app/outputs/bundle/release/app-release.aab --clobber
