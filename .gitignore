@@ -1,0 +1,39 @@
+# Environment
+.env
+
+# Composer
+/vendor/
+composer.phar
+composer.lock
+
+# Database files
+/database/database.sqlite
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/editor files
+/.vscode/
+/.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Logs and runtime files
+/logs/
+*.log
+*.cache
+
+# Build and temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.zip
+
+# Ignore generated test reports
+/phpunit.xml
+/phpunit.xml.dist
+
+# Ignore agent files
+/agent/**
