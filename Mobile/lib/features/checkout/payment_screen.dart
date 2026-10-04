@@ -51,8 +51,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final subtotal = items.fold(0.0, (s, i) => s + cart.lineTotal(i));
     final discount = cart.couponDiscount;
     final delivery =
-        (subtotal >= AppConfig.freeDeliveryAbove ? 0.0 : AppConfig.deliveryCharge) +
-            widget.args.deliveryExtra;
+        (subtotal >= AppConfig.freeDeliveryAbove
+            ? 0.0
+            : AppConfig.deliveryCharge) +
+        widget.args.deliveryExtra;
     final tax = (subtotal - discount) * AppConfig.gstPercent / 100;
     final now = DateTime.now();
     final id = 'MS${now.millisecondsSinceEpoch.toString().substring(6)}';
@@ -76,8 +78,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
       deliveryFee: delivery,
       tax: tax,
       paymentMethod: _method,
-      expectedDelivery: now.add(Duration(
-          days: widget.args.slotLabel == 'Express' ? 4 : 8)),
+      expectedDelivery: now.add(
+        Duration(days: widget.args.slotLabel == 'Express' ? 4 : 8),
+      ),
       couponCode: cart.coupon?.code,
       invoiceNo: 'INV-$id',
     );
@@ -102,11 +105,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Widget build(BuildContext context) {
     final deps = AppScope.of(context);
     final cart = deps.cart;
-    final subtotal =
-        widget.args.items.fold(0.0, (s, i) => s + cart.lineTotal(i));
+    final subtotal = widget.args.items.fold(
+      0.0,
+      (s, i) => s + cart.lineTotal(i),
+    );
     final delivery =
-        (subtotal >= AppConfig.freeDeliveryAbove ? 0.0 : AppConfig.deliveryCharge) +
-            widget.args.deliveryExtra;
+        (subtotal >= AppConfig.freeDeliveryAbove
+            ? 0.0
+            : AppConfig.deliveryCharge) +
+        widget.args.deliveryExtra;
     final tax = (subtotal - cart.couponDiscount) * AppConfig.gstPercent / 100;
     final total = subtotal - cart.couponDiscount + delivery + tax;
 
@@ -123,25 +130,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline_rounded,
-                    size: 18, color: AppColors.deep),
+                const Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: AppColors.deep,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Prototype build: payment is simulated. No card details are '
                     'collected and no gateway is contacted.',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AppColors.inkSoft, height: 1.4),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.inkSoft,
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: AppDimens.lg),
-          Text('Choose a payment method',
-              style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Choose a payment method',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: AppDimens.md),
           for (final method in PaymentMethod.values)
             Container(
@@ -154,27 +166,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   width: _method == method ? 1.8 : 1,
                 ),
               ),
-              child: ListTile(
-                onTap: () => setState(() => _method = method),
-                leading: Icon(_icons[method], color: AppColors.deep),
-                title: Text(method.label,
-                    style: Theme.of(context).textTheme.titleSmall),
-                subtitle: Text(_subtitles[method] ?? '',
-                    style: Theme.of(context).textTheme.bodySmall),
-                trailing: Icon(
-                  _method == method
-                      ? Icons.radio_button_checked_rounded
-                      : Icons.radio_button_off_rounded,
-                  color:
-                      _method == method ? AppColors.teal : AppColors.mutedSoft,
-                  size: 20,
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  onTap: () => setState(() => _method = method),
+                  leading: Icon(_icons[method], color: AppColors.deep),
+                  title: Text(
+                    method.label,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  subtitle: Text(
+                    _subtitles[method] ?? '',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  trailing: Icon(
+                    _method == method
+                        ? Icons.radio_button_checked_rounded
+                        : Icons.radio_button_off_rounded,
+                    color: _method == method
+                        ? AppColors.teal
+                        : AppColors.mutedSoft,
+                    size: 20,
+                  ),
                 ),
               ),
             ),
           const SizedBox(height: AppDimens.lg),
           Row(
             children: [
-              const Icon(Icons.lock_rounded, size: 15, color: AppColors.success),
+              const Icon(
+                Icons.lock_rounded,
+                size: 15,
+                color: AppColors.success,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -191,7 +217,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
           padding: const EdgeInsets.all(AppDimens.lg),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
-            border: const Border(top: BorderSide(color: AppColors.line)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.ink.withValues(alpha: 0.05),
+                blurRadius: 20,
+              ),
+            ],
           ),
           child: Row(
             children: [
@@ -199,9 +231,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(Fmt.rupees(total),
-                      style: Theme.of(context).textTheme.titleLarge),
-                  Text('incl. GST', style: Theme.of(context).textTheme.labelSmall),
+                  Text(
+                    Fmt.rupees(total),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  Text(
+                    'incl. GST',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
                 ],
               ),
               const SizedBox(width: AppDimens.lg),

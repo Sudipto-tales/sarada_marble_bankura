@@ -1,6 +1,48 @@
 # Vayu Ecommerce and Developer Console Plan
 
-Status: planned; this document does not imply that the features are implemented.
+Status: dedicated developer login, eight console pages, persisted account permissions, and read-only runtime endpoint implemented. API traffic collection, normalized application-wide RBAC, incidents, alerts, and business traces remain planned.
+
+## Current compact delivery
+
+- The landing page displays a Maa Sarada welcome message.
+- `/developer` redirects signed-out users to `/developer/login`. Authenticated accounts see the overview; the console has eight independently addressable pages. One controller and one shared view use shared CSS/JavaScript assets without chart libraries or build dependencies.
+- `DEVELOPER_ENABLED=false` in environment configuration removes both console routes and skips loading its controller. The flag is defined in `config/config.php` and defaults to true.
+- Console identities are stored separately in `developer_accounts`, with hashed passwords, an allowed role, enabled state, and explicit JSON permission assignments. Authentication stores only the console account ID; current role, enabled state and permissions are fetched on each request. Page-specific permissions also gate server/API fields in the metrics response. Anonymous HTML requests redirect to login; anonymous JSON requests return 401; insufficient page permissions return 403. Customer sessions grant no developer access. Login uses CSRF checks, session ID rotation, a 30-minute inactivity limit, and persistent direct-client-IP throttling (five attempts per 15 minutes). Logout is POST-only and requires CSRF.
+- Five-second polling updates runtime values without page reload, pauses in hidden tabs, supports manual pause, and reports connection failures. Supported hosts expose one-minute load average; PHP memory is request memory, not host memory. CPU, host memory, real API counts, failure rates, and module health require collectors.
+- An explicitly labeled sample preview demonstrates moving traffic counts and the chart. The commerce graph and endpoint list are design definitions, not measured execution or automatically discovered commerce APIs.
+
+## Next implementation sequence
+
+### Delivered page designs
+
+| Page | Current design and interaction | Next data integration |
+| --- | --- | --- |
+| Overview | Cards, throughput chart, runtime snapshot, dependency map, endpoint watch, recent activity | Traffic aggregation and module observations |
+| API registry | Search by path/module/permission, module filter, pagination, endpoint detail dialog, actual registered routes and labeled planned contracts | Method/permission metadata, request history, percentiles, failure rate |
+| Server load | Real supported load-average samples and bounded chart history, request memory, infrastructure collector status | Host CPU/memory/disk, workers, database and queue measurements |
+| Module flows | Selectable commerce nodes, module details, zoom/reset, explicit planned dependency and unknown health states | Trace correlation, dependency edges, failure overlays, module throughput |
+| Incidents | Empty/unconnected state; labeled sample inbox with severity and state filtering | Fingerprints, lifecycle actions, recovery checks, notifications |
+| Live activity | Bounded event stream, pause/resume and clear-visible controls | Sanitized API events, audit actions and job observations |
+| Roles & permissions | Current role/account and explicit granted/denied page permissions | Role management, user assignment and audited permission changes |
+| Settings | Effective read-only configuration and collector roadmap | Validated threshold/retention/alert settings with mutation permissions |
+
+The shared shell highlights the current page, hides inaccessible navigation entries, supports mobile navigation, and provides visible disconnected/paused states. Tables use local filtering and ten-row pagination now; replace this with server-side pagination as the registry grows. Preview values are explicitly simulated and never written to monitoring storage. Preview traces do not imply real execution, and sample events are removed on leaving preview mode.
+
+### Local account setup
+
+From `Website`, run `php vayu developer:create your@email.com`, then enter a password of at least 12 characters at the prompt. Input is currently visible in the CLI. The command initializes only the two dedicated console tables and inserts a new enabled developer account with all current read permissions; it does not grant customer accounts access. Duplicate emails fail rather than replacing credentials. SQLite and MySQL table creation are supported; MongoDB console authentication is not implemented.
+
+Run `php vayu run` and open `/developer/login`. No account is automatically created during page requests, and no default credentials are included. Account editing/recovery and normalized role-permission assignments are subsequent work. The configuration flag removes login, logout, all console pages, and the metrics API when disabled.
+
+Run `php tests/DeveloperAccessTest.php` for isolated authentication checks. Desktop/mobile previews are saved in `Docs/previews/`; overview previews deliberately use labeled simulated traffic.
+
+1. Centralize database-backed roles, permissions, role-permission links, and user-role assignments. Check account state and current permissions on every protected request; distinguish customer ownership checks from role permissions. Route metadata will declare method and permission requirements for all APIs and protected pages.
+2. Register module and endpoint metadata; capture incoming/outgoing requests, timing, outcomes, and request/trace IDs. Replace preview counters and endpoint rows with observed data.
+3. Add a scheduled host collector for CPU, host memory, active workers, database health, and disk usage. Persist bounded history and serve time-window aggregates. Use external availability checks for server outages.
+4. Connect module counts and correlated traces to the flow visualization; show unknown, degraded, and failing states. Add incident grouping and asynchronous alerts.
+5. Introduce server-sent events if polling cost or latency warrants it; keep permission checks, reconnect handling, bounded buffers, and a polling fallback.
+
+Implemented read permissions: `developer.view`, `monitor.apis.read`, `monitor.server.read`, `monitor.workflows.read`, `monitor.incidents.read`, `monitor.events.read`, `monitor.access.read`, and `monitor.settings.read`. Mutation permissions and customer commerce permissions remain future work.
 
 Date: 2026-10-02
 
@@ -14,7 +56,7 @@ The first delivery is the developer console and monitoring foundation. Building 
 
 Vayu provides frontend routes in `app/view.php`, API routes in `api/gateway.php`, controllers in `app/bridge/`, views in `app/page/`, and reusable helpers in `core/`. Configuration uses environment values. SQL database helpers use PDO, with SQLite configured for local development.
 
-There is an existing `core/Auth.php`, but developer authentication and developer routes have not been established. Existing developer credentials must be located and verified before implementation; do not assume the customer authentication table contains a developer account.
+There is an existing customer `core/Auth.php`. Dedicated console authentication now lives in `core/DeveloperAccess.php` and does not reuse customer accounts. Accounts are explicitly provisioned through the CLI; no default developer password is seeded.
 
 The outgoing API helper currently returns response content without consistently classifying HTTP failures. The route dispatcher lacks explicit HTTP method enforcement and developer access guards. Migration execution must be reviewed and repaired before introducing monitoring tables.
 
@@ -38,16 +80,19 @@ Each module has an implementation state and a separate health state. An unimplem
 
 ## Developer access and routes
 
-Visiting `/developer` shows the login form for an unauthenticated visitor and redirects an authenticated developer to the dashboard.
+Visiting `/developer` redirects unauthenticated visitors to `/developer/login`; authenticated, authorized developers see the overview at `/developer`. `/developer/overview` is also supported. Session expiry redirects HTML visitors back to login; the data API returns 401.
 
 | Route | Purpose |
 | --- | --- |
-| `/developer` | Login entry point |
-| `/developer/dashboard` | Health overview and recent activity |
+| `/developer/login` | Dedicated login form (GET) and authentication (POST) |
+| `/developer` | Protected overview |
+| `/developer/overview` | Overview alias |
+| `/developer/server` | Runtime readings and load history |
+| `/developer/access` | Current account permissions and access policy |
 | `/developer/apis` | Registered APIs, metrics, and request history |
 | `/developer/incidents` | Incident list and investigation details |
 | `/developer/workflows` | Interactive business workflow graph |
-| `/developer/knowledge` | Expandable framework knowledge tree |
+| `/developer/knowledge` | Planned future expandable framework knowledge tree |
 | `/developer/activity` | Recorded developer actions and operational updates |
 | `/developer/settings` | Monitoring and notification settings |
 | `/developer/logout` | POST-only session logout |
@@ -212,7 +257,7 @@ If monitoring storage fails, write a bounded fallback log outside the public web
 
 | Location | Planned responsibility |
 | --- | --- |
-| `core/DeveloperAuth.php` | Developer sessions and access checks |
+| `core/DeveloperAccess.php` | Implemented: dedicated sessions, account permissions, login and provisioning |
 | `core/ApiMonitor.php` | Event capture and classification |
 | `core/IncidentManager.php` | Failure grouping and lifecycle |
 | `core/NotificationQueue.php` | Queued alerts and delivery state |
@@ -220,7 +265,7 @@ If monitoring storage fails, write a bounded fallback log outside the public web
 | `core/Helpers.php` | Outgoing API instrumentation |
 | `core/RouteManager.php` | HTTP method enforcement, guards, incoming monitoring |
 | `app/bridge/Developer.php` | Console page controller |
-| `app/page/developer/` | Login and console views |
+| `app/page/developer.php` | Implemented: shared login and eight page views |
 | `assets/developer/` | Styles, polling, and graph interactions |
 | `api/DeveloperApi.php` | Authorized console data and actions |
 | `app/view.php` and `api/gateway.php` | Route registration |

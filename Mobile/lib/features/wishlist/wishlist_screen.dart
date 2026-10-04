@@ -62,32 +62,37 @@ class _WishlistScreenState extends State<WishlistScreen> {
               title: 'Nothing saved yet',
               message: 'Tap the heart on any marble to keep it here for later.',
               actionLabel: 'Browse marble',
-              onAction: () => Navigator.pushNamed(context, Routes.catalog,
-                  arguments: const CatalogArgs()),
+              onAction: () => Navigator.pushNamed(
+                context,
+                Routes.catalog,
+                arguments: const CatalogArgs(),
+              ),
             );
           }
           return FutureBuilder<List<Product>>(
             future: _future,
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
-                return const LoadingView();
+                return const ProductGridSkeleton();
               }
               if (snap.hasError) {
                 return ErrorView(
-                    onRetry: () => setState(() => _future = _load()));
+                  onRetry: () => setState(() => _future = _load()),
+                );
               }
               final saved = (snap.data ?? const <Product>[])
                   .where((p) => wishlist.contains(p.id))
                   .toList();
-              final columns =
-                  AppDimens.gridColumns(MediaQuery.sizeOf(context).width);
+              final columns = AppDimens.gridColumns(
+                MediaQuery.sizeOf(context).width,
+              );
               return GridView.builder(
                 padding: const EdgeInsets.all(AppDimens.lg),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columns,
                   mainAxisSpacing: AppDimens.md,
                   crossAxisSpacing: AppDimens.md,
-                  childAspectRatio: 0.56,
+                  mainAxisExtent: AppDimens.gridProductHeight(context),
                 ),
                 itemCount: saved.length,
                 itemBuilder: (context, i) => ProductCard(product: saved[i]),

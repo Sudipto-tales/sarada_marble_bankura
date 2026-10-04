@@ -7,9 +7,11 @@
 3. Run `composer install` to install dependencies.
 4. Start the application using a local server, for example:
    ```bash
-   php -S localhost:8000
+   php vayu run
    ```
-5. Open the app in your browser at `http://localhost:8000`.
+5. Open the app in your browser at `http://127.0.0.1:8000`. Stop with Ctrl+C.
+
+Choose another port with `php vayu run --port=8080`.
 
 ## Key entry points
 

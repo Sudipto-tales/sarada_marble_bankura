@@ -1,35 +1,36 @@
 import 'package:flutter/material.dart';
 
-/// Palette lifted from the Maa Sarada logo: teal/cyan emblem, deep petrol
-/// shadows, warm gold accent for premium/offer cues.
+/// Stone Atelier: warm limestone, quiet sage and fired-clay actions.
 class AppColors {
   const AppColors._();
 
-  static const Color ice = Color(0xFFD0F0F8);
-  static const Color cyan = Color(0xFF48D0D8);
-  static const Color teal = Color(0xFF2BB8CC);
-  static const Color deep = Color(0xFF0E6C86);
-  static const Color ink = Color(0xFF061826);
-  static const Color inkSoft = Color(0xFF0E2534);
+  static const Color ice = Color(0xFFE4E8DA);
+  static const Color cyan = Color(0xFFC0C9AE);
+  static const Color teal = Color(0xFF647158);
+  static const Color deep = Color(0xFF49553F);
+  static const Color ink = Color(0xFF292D29);
+  static const Color inkSoft = Color(0xFF3B4036);
+  static const Color clay = Color(0xFFAD573C);
+  static const Color sage = Color(0xFF929D89);
 
   static const Color gold = Color(0xFFC9A24B);
   static const Color goldSoft = Color(0xFFF0E2C0);
 
-  static const Color surface = Color(0xFFF6F9FB);
-  static const Color surfaceAlt = Color(0xFFFFFFFF);
-  static const Color line = Color(0xFFE2EAEF);
-  static const Color muted = Color(0xFF6C7F8A);
-  static const Color mutedSoft = Color(0xFF9AAAB4);
+  static const Color surface = Color(0xFFF6F3EC);
+  static const Color surfaceAlt = Color(0xFFFFFDF8);
+  static const Color line = Color(0xFFE5E0D6);
+  static const Color muted = Color(0xFF706E65);
+  static const Color mutedSoft = Color(0xFF89877D);
 
   static const Color success = Color(0xFF1E9E6A);
   static const Color warning = Color(0xFFE08A1E);
   static const Color danger = Color(0xFFD9484F);
 
-  static const Color darkSurface = Color(0xFF0B1B26);
-  static const Color darkCard = Color(0xFF122836);
+  static const Color darkSurface = Color(0xFF1E211C);
+  static const Color darkCard = Color(0xFF2A2E26);
 
   static const LinearGradient brandGradient = LinearGradient(
-    colors: [Color(0xFF7FE7F2), teal, deep],
+    colors: [Color(0xFFB96B4D), clay, Color(0xFF96482F)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

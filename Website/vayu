@@ -1,0 +1,79 @@
+<?php
+
+// This file is both the CLI launcher and the development-server router.
+if (PHP_SAPI === 'cli-server') {
+    $path = rawurldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/');
+    $file = realpath(__DIR__ . $path);
+    $assets = realpath(__DIR__ . '/assets');
+    if ($file && $assets && is_file($file)
+        && str_starts_with($file, $assets . DIRECTORY_SEPARATOR)
+        && in_array(strtolower(pathinfo($file, PATHINFO_EXTENSION)),
+            ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'map'], true)) {
+        return false;
+    }
+    if (preg_match('~^/(?:\.|config(?:/|$)|core(?:/|$)|vendor(?:/|$)|database(?:/|$)|docs(?:/|$)|app(?:/|$)|vayu$|composer\.)~i', $path)) {
+        http_response_code(404);
+        echo 'Not found';
+        return;
+    }
+    $_SERVER['SCRIPT_NAME'] = '/index.php';
+    require __DIR__ . '/index.php';
+    return;
+}
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
+$command = $argv[1] ?? 'help';
+if (in_array($command, ['help', '--help', '-h'], true)) {
+    echo "Vayu development server\n\nUsage: php vayu run [--host=127.0.0.1] [--port=8000]\n\nStop with Ctrl+C.\n";
+    echo "Create a console account: php vayu developer:create you@example.com\n";
+    exit(0);
+}
+if ($command === 'developer:create') {
+    require __DIR__ . '/vendor/autoload.php';
+    Dotenv\Dotenv::createImmutable(__DIR__)->safeLoad();
+    require __DIR__ . '/config/env.php';
+    require __DIR__ . '/config/config.php';
+    require __DIR__ . '/config/db.php';
+    require __DIR__ . '/core/DeveloperAccess.php';
+    echo "Enter a password (at least 12 characters; input is visible): ";
+    $password = rtrim(fgets(STDIN) ?: '', "\r\n");
+    try {
+        DeveloperAccess::provision($argv[2] ?? '', $password);
+        echo "Developer account created. Sign in at /developer/login.\n";
+        exit(0);
+    } catch (Throwable $e) {
+        fwrite(STDERR, "Account could not be created. Check the email, password length, existing account, and database configuration.\n");
+        exit(1);
+    }
+}
+if ($command !== 'run') {
+    fwrite(STDERR, "Unknown command. Use: php vayu --help\n");
+    exit(1);
+}
+$host = '127.0.0.1';
+$port = '8000';
+foreach (array_slice($argv, 2) as $option) {
+    if (str_starts_with($option, '--host=')) $host = substr($option, 7);
+    elseif (str_starts_with($option, '--port=')) $port = substr($option, 7);
+    else { fwrite(STDERR, "Unknown option: {$option}\n"); exit(1); }
+}
+if (!filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && $host !== 'localhost') {
+    fwrite(STDERR, "Host must be localhost or an IPv4 address.\n");
+    exit(1);
+}
+if (!ctype_digit($port) || (int) $port < 1 || (int) $port > 65535) {
+    fwrite(STDERR, "Port must be between 1 and 65535.\n");
+    exit(1);
+}
+echo "Vayu running at http://{$host}:{$port}\nStop with Ctrl+C.\n";
+$process = proc_open([PHP_BINARY, '-d', 'variables_order=EGPCS', '-S', "{$host}:{$port}", '-t', __DIR__, __FILE__],
+    [0 => STDIN, 1 => STDOUT, 2 => STDERR], $pipes, __DIR__);
+if (!is_resource($process)) {
+    fwrite(STDERR, "Unable to start PHP development server.\n");
+    exit(1);
+}
+exit(proc_close($process));

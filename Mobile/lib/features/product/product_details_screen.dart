@@ -12,6 +12,7 @@ import '../../core/widgets/feedback.dart';
 import '../../core/widgets/price_text.dart';
 import '../../core/widgets/quantity_stepper.dart';
 import '../../core/widgets/state_views.dart';
+import '../../core/widgets/shimmer.dart';
 import '../../data/models/product.dart';
 import '../../data/models/review.dart';
 import '../catalog/widgets/product_card.dart';
@@ -76,8 +77,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   /// screen decides what it means (prefill the quantity).
   void _onCalculated(CalculationResult result) {
     setState(() => _sqFt = result.requiredSqFt);
-    Toast.show(context,
-        'Quantity set to ${Fmt.sqft(result.requiredSqFt)} from the calculator');
+    Toast.show(
+      context,
+      'Quantity set to ${Fmt.sqft(result.requiredSqFt)} from the calculator',
+    );
   }
 
   @override
@@ -116,10 +119,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           return SafeArea(
             child: Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimens.lg, vertical: AppDimens.md),
+                horizontal: AppDimens.lg,
+                vertical: AppDimens.md,
+              ),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                border: const Border(top: BorderSide(color: AppColors.line)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(32),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.ink.withValues(alpha: 0.06),
+                    blurRadius: 24,
+                  ),
+                ],
               ),
               child: Row(
                 children: [
@@ -130,10 +143,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         onPressed: product.inStock
                             ? () => _addToCart(product)
                             : null,
-                        icon: const Icon(Icons.add_shopping_cart_rounded,
-                            size: 18),
+                        icon: const Icon(
+                          Icons.add_shopping_cart_rounded,
+                          size: 18,
+                        ),
                         label: Text(
-                            cart.contains(product.id) ? 'Add more' : 'Add to cart'),
+                          cart.contains(product.id)
+                              ? 'Add more'
+                              : 'Add to cart',
+                        ),
                       ),
                     ),
                   ),
@@ -210,11 +228,14 @@ class _Content extends StatelessWidget {
                   if (!ok) {
                     Toast.error(context, 'Compare holds up to 4 products');
                   } else if (browsing.isComparing(product.id)) {
-                    Toast.show(context, 'Added to compare',
-                        actionLabel: browsing.canCompare ? 'Compare' : null,
-                        onAction: browsing.canCompare
-                            ? () => Navigator.pushNamed(context, Routes.compare)
-                            : null);
+                    Toast.show(
+                      context,
+                      'Added to compare',
+                      actionLabel: browsing.canCompare ? 'Compare' : null,
+                      onAction: browsing.canCompare
+                          ? () => Navigator.pushNamed(context, Routes.compare)
+                          : null,
+                    );
                   }
                 },
                 icon: Icon(
@@ -232,148 +253,166 @@ class _Content extends StatelessWidget {
               builder: (context, wishlist) => IconButton(
                 onPressed: () {
                   final added = wishlist.toggle(product.id);
-                  Toast.show(context,
-                      added ? 'Saved to wishlist' : 'Removed from wishlist');
+                  Toast.show(
+                    context,
+                    added ? 'Saved to wishlist' : 'Removed from wishlist',
+                  );
                 },
                 icon: Icon(
                   wishlist.contains(product.id)
                       ? Icons.favorite_rounded
                       : Icons.favorite_border_rounded,
-                  color: wishlist.contains(product.id) ? AppColors.danger : null,
+                  color: wishlist.contains(product.id)
+                      ? AppColors.danger
+                      : null,
                 ),
               ),
             ),
           ],
         ),
-        SliverList.list(children: [
-          Padding(
-            padding: AppDimens.screenPad,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: AppDimens.md),
-                Row(
-                  children: [
-                    if (product.isBestSeller)
-                      const TagChip(
-                        label: 'BESTSELLER',
-                        color: AppColors.ink,
-                        background: AppColors.goldSoft,
-                        dense: true,
-                      ),
-                    if (product.isTrending) ...[
-                      const SizedBox(width: 6),
-                      const TagChip(
+        SliverList.list(
+          children: [
+            Padding(
+              padding: AppDimens.screenPad,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: AppDimens.md),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (product.isBestSeller)
+                        const TagChip(
+                          label: 'BESTSELLER',
+                          color: AppColors.ink,
+                          background: AppColors.goldSoft,
+                          dense: true,
+                        ),
+                      if (product.isTrending) ...[
+                        const SizedBox(width: 6),
+                        const TagChip(
                           label: 'TRENDING',
                           color: AppColors.deep,
-                          dense: true),
+                          dense: true,
+                        ),
+                      ],
+                      Text(product.brand, style: t.labelSmall),
                     ],
-                    const Spacer(),
-                    Text(product.brand, style: t.labelSmall),
-                  ],
-                ),
-                const SizedBox(height: AppDimens.sm),
-                Text(product.name, style: t.headlineSmall),
-                const SizedBox(height: 6),
-                Text(
-                  '${product.color} · ${product.finish} · ${product.origin}',
-                  style: t.bodySmall,
-                ),
-                const SizedBox(height: AppDimens.md),
-                Row(
-                  children: [
-                    RatingBadge(
-                        rating: product.rating, count: product.reviewCount),
-                    const SizedBox(width: AppDimens.md),
-                    if (product.inStock)
-                      TagChip(
-                        label: product.isLowStock
-                            ? 'Only ${product.stock} sq.ft left'
-                            : 'In stock',
-                        color: product.isLowStock
-                            ? AppColors.warning
-                            : AppColors.success,
-                        dense: true,
-                      )
-                    else
-                      const TagChip(
+                  ),
+                  const SizedBox(height: AppDimens.sm),
+                  Text(product.name, style: t.headlineSmall),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${product.color} · ${product.finish} · ${product.origin}',
+                    style: t.bodySmall,
+                  ),
+                  const SizedBox(height: AppDimens.md),
+                  Row(
+                    children: [
+                      RatingBadge(
+                        rating: product.rating,
+                        count: product.reviewCount,
+                      ),
+                      const SizedBox(width: AppDimens.md),
+                      if (product.inStock)
+                        TagChip(
+                          label: product.isLowStock
+                              ? 'Only ${product.stock} sq.ft left'
+                              : 'In stock',
+                          color: product.isLowStock
+                              ? AppColors.warning
+                              : AppColors.success,
+                          dense: true,
+                        )
+                      else
+                        const TagChip(
                           label: 'Out of stock',
                           color: AppColors.danger,
-                          dense: true),
-                  ],
-                ),
-                const SizedBox(height: AppDimens.lg),
-                PriceText(
-                  price: product.pricePerSqFt,
-                  original: product.originalPrice,
-                  discount: product.discount,
-                  size: 26,
-                ),
-                Text('Inclusive of edge polishing. GST extra.',
-                    style: t.labelSmall),
-                const SizedBox(height: AppDimens.lg),
-                _QuantityBlock(
-                  sqFt: sqFt,
-                  onSqFt: onSqFt,
-                  estimate: estimate,
-                  product: product,
-                  onCalculated: onCalculated,
-                ),
-              ],
-            ),
-          ),
-          const SectionGap(),
-          if (FeatureFlags.visualizationEnabled) _VisualizeCta(product: product),
-          const SectionGap(),
-          _DeliveryBlock(product: product),
-          const SectionGap(),
-          SectionHeader(title: 'About this stone'),
-          Padding(
-            padding: AppDimens.screenPad,
-            child: Text(product.description,
-                style: t.bodyLarge?.copyWith(height: 1.55)),
-          ),
-          const SizedBox(height: AppDimens.lg),
-          Padding(
-            padding: AppDimens.screenPad,
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final use in product.applications)
-                  TagChip(label: use, color: AppColors.deep),
-              ],
-            ),
-          ),
-          const SectionGap(),
-          const SectionHeader(title: 'Specifications'),
-          ProductSpecs(product: product),
-          const SectionGap(),
-          ReviewSummary(
-            product: product,
-            reviews: data.reviews,
-            breakdown: data.breakdown,
-          ),
-          const SectionGap(),
-          if (data.similar.isNotEmpty) ...[
-            const SectionHeader(
-              title: 'Similar marble',
-              subtitle: 'Same family, different budget',
-            ),
-            SizedBox(
-              height: 292,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: AppDimens.screenPad,
-                itemCount: data.similar.length,
-                separatorBuilder: (_, _) => const SizedBox(width: AppDimens.md),
-                itemBuilder: (context, i) =>
-                    ProductCard(product: data.similar[i], width: 168),
+                          dense: true,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimens.lg),
+                  PriceText(
+                    price: product.pricePerSqFt,
+                    original: product.originalPrice,
+                    discount: product.discount,
+                    size: 26,
+                  ),
+                  Text(
+                    'Inclusive of edge polishing. GST extra.',
+                    style: t.labelSmall,
+                  ),
+                  const SizedBox(height: AppDimens.lg),
+                  _QuantityBlock(
+                    sqFt: sqFt,
+                    onSqFt: onSqFt,
+                    estimate: estimate,
+                    product: product,
+                    onCalculated: onCalculated,
+                  ),
+                ],
               ),
             ),
+            const SectionGap(),
+            if (FeatureFlags.visualizationEnabled)
+              _VisualizeCta(product: product),
+            const SectionGap(),
+            _DeliveryBlock(product: product),
+            const SectionGap(),
+            SectionHeader(title: 'About this stone'),
+            Padding(
+              padding: AppDimens.screenPad,
+              child: Text(
+                product.description,
+                style: t.bodyLarge?.copyWith(height: 1.55),
+              ),
+            ),
+            const SizedBox(height: AppDimens.lg),
+            Padding(
+              padding: AppDimens.screenPad,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final use in product.applications)
+                    TagChip(label: use, color: AppColors.deep),
+                ],
+              ),
+            ),
+            const SectionGap(),
+            const SectionHeader(title: 'Specifications'),
+            ProductSpecs(product: product),
+            const SectionGap(),
+            ReviewSummary(
+              product: product,
+              reviews: data.reviews,
+              breakdown: data.breakdown,
+            ),
+            const SectionGap(),
+            if (data.similar.isNotEmpty) ...[
+              const SectionHeader(
+                title: 'Similar marble',
+                subtitle: 'Same family, different budget',
+              ),
+              SizedBox(
+                height: AppDimens.productHeight(context, 168),
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: AppDimens.screenPad,
+                  itemCount: data.similar.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(width: AppDimens.md),
+                  itemBuilder: (context, i) =>
+                      ProductCard(product: data.similar[i], width: 168),
+                ),
+              ),
+            ],
+            const SizedBox(height: AppDimens.xxxl),
           ],
-          const SizedBox(height: AppDimens.xxxl),
-        ]),
+        ),
       ],
     );
   }
@@ -435,8 +474,11 @@ class _QuantityBlock extends StatelessWidget {
               },
               child: Row(
                 children: [
-                  const Icon(Icons.calculate_rounded,
-                      size: 19, color: AppColors.deep),
+                  const Icon(
+                    Icons.calculate_rounded,
+                    size: 19,
+                    color: AppColors.deep,
+                  ),
                   const SizedBox(width: AppDimens.md),
                   Expanded(
                     child: Text(
@@ -479,8 +521,11 @@ class _VisualizeCta extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.view_in_ar_rounded,
-                  size: 28, color: Colors.white),
+              const Icon(
+                Icons.view_in_ar_rounded,
+                size: 28,
+                color: Colors.white,
+              ),
               const SizedBox(width: AppDimens.md),
               Expanded(
                 child: Column(
@@ -541,9 +586,11 @@ class _DeliveryBlockState extends State<_DeliveryBlock> {
     }
     // Static rule for the prototype: even PIN codes get the faster window.
     final fast = int.parse(pin) % 2 == 0;
-    setState(() => _message = fast
-        ? 'Deliverable · site delivery in 5-6 days'
-        : 'Deliverable · site delivery in 8-9 days');
+    setState(
+      () => _message = fast
+          ? 'Deliverable · site delivery in 5-6 days'
+          : 'Deliverable · site delivery in 8-9 days',
+    );
   }
 
   @override
@@ -562,11 +609,13 @@ class _DeliveryBlockState extends State<_DeliveryBlock> {
           children: [
             Row(
               children: [
-                const Icon(Icons.local_shipping_outlined,
-                    size: 19, color: AppColors.deep),
+                const Icon(
+                  Icons.local_shipping_outlined,
+                  size: 19,
+                  color: AppColors.deep,
+                ),
                 const SizedBox(width: 10),
-                Text('Delivery',
-                    style: Theme.of(context).textTheme.titleSmall),
+                Text('Delivery', style: Theme.of(context).textTheme.titleSmall),
               ],
             ),
             const SizedBox(height: AppDimens.md),
@@ -588,7 +637,8 @@ class _DeliveryBlockState extends State<_DeliveryBlock> {
                 OutlinedButton(
                   onPressed: _check,
                   style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 46)),
+                    minimumSize: const Size(0, 46),
+                  ),
                   child: const Text('Check'),
                 ),
               ],
@@ -598,25 +648,28 @@ class _DeliveryBlockState extends State<_DeliveryBlock> {
               Text(
                 _message!,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: _message!.startsWith('Enter')
-                          ? AppColors.danger
-                          : AppColors.success,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: _message!.startsWith('Enter')
+                      ? AppColors.danger
+                      : AppColors.success,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
             const Divider(height: AppDimens.xl),
             const _Promise(
-                icon: Icons.replay_rounded,
-                text: '7-day replacement for damaged or mismatched slabs'),
+              icon: Icons.replay_rounded,
+              text: '7-day replacement for damaged or mismatched slabs',
+            ),
             const SizedBox(height: 10),
             const _Promise(
-                icon: Icons.verified_outlined,
-                text: 'Quarry-graded, no seconds or patched slabs'),
+              icon: Icons.verified_outlined,
+              text: 'Quarry-graded, no seconds or patched slabs',
+            ),
             const SizedBox(height: 10),
             const _Promise(
-                icon: Icons.handyman_outlined,
-                text: 'Installation partners available in 40+ cities'),
+              icon: Icons.handyman_outlined,
+              text: 'Installation partners available in 40+ cities',
+            ),
           ],
         ),
       ),
@@ -632,28 +685,61 @@ class _Promise extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          Icon(icon, size: 16, color: AppColors.muted),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text, style: Theme.of(context).textTheme.bodySmall),
-          ),
-        ],
-      );
+    children: [
+      Icon(icon, size: 16, color: AppColors.muted),
+      const SizedBox(width: 10),
+      Expanded(child: Text(text, style: Theme.of(context).textTheme.bodySmall)),
+    ],
+  );
 }
 
 class _DetailsSkeleton extends StatelessWidget {
   const _DetailsSkeleton();
 
   @override
-  Widget build(BuildContext context) => ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          Container(height: 320, color: AppColors.line.withValues(alpha: 0.5)),
-          const Padding(
-            padding: EdgeInsets.all(AppDimens.lg),
-            child: LoadingView(),
+  Widget build(BuildContext context) => CustomScrollView(
+    slivers: [
+      SliverAppBar(
+        pinned: true,
+        expandedHeight: 360,
+        flexibleSpace: FlexibleSpaceBar(
+          background: Padding(
+            padding: EdgeInsets.only(
+              top: MediaQuery.paddingOf(context).top + 56,
+              left: 16,
+              right: 16,
+              bottom: 12,
+            ),
+            child: const Shimmer(height: 300, radius: 32),
           ),
-        ],
-      );
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Semantics(
+          label: 'Loading marble details',
+          child: const Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Shimmer(width: 88, height: 20),
+                SizedBox(height: 16),
+                Shimmer(width: 240, height: 28),
+                SizedBox(height: 12),
+                Shimmer(width: 180, height: 14),
+                SizedBox(height: 20),
+                Shimmer(width: 100, height: 20),
+                SizedBox(height: 20),
+                Shimmer(width: 140, height: 32),
+                SizedBox(height: 24),
+                Shimmer(width: double.infinity, height: 76, radius: 24),
+                SizedBox(height: 20),
+                Shimmer(width: double.infinity, height: 100, radius: 24),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
 }

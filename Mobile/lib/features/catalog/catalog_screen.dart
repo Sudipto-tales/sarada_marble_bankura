@@ -101,7 +101,8 @@ class _CatalogScreenState extends State<CatalogScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final title = widget.args?.title ??
+    final title =
+        widget.args?.title ??
         (widget.args?.categoryId != null ? 'Category' : 'All marble');
     final deps = AppScope.of(context);
 
@@ -137,7 +138,7 @@ class _CatalogScreenState extends State<CatalogScreen>
               future: _future,
               builder: (context, snap) {
                 if (snap.connectionState != ConnectionState.done) {
-                  return _GridSkeleton();
+                  return const ProductGridSkeleton();
                 }
                 if (snap.hasError) {
                   return ErrorView(onRetry: () => _apply(_filter));
@@ -150,8 +151,9 @@ class _CatalogScreenState extends State<CatalogScreen>
                     message:
                         'Try widening the price range or clearing a filter or two.',
                     actionLabel: _filter.isEmpty ? null : 'Clear filters',
-                    onAction:
-                        _filter.isEmpty ? null : () => _apply(_filter.cleared()),
+                    onAction: _filter.isEmpty
+                        ? null
+                        : () => _apply(_filter.cleared()),
                   );
                 }
                 return _ProductGrid(
@@ -205,7 +207,11 @@ class _ProductGrid extends StatelessWidget {
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(
-              AppDimens.lg, AppDimens.md, AppDimens.lg, 0),
+            AppDimens.lg,
+            AppDimens.md,
+            AppDimens.lg,
+            0,
+          ),
           sliver: SliverToBoxAdapter(
             child: Text(header, style: Theme.of(context).textTheme.bodySmall),
           ),
@@ -217,31 +223,13 @@ class _ProductGrid extends StatelessWidget {
               crossAxisCount: columns,
               mainAxisSpacing: AppDimens.md,
               crossAxisSpacing: AppDimens.md,
-              childAspectRatio: 0.56,
+              mainAxisExtent: AppDimens.gridProductHeight(context),
             ),
             itemCount: products.length,
             itemBuilder: (context, i) => ProductCard(product: products[i]),
           ),
         ),
       ],
-    );
-  }
-}
-
-class _GridSkeleton extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final columns = AppDimens.gridColumns(MediaQuery.sizeOf(context).width);
-    return GridView.builder(
-      padding: const EdgeInsets.all(AppDimens.lg),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: columns,
-        mainAxisSpacing: AppDimens.md,
-        crossAxisSpacing: AppDimens.md,
-        childAspectRatio: 0.56,
-      ),
-      itemCount: 6,
-      itemBuilder: (context, _) => const ProductCardSkeleton(),
     );
   }
 }
@@ -269,7 +257,9 @@ class _CategoryChips extends StatelessWidget {
           return ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(
-                horizontal: AppDimens.lg, vertical: AppDimens.sm),
+              horizontal: AppDimens.lg,
+              vertical: AppDimens.sm,
+            ),
             itemCount: categories.length,
             separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (context, i) {
@@ -305,7 +295,13 @@ class _FilterBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        border: const Border(top: BorderSide(color: AppColors.line)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.ink.withValues(alpha: 0.05),
+            blurRadius: 20,
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -342,12 +338,17 @@ class _FilterBar extends StatelessWidget {
                   children: [
                     const Icon(Icons.tune_rounded, size: 19),
                     const SizedBox(width: 8),
-                    Text('Filters', style: Theme.of(context).textTheme.labelLarge),
+                    Text(
+                      'Filters',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
                     if (activeCount > 0) ...[
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.teal,
                           borderRadius: BorderRadius.circular(9),
@@ -388,18 +389,26 @@ class _CompareTray extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppDimens.lg, vertical: AppDimens.sm),
+        horizontal: AppDimens.lg,
+        vertical: AppDimens.sm,
+      ),
       color: AppColors.inkSoft,
       child: Row(
         children: [
-          Icon(Icons.compare_arrows_rounded,
-              size: 18, color: AppColors.cyan.withValues(alpha: 0.9)),
+          Icon(
+            Icons.compare_arrows_rounded,
+            size: 18,
+            color: AppColors.cyan.withValues(alpha: 0.9),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               '$count selected to compare',
               style: const TextStyle(
-                  color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w600),
+                color: Colors.white,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           TextButton(
@@ -411,7 +420,8 @@ class _CompareTray extends StatelessWidget {
               minimumSize: const Size(0, 36),
               padding: const EdgeInsets.symmetric(horizontal: 16),
             ),
-            onPressed: onCompare ??
+            onPressed:
+                onCompare ??
                 () => Toast.show(context, 'Select at least 2 products'),
             child: const Text('Compare'),
           ),

@@ -47,15 +47,17 @@ class CartScreen extends StatelessWidget {
               message:
                   'Browse the catalog and add the marble you need. Quantities are in square feet.',
               actionLabel: 'Browse marble',
-              onAction: () => Navigator.pushNamed(context, Routes.catalog,
-                  arguments: const CatalogArgs()),
+              onAction: () => Navigator.pushNamed(
+                context,
+                Routes.catalog,
+                arguments: const CatalogArgs(),
+              ),
             );
           }
           return ListView(
             padding: const EdgeInsets.only(bottom: AppDimens.xxxl),
             children: [
-              for (final item in cart.items)
-                _CartLine(item: item, cart: cart),
+              for (final item in cart.items) _CartLine(item: item, cart: cart),
               const SizedBox(height: AppDimens.md),
               _CouponRow(cart: cart),
               const SizedBox(height: AppDimens.md),
@@ -82,7 +84,15 @@ class CartScreen extends StatelessWidget {
               padding: const EdgeInsets.all(AppDimens.lg),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                border: const Border(top: BorderSide(color: AppColors.line)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.ink.withValues(alpha: 0.05),
+                    blurRadius: 20,
+                  ),
+                ],
               ),
               child: Row(
                 children: [
@@ -90,10 +100,14 @@ class CartScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(Fmt.rupees(cart.total),
-                          style: Theme.of(context).textTheme.titleLarge),
-                      Text('${Fmt.sqft(cart.totalSqFt)} total',
-                          style: Theme.of(context).textTheme.bodySmall),
+                      Text(
+                        Fmt.rupees(cart.total),
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      Text(
+                        '${Fmt.sqft(cart.totalSqFt)} total',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ],
                   ),
                   const SizedBox(width: AppDimens.lg),
@@ -141,7 +155,10 @@ class _CartLine extends StatelessWidget {
         alignment: Alignment.centerRight,
         color: AppColors.danger.withValues(alpha: 0.12),
         padding: const EdgeInsets.only(right: AppDimens.xl),
-        child: const Icon(Icons.delete_outline_rounded, color: AppColors.danger),
+        child: const Icon(
+          Icons.delete_outline_rounded,
+          color: AppColors.danger,
+        ),
       ),
       onDismissed: (_) {
         cart.remove(item.productId);
@@ -149,7 +166,11 @@ class _CartLine extends StatelessWidget {
       },
       child: Container(
         margin: const EdgeInsets.fromLTRB(
-            AppDimens.lg, AppDimens.md, AppDimens.lg, 0),
+          AppDimens.lg,
+          AppDimens.md,
+          AppDimens.lg,
+          0,
+        ),
         padding: const EdgeInsets.all(AppDimens.md),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
@@ -163,23 +184,33 @@ class _CartLine extends StatelessWidget {
               children: [
                 InkWell(
                   onTap: () => Navigator.pushNamed(
-                      context, Routes.productDetails,
-                      arguments: ProductArgs(product.id)),
-                  child: AppImage(product.image,
-                      width: 76, height: 76, radius: AppDimens.radiusSm),
+                    context,
+                    Routes.productDetails,
+                    arguments: ProductArgs(product.id),
+                  ),
+                  child: AppImage(
+                    product.image,
+                    width: 76,
+                    height: 76,
+                    radius: AppDimens.radiusSm,
+                  ),
                 ),
                 const SizedBox(width: AppDimens.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(product.name,
-                          style: t.titleSmall,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      Text(
+                        product.name,
+                        style: t.titleSmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       const SizedBox(height: 2),
-                      Text('${product.finish} · ${product.thickness}',
-                          style: t.bodySmall),
+                      Text(
+                        '${product.finish} · ${product.thickness}',
+                        style: t.bodySmall,
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         '${Fmt.rupees(product.pricePerSqFt)}/sq.ft',
@@ -265,8 +296,9 @@ class _CouponRow extends StatelessWidget {
         onTap: () async {
           final result = await Navigator.pushNamed(context, Routes.coupons);
           if (result is String && context.mounted) {
-            final coupon =
-                await AppScope.read(context).promos.couponByCode(result);
+            final coupon = await AppScope.read(
+              context,
+            ).promos.couponByCode(result);
             if (!context.mounted) return;
             if (coupon == null || !coupon.isApplicable(cart.subtotal)) {
               Toast.error(context, 'This coupon does not apply to your cart');
@@ -287,9 +319,11 @@ class _CouponRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(Icons.local_offer_rounded,
-                  size: 19,
-                  color: applied == null ? AppColors.gold : AppColors.success),
+              Icon(
+                Icons.local_offer_rounded,
+                size: 19,
+                color: applied == null ? AppColors.gold : AppColors.success,
+              ),
               const SizedBox(width: AppDimens.md),
               Expanded(
                 child: Text(
@@ -329,16 +363,19 @@ class _DeliveryPromise extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(Icons.local_shipping_rounded,
-                size: 20, color: AppColors.deep),
+            const Icon(
+              Icons.local_shipping_rounded,
+              size: 20,
+              color: AppColors.deep,
+            ),
             const SizedBox(width: AppDimens.md),
             Expanded(
               child: Text(
                 'Slabs are crated and edge-protected. Site delivery in 5-9 days, unloading assistance included.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AppColors.inkSoft, height: 1.35),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.inkSoft,
+                  height: 1.35,
+                ),
               ),
             ),
           ],

@@ -29,7 +29,10 @@ class ProductRail extends StatelessWidget {
   Widget build(BuildContext context) {
     if (products.isEmpty) return const SizedBox.shrink();
     return SizedBox(
-      height: height,
+      height: AppDimens.productHeight(
+        context,
+        cardWidth,
+      ).clamp(height, double.infinity),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: AppDimens.screenPad,
@@ -64,17 +67,23 @@ class CategoryStrip extends StatelessWidget {
               children: [
                 InkWell(
                   borderRadius: BorderRadius.circular(40),
-                  onTap: () => Navigator.pushNamed(context, Routes.catalog,
-                      arguments: CatalogArgs(categoryId: c.id, title: c.name)),
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    Routes.catalog,
+                    arguments: CatalogArgs(categoryId: c.id, title: c.name),
+                  ),
                   child: Container(
                     width: 72,
                     height: 72,
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppColors.brandGradient,
+                      borderRadius: AppDimens.stoneCurve,
+                      color: AppColors.line,
                     ),
-                    child: ClipOval(child: AppImage(c.image)),
+                    child: ClipRRect(
+                      borderRadius: AppDimens.stoneCurve,
+                      child: AppImage(c.image),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 7),
@@ -84,9 +93,9 @@ class CategoryStrip extends StatelessWidget {
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        height: 1.2,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurface,
+                    height: 1.2,
+                  ),
                 ),
               ],
             ),
@@ -111,8 +120,11 @@ class ModuleShortcuts extends StatelessWidget {
           subtitle: 'Walk through a 3D room and swap marble live',
           icon: Icons.view_in_ar_rounded,
           image: 'assets/images/rooms/luxury_living_thumb.webp',
-          onTap: () => Navigator.pushNamed(context, Routes.visualizer,
-              arguments: const VisualizerArgs()),
+          onTap: () => Navigator.pushNamed(
+            context,
+            Routes.visualizer,
+            arguments: const VisualizerArgs(),
+          ),
         ),
       if (FeatureFlags.calculatorEnabled)
         _ShortcutTile(
@@ -120,8 +132,11 @@ class ModuleShortcuts extends StatelessWidget {
           subtitle: 'Area, wastage and slab count in one go',
           icon: Icons.calculate_rounded,
           image: 'assets/images/rooms/modern_kitchen_thumb.webp',
-          onTap: () => Navigator.pushNamed(context, Routes.calculator,
-              arguments: const CalculatorArgs()),
+          onTap: () => Navigator.pushNamed(
+            context,
+            Routes.calculator,
+            arguments: const CalculatorArgs(),
+          ),
         ),
     ];
     if (tiles.isEmpty) return const SizedBox.shrink();
@@ -242,7 +257,10 @@ class OfferStrip extends StatelessWidget {
               context,
               Routes.catalog,
               arguments: CatalogArgs(
-                  categoryId: o.categoryId, title: o.title, onlyOffers: true),
+                categoryId: o.categoryId,
+                title: o.title,
+                onlyOffers: true,
+              ),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppDimens.radiusMd),
@@ -319,8 +337,11 @@ class InspirationRail extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppDimens.radiusMd),
             onTap: item.productId == null
                 ? null
-                : () => Navigator.pushNamed(context, Routes.productDetails,
-                    arguments: ProductArgs(item.productId!)),
+                : () => Navigator.pushNamed(
+                    context,
+                    Routes.productDetails,
+                    arguments: ProductArgs(item.productId!),
+                  ),
             child: SizedBox(
               width: 260,
               child: Column(
@@ -333,10 +354,14 @@ class InspirationRail extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 9),
-                  Text(item.title,
-                      style: Theme.of(context).textTheme.titleSmall),
-                  Text(item.subtitle,
-                      style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    item.title,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  Text(
+                    item.subtitle,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
             ),
@@ -353,9 +378,17 @@ class TrustStrip extends StatelessWidget {
 
   static const _items = [
     (Icons.verified_rounded, 'Quarry direct', 'Graded slabs, no seconds'),
-    (Icons.local_shipping_rounded, 'Site delivery', 'Crated and edge-protected'),
+    (
+      Icons.local_shipping_rounded,
+      'Site delivery',
+      'Crated and edge-protected',
+    ),
     (Icons.straighten_rounded, 'Free measure', 'On orders above ₹1 lakh'),
-    (Icons.support_agent_rounded, 'Stone advisors', 'Talk to a real fabricator'),
+    (
+      Icons.support_agent_rounded,
+      'Stone advisors',
+      'Talk to a real fabricator',
+    ),
   ];
 
   @override
@@ -380,10 +413,9 @@ class TrustStrip extends StatelessWidget {
                     Text(
                       title,
                       textAlign: TextAlign.center,
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelMedium
-                          ?.copyWith(fontSize: 11),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelMedium?.copyWith(fontSize: 11),
                     ),
                     const SizedBox(height: 2),
                     Padding(
@@ -391,10 +423,10 @@ class TrustStrip extends StatelessWidget {
                       child: Text(
                         sub,
                         textAlign: TextAlign.center,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(fontSize: 9.5, height: 1.25),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontSize: 9.5,
+                          height: 1.25,
+                        ),
                       ),
                     ),
                   ],
@@ -473,8 +505,10 @@ class VisualizerPromo extends StatelessWidget {
                         icon: Icons.view_in_ar_rounded,
                         height: 44,
                         onPressed: () => Navigator.pushNamed(
-                            context, Routes.visualizer,
-                            arguments: const VisualizerArgs()),
+                          context,
+                          Routes.visualizer,
+                          arguments: const VisualizerArgs(),
+                        ),
                       ),
                     ),
                   ],
@@ -501,25 +535,27 @@ class SupportCard extends StatelessWidget {
         padding: const EdgeInsets.all(AppDimens.lg),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              AppColors.ice.withValues(alpha: 0.7),
-              AppColors.surface,
-            ],
+            colors: [AppColors.ice.withValues(alpha: 0.7), AppColors.surface],
           ),
           borderRadius: BorderRadius.circular(AppDimens.radiusMd),
           border: Border.all(color: AppColors.line),
         ),
         child: Row(
           children: [
-            const Icon(Icons.headset_mic_rounded,
-                size: 26, color: AppColors.deep),
+            const Icon(
+              Icons.headset_mic_rounded,
+              size: 26,
+              color: AppColors.deep,
+            ),
             const SizedBox(width: AppDimens.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Not sure which stone?',
-                      style: t.titleSmall?.copyWith(color: AppColors.ink)),
+                  Text(
+                    'Not sure which stone?',
+                    style: t.titleSmall?.copyWith(color: AppColors.ink),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     'Request a free sample or a project quote.',
@@ -559,8 +595,11 @@ class RecentlyViewedRail extends StatelessWidget {
           final p = products[i];
           return InkWell(
             borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-            onTap: () => Navigator.pushNamed(context, Routes.productDetails,
-                arguments: ProductArgs(p.id)),
+            onTap: () => Navigator.pushNamed(
+              context,
+              Routes.productDetails,
+              arguments: ProductArgs(p.id),
+            ),
             child: Container(
               width: 214,
               padding: const EdgeInsets.all(8),
@@ -578,16 +617,16 @@ class RecentlyViewedRail extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(p.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall),
+                        Text(
+                          p.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           '${Fmt.rupees(p.pricePerSqFt)}/sq.ft',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelMedium
+                          style: Theme.of(context).textTheme.labelMedium
                               ?.copyWith(color: AppColors.deep),
                         ),
                       ],

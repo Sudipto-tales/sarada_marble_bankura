@@ -7,6 +7,8 @@ import '../../../core/theme/app_dimens.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/widgets/brand_widgets.dart';
 import '../../../core/widgets/price_text.dart';
+import '../../../core/widgets/shimmer.dart';
+import '../../../core/widgets/stone_motion.dart';
 import '../../../data/models/product.dart';
 
 /// The catalog's primary unit. Used by home rails, grids, search and compare.
@@ -32,108 +34,93 @@ class ProductCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final heroTag = 'product-${product.id}-${width ?? 0}';
 
+    final tint = stoneTint(product.color, Theme.of(context).brightness);
     return SizedBox(
       width: width,
-      child: Material(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-          onTap: onTap ??
-              () => Navigator.pushNamed(
-                    context,
-                    Routes.productDetails,
-                    arguments: ProductArgs(product.id, heroTag: heroTag),
-                  ),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-              border: Border.all(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white10
-                    : AppColors.line,
-              ),
-            ),
+      child: StoneMotion(
+        child: Material(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: AppDimens.stoneCurve,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap:
+                onTap ??
+                () => Navigator.pushNamed(
+                  context,
+                  Routes.productDetails,
+                  arguments: ProductArgs(product.id, heroTag: heroTag),
+                ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(AppDimens.radiusMd)),
-                      child: AspectRatio(
-                        aspectRatio: compact ? 1.35 : 1.15,
-                        child: Hero(
-                          tag: heroTag,
-                          child: AppImage(
-                            product.image,
-                            placeholderColor: AppColors.surface,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: tint,
+                    borderRadius: AppDimens.stoneCurve,
+                  ),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: AppDimens.stoneCurve,
+                        child: AspectRatio(
+                          aspectRatio: compact ? 1.35 : 1.15,
+                          child: Hero(
+                            tag: heroTag,
+                            child: AppImage(
+                              product.image,
+                              placeholderColor: tint,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    if (product.discount > 0)
-                      Positioned(
-                        left: 8,
-                        top: 8,
-                        child: TagChip(
-                          label: '${product.discount}% OFF',
-                          color: Colors.white,
-                          background: AppColors.danger,
-                          dense: true,
-                        ),
-                      ),
-                    if (showWishlist)
-                      Positioned(
-                        right: 4,
-                        top: 4,
-                        child: Observer(
-                          listenable: deps.wishlist,
-                          builder: (context, wishlist) {
-                            final saved = wishlist.contains(product.id);
-                            return IconButton(
-                              visualDensity: VisualDensity.compact,
+                      if (showWishlist)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Observer(
+                            listenable: deps.wishlist,
+                            builder: (context, wishlist) => IconButton(
+                              tooltip: wishlist.contains(product.id)
+                                  ? 'Remove from wishlist'
+                                  : 'Save marble',
                               style: IconButton.styleFrom(
-                                backgroundColor:
-                                    Colors.white.withValues(alpha: 0.86),
-                                minimumSize: const Size(30, 30),
+                                backgroundColor: AppColors.surfaceAlt,
+                                minimumSize: const Size(44, 44),
                               ),
                               icon: Icon(
-                                saved
+                                wishlist.contains(product.id)
                                     ? Icons.favorite_rounded
                                     : Icons.favorite_border_rounded,
-                                size: 17,
-                                color: saved ? AppColors.danger : AppColors.ink,
+                                size: 19,
+                                color: wishlist.contains(product.id)
+                                    ? AppColors.clay
+                                    : AppColors.ink,
                               ),
                               onPressed: () => wishlist.toggle(product.id),
-                            );
-                          },
-                        ),
-                      ),
-                    if (!product.inStock)
-                      Positioned.fill(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.62),
-                            borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(AppDimens.radiusMd)),
+                            ),
                           ),
-                          alignment: Alignment.center,
-                          child: const TagChip(
+                        ),
+                      if (!product.inStock)
+                        const Positioned(
+                          left: 8,
+                          bottom: 8,
+                          child: TagChip(
                             label: 'OUT OF STOCK',
                             color: Colors.white,
                             background: AppColors.ink,
+                            dense: true,
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         product.name,
@@ -141,19 +128,20 @@ class ProductCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: t.titleSmall,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
                         '${product.finish} · ${product.origin.split(',').first}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: t.bodySmall,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 7),
                       RatingBadge(
-                          rating: product.rating,
-                          count: product.reviewCount,
-                          dense: true),
-                      const SizedBox(height: 6),
+                        rating: product.rating,
+                        count: product.reviewCount,
+                        dense: true,
+                      ),
+                      const SizedBox(height: 7),
                       PriceText(
                         price: product.pricePerSqFt,
                         original: product.originalPrice,
@@ -163,10 +151,11 @@ class ProductCard extends StatelessWidget {
                       ),
                       if (product.isLowStock) ...[
                         const SizedBox(height: 6),
-                        TagChip(
-                          label: 'Only ${product.stock} sq.ft left',
-                          color: AppColors.warning,
-                          dense: true,
+                        Text(
+                          'Only ${product.stock} sq.ft left',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.labelSmall?.copyWith(color: AppColors.clay),
                         ),
                       ],
                     ],
@@ -200,29 +189,42 @@ class ProductListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return InkWell(
-      onTap: onTap ??
-          () => Navigator.pushNamed(context, Routes.productDetails,
-              arguments: ProductArgs(product.id)),
+      onTap:
+          onTap ??
+          () => Navigator.pushNamed(
+            context,
+            Routes.productDetails,
+            arguments: ProductArgs(product.id),
+          ),
       child: Padding(
         padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.lg, vertical: AppDimens.md),
+          horizontal: AppDimens.lg,
+          vertical: AppDimens.md,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AppImage(product.image,
-                width: 78, height: 78, radius: AppDimens.radiusSm),
+            AppImage(
+              product.image,
+              width: 78,
+              height: 78,
+              radius: AppDimens.radiusSm,
+            ),
             const SizedBox(width: AppDimens.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(product.name,
-                      style: t.titleSmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    product.name,
+                    style: t.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const SizedBox(height: 2),
                   Text(
-                    subtitle ?? '${product.color} · ${product.finish} · ${product.thickness}',
+                    subtitle ??
+                        '${product.color} · ${product.finish} · ${product.thickness}',
                     style: t.bodySmall,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -254,54 +256,94 @@ class ProductCardSkeleton extends StatelessWidget {
   final double? width;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => Semantics(
+    label: 'Loading marble',
+    child: ExcludeSemantics(
+      child: Container(
         width: width,
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-          border: Border.all(color: AppColors.line),
+          borderRadius: AppDimens.stoneCurve,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            AspectRatio(
-              aspectRatio: 1.15,
-              child: Container(color: AppColors.line.withValues(alpha: 0.5)),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: ClipRRect(
+                borderRadius: AppDimens.stoneCurve,
+                child: const AspectRatio(
+                  aspectRatio: 1.15,
+                  child: Shimmer(height: double.infinity, radius: 0),
+                ),
+              ),
             ),
             const Padding(
-              padding: EdgeInsets.all(10),
+              padding: EdgeInsets.fromLTRB(12, 10, 12, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Bar(widthFactor: 0.9),
-                  SizedBox(height: 8),
-                  _Bar(widthFactor: 0.55),
-                  SizedBox(height: 10),
-                  _Bar(widthFactor: 0.7, height: 16),
+                  Shimmer(width: double.infinity, height: 16),
+                  SizedBox(height: 7),
+                  Shimmer(width: 90, height: 12),
+                  SizedBox(height: 7),
+                  Shimmer(width: 64, height: 14),
+                  SizedBox(height: 7),
+                  Shimmer(width: 100, height: 18),
                 ],
               ),
             ),
           ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
-class _Bar extends StatelessWidget {
-  const _Bar({required this.widthFactor, this.height = 10});
-  final double widthFactor;
-  final double height;
-
+/// Shared by catalog and wishlist while product metadata is being fetched.
+class ProductGridSkeleton extends StatelessWidget {
+  const ProductGridSkeleton({super.key});
   @override
-  Widget build(BuildContext context) => FractionallySizedBox(
-        widthFactor: widthFactor,
-        alignment: Alignment.centerLeft,
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            color: AppColors.line,
-            borderRadius: BorderRadius.circular(6),
+  Widget build(BuildContext context) => GridView.builder(
+    padding: const EdgeInsets.all(AppDimens.lg),
+    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: AppDimens.gridColumns(MediaQuery.sizeOf(context).width),
+      mainAxisSpacing: AppDimens.md,
+      crossAxisSpacing: AppDimens.md,
+      mainAxisExtent: AppDimens.gridProductHeight(context),
+    ),
+    itemCount: 6,
+    itemBuilder: (_, _) => const ProductCardSkeleton(),
+  );
+}
+
+/// Search uses rows rather than cards, so its skeleton retains that geometry.
+class ProductListSkeleton extends StatelessWidget {
+  const ProductListSkeleton({super.key});
+  @override
+  Widget build(BuildContext context) => ListView.separated(
+    padding: const EdgeInsets.all(16),
+    itemCount: 6,
+    separatorBuilder: (_, _) => const SizedBox(height: 24),
+    itemBuilder: (_, _) => const Row(
+      children: [
+        Shimmer(width: 78, height: 78, radius: 24),
+        SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Shimmer(width: double.infinity, height: 16),
+              SizedBox(height: 10),
+              Shimmer(width: 100, height: 12),
+              SizedBox(height: 10),
+              Shimmer(width: 80, height: 18),
+            ],
           ),
         ),
-      );
+      ],
+    ),
+  );
 }
