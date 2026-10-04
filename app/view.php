@@ -9,6 +9,13 @@ class ViewRouteProvider extends RouteProvider
         return [
             'default' => ['Welcome', 'index'],
             'hello' => ['Welcome', 'hello'],
+            ... (DEVELOPER_ENABLED ? [
+                'developer' => ['Developer', 'index'],
+                'developer/login' => ['Developer', 'login'],
+                'developer/logout' => ['Developer', 'logout'],
+                ...array_fill_keys(array_map(fn($page) => 'developer/' . $page,
+                    ['overview', 'apis', 'server', 'workflows', 'incidents', 'activity', 'access', 'settings']), ['Developer', 'index']),
+            ] : []),
         ];
     }
 }
