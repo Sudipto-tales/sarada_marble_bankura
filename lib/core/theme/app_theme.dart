@@ -4,49 +4,56 @@ import 'package:flutter/services.dart';
 import 'app_colors.dart';
 import 'app_dimens.dart';
 
-/// Material 3 theme built around the logo palette.
+/// Shared showroom styling for commerce, account and optional modules.
 class AppTheme {
   const AppTheme._();
 
   static ThemeData light() {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.teal,
-      brightness: Brightness.light,
-    ).copyWith(
-      primary: AppColors.teal,
-      onPrimary: Colors.white,
-      secondary: AppColors.deep,
-      tertiary: AppColors.gold,
-      surface: AppColors.surfaceAlt,
-      onSurface: AppColors.ink,
-      error: AppColors.danger,
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.teal,
+          brightness: Brightness.light,
+        ).copyWith(
+          primary: AppColors.clay,
+          onPrimary: Colors.white,
+          secondary: AppColors.deep,
+          tertiary: AppColors.gold,
+          surface: AppColors.surfaceAlt,
+          onSurface: AppColors.ink,
+          error: AppColors.danger,
+        );
     return _base(scheme, AppColors.surface);
   }
 
   static ThemeData dark() {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.teal,
-      brightness: Brightness.dark,
-    ).copyWith(
-      primary: AppColors.cyan,
-      onPrimary: AppColors.ink,
-      secondary: AppColors.ice,
-      tertiary: AppColors.gold,
-      surface: AppColors.darkCard,
-      onSurface: Colors.white,
-      error: AppColors.danger,
-    );
+    final scheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.teal,
+          brightness: Brightness.dark,
+        ).copyWith(
+          primary: AppColors.cyan,
+          onPrimary: AppColors.ink,
+          secondary: AppColors.ice,
+          tertiary: AppColors.gold,
+          surface: AppColors.darkCard,
+          onSurface: Colors.white,
+          error: AppColors.danger,
+        );
     return _base(scheme, AppColors.darkSurface);
   }
 
   static ThemeData _base(ColorScheme scheme, Color scaffold) {
     final dark = scheme.brightness == Brightness.dark;
     final onSurface = scheme.onSurface;
-    final base = ThemeData(useMaterial3: true, colorScheme: scheme);
+    final base = ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme,
+      fontFamily: 'sans-serif',
+    );
 
     TextStyle t(double size, FontWeight w, {double? h, Color? c, double? ls}) =>
         TextStyle(
+          fontFamily: 'sans-serif',
           fontSize: size,
           fontWeight: w,
           height: h,
@@ -58,7 +65,12 @@ class AppTheme {
       scaffoldBackgroundColor: scaffold,
       splashFactory: InkSparkle.splashFactory,
       textTheme: base.textTheme.copyWith(
-        displaySmall: t(30, FontWeight.w700, h: 1.15, ls: -0.6),
+        displaySmall: t(
+          32,
+          FontWeight.w500,
+          h: 1.12,
+          ls: -1.1,
+        ).copyWith(fontFamily: 'serif'),
         headlineMedium: t(24, FontWeight.w700, h: 1.2, ls: -0.4),
         headlineSmall: t(20, FontWeight.w700, h: 1.22, ls: -0.3),
         titleLarge: t(17, FontWeight.w700, h: 1.25),
@@ -66,27 +78,38 @@ class AppTheme {
         titleSmall: t(13.5, FontWeight.w600, h: 1.3),
         bodyLarge: t(15, FontWeight.w400, h: 1.45),
         bodyMedium: t(13.5, FontWeight.w400, h: 1.45),
-        bodySmall: t(12, FontWeight.w400, h: 1.4, c: dark ? AppColors.mutedSoft : AppColors.muted),
+        bodySmall: t(
+          12,
+          FontWeight.w400,
+          h: 1.4,
+          c: dark ? AppColors.mutedSoft : AppColors.muted,
+        ),
         labelLarge: t(14, FontWeight.w600, ls: 0.1),
         labelMedium: t(12, FontWeight.w600, ls: 0.2),
-        labelSmall: t(11, FontWeight.w600, ls: 0.3, c: dark ? AppColors.mutedSoft : AppColors.muted),
+        labelSmall: t(
+          11,
+          FontWeight.w600,
+          ls: 0.3,
+          c: dark ? AppColors.mutedSoft : AppColors.muted,
+        ),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: dark ? AppColors.darkSurface : Colors.white,
+        backgroundColor: scaffold,
         foregroundColor: onSurface,
         elevation: 0,
-        scrolledUnderElevation: 0.5,
+        scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: t(17, FontWeight.w700),
-        systemOverlayStyle:
-            dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+        systemOverlayStyle: dark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
       ),
       cardTheme: CardThemeData(
         color: scheme.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+          borderRadius: AppDimens.stoneCurve,
           side: BorderSide(color: dark ? Colors.white10 : AppColors.line),
         ),
       ),
@@ -132,8 +155,13 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: dark ? Colors.white10 : Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        fillColor: dark
+            ? Colors.white10
+            : AppColors.line.withValues(alpha: 0.45),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
         hintStyle: t(14, FontWeight.w400, c: AppColors.mutedSoft),
         border: _field(AppColors.line),
         enabledBorder: _field(dark ? Colors.white24 : AppColors.line),

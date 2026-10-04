@@ -6,6 +6,7 @@ import '../../core/state/app_scope.dart';
 import '../../core/theme/app_dimens.dart';
 import '../../core/widgets/brand_widgets.dart';
 import '../../core/widgets/state_views.dart';
+import '../../core/widgets/shimmer.dart';
 import '../../data/models/category.dart';
 import '../../data/models/coupon.dart';
 import '../../data/models/product.dart';
@@ -104,19 +105,23 @@ class _HomeScreenState extends State<HomeScreen>
           future: _future,
           builder: (context, snap) {
             if (snap.connectionState != ConnectionState.done) {
-              return const CustomScrollView(slivers: [
-                HomeHeader(),
-                SliverToBoxAdapter(child: _HomeSkeleton()),
-              ]);
+              return const CustomScrollView(
+                slivers: [
+                  HomeHeader(),
+                  SliverToBoxAdapter(child: _HomeSkeleton()),
+                ],
+              );
             }
             if (snap.hasError) {
-              return CustomScrollView(slivers: [
-                const HomeHeader(),
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: ErrorView(onRetry: _refresh),
-                ),
-              ]);
+              return CustomScrollView(
+                slivers: [
+                  const HomeHeader(),
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: ErrorView(onRetry: _refresh),
+                  ),
+                ],
+              );
             }
             return _HomeContent(feed: snap.data!);
           },
@@ -137,82 +142,113 @@ class _HomeContent extends StatelessWidget {
     return CustomScrollView(
       slivers: [
         const HomeHeader(),
-        SliverList.list(children: [
-          const SizedBox(height: AppDimens.sm),
-          BannerCarousel(banners: feed.banners),
-          const SectionGap(),
-          SectionHeader(
-            title: 'Shop by category',
-            subtitle: 'Marble, granite and imported stone',
-            actionLabel: 'All',
-            onAction: () => Navigator.pushNamed(context, Routes.catalog,
-                arguments: const CatalogArgs()),
-          ),
-          CategoryStrip(categories: feed.categories),
-          const SectionGap(),
-          const ModuleShortcuts(),
-          const SectionGap(),
-          SectionHeader(
-            title: 'Featured collection',
-            subtitle: 'Hand-picked slabs from this month',
-            actionLabel: 'See all',
-            onAction: () => Navigator.pushNamed(context, Routes.catalog,
-                arguments: const CatalogArgs(title: 'Featured')),
-          ),
-          ProductRail(products: feed.featured),
-          const SectionGap(),
-          SectionHeader(
-            title: 'Offers for you',
-            subtitle: 'Coupons applied at checkout',
-            actionLabel: 'Coupons',
-            onAction: () => Navigator.pushNamed(context, Routes.coupons),
-          ),
-          OfferStrip(offers: feed.offers),
-          const SectionGap(),
-          if (feed.deals.isNotEmpty) ...[
-            const SectionHeader(
-              title: 'Biggest discounts',
-              subtitle: 'Lots clearing at 25% off or more',
+        SliverList.list(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'THE STONE ATELIER',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(letterSpacing: 2.5),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    "Find your home's\nsignature stone.",
+                    style: Theme.of(context).textTheme.displaySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Natural textures. Beautiful possibilities.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
             ),
-            ProductRail(products: feed.deals),
+            BannerCarousel(banners: feed.banners),
             const SectionGap(),
-          ],
-          if (FeatureFlags.visualizationEnabled) ...[
-            const VisualizerPromo(),
-            const SectionGap(),
-          ],
-          const SectionHeader(
-            title: 'Trending now',
-            subtitle: 'What other buyers are viewing this week',
-          ),
-          ProductRail(products: feed.trending),
-          const SectionGap(),
-          const SectionHeader(
-            title: 'Get the look',
-            subtitle: 'Real rooms, shoppable stone',
-          ),
-          InspirationRail(items: feed.inspiration),
-          const SectionGap(),
-          const SectionHeader(
-            title: 'Best sellers',
-            subtitle: 'Consistently reordered by contractors',
-          ),
-          ProductRail(products: feed.bestSellers),
-          const SectionGap(),
-          const TrustStrip(),
-          const SectionGap(),
-          if (feed.recentlyViewed.isNotEmpty) ...[
             SectionHeader(
-              title: 'Recently viewed',
-              actionLabel: 'Clear',
-              onAction: deps.browsing.clearRecent,
+              title: 'Shop by category',
+              subtitle: 'Marble, granite and imported stone',
+              actionLabel: 'All',
+              onAction: () => Navigator.pushNamed(
+                context,
+                Routes.catalog,
+                arguments: const CatalogArgs(),
+              ),
             ),
-            RecentlyViewedRail(products: feed.recentlyViewed),
+            CategoryStrip(categories: feed.categories),
             const SectionGap(),
+            const ModuleShortcuts(),
+            const SectionGap(),
+            SectionHeader(
+              title: 'Featured collection',
+              subtitle: 'Hand-picked slabs from this month',
+              actionLabel: 'See all',
+              onAction: () => Navigator.pushNamed(
+                context,
+                Routes.catalog,
+                arguments: const CatalogArgs(title: 'Featured'),
+              ),
+            ),
+            ProductRail(products: feed.featured),
+            const SectionGap(),
+            SectionHeader(
+              title: 'Offers for you',
+              subtitle: 'Coupons applied at checkout',
+              actionLabel: 'Coupons',
+              onAction: () => Navigator.pushNamed(context, Routes.coupons),
+            ),
+            OfferStrip(offers: feed.offers),
+            const SectionGap(),
+            if (feed.deals.isNotEmpty) ...[
+              const SectionHeader(
+                title: 'Biggest discounts',
+                subtitle: 'Lots clearing at 25% off or more',
+              ),
+              ProductRail(products: feed.deals),
+              const SectionGap(),
+            ],
+            if (FeatureFlags.visualizationEnabled) ...[
+              const VisualizerPromo(),
+              const SectionGap(),
+            ],
+            const SectionHeader(
+              title: 'Trending now',
+              subtitle: 'What other buyers are viewing this week',
+            ),
+            ProductRail(products: feed.trending),
+            const SectionGap(),
+            const SectionHeader(
+              title: 'Get the look',
+              subtitle: 'Real rooms, shoppable stone',
+            ),
+            InspirationRail(items: feed.inspiration),
+            const SectionGap(),
+            const SectionHeader(
+              title: 'Best sellers',
+              subtitle: 'Consistently reordered by contractors',
+            ),
+            ProductRail(products: feed.bestSellers),
+            const SectionGap(),
+            const TrustStrip(),
+            const SectionGap(),
+            if (feed.recentlyViewed.isNotEmpty) ...[
+              SectionHeader(
+                title: 'Recently viewed',
+                actionLabel: 'Clear',
+                onAction: deps.browsing.clearRecent,
+              ),
+              RecentlyViewedRail(products: feed.recentlyViewed),
+              const SectionGap(),
+            ],
+            const SupportCard(),
+            const SizedBox(height: AppDimens.xxxl),
           ],
-          const SupportCard(),
-          const SizedBox(height: AppDimens.xxxl),
-        ]),
+        ),
       ],
     );
   }
@@ -228,19 +264,41 @@ class _HomeSkeleton extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Shimmer(width: 120, height: 12),
+                SizedBox(height: 14),
+                Shimmer(width: 240, height: 64),
+                SizedBox(height: 12),
+                Shimmer(width: 200, height: 16),
+              ],
+            ),
+          ),
           Padding(
             padding: AppDimens.screenPad,
-            child: Container(
-              height: 196,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(AppDimens.radiusLg),
-              ),
+            child: SizedBox(
+              height: 236,
+              child: const Shimmer(height: 236, radius: 32),
             ),
           ),
           const SizedBox(height: AppDimens.xl),
           SizedBox(
-            height: 292,
+            height: 90,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: AppDimens.screenPad,
+              itemCount: 5,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (_, _) =>
+                  const Shimmer(width: 72, height: 72, radius: 24),
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            height: AppDimens.productHeight(context, 168),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: AppDimens.screenPad,

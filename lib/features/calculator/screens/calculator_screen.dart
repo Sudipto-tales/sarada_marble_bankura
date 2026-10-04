@@ -49,13 +49,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   ];
 
   Estimate get _estimate => _service.estimate(
-        entries: _entries,
-        pricePerSqFt: _product?.pricePerSqFt ?? 0,
-        wastagePercent: _wastage,
-        slabSqFt: _product?.slabSqFt ?? 31,
-        includePolishing: _polishing,
-        includeInstallation: _installation,
-      );
+    entries: _entries,
+    pricePerSqFt: _product?.pricePerSqFt ?? 0,
+    wastagePercent: _wastage,
+    slabSqFt: _product?.slabSqFt ?? 31,
+    includePolishing: _polishing,
+    includeInstallation: _installation,
+  );
 
   void _usePreset(String preset) {
     setState(() {
@@ -69,8 +69,12 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     setState(() {
       _entries = [
         ..._entries,
-        AreaEntry(id: 'e${_seq++}', label: 'Surface ${_entries.length + 1}',
-            length: 10, width: 10),
+        AreaEntry(
+          id: 'e${_seq++}',
+          label: 'Surface ${_entries.length + 1}',
+          length: 10,
+          width: 10,
+        ),
       ];
     });
   }
@@ -95,15 +99,19 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     if (product == null) return;
     final result = _service.toResult(product.id, _estimate);
     await AppScope.read(context).cart.setQuantity(
-          product,
-          result.requiredSqFt,
-          source: CartSource.calculator,
-          note: '$_preset · ${result.slabCount} slabs incl. ${_wastage.toStringAsFixed(0)}% wastage',
-        );
+      product,
+      result.requiredSqFt,
+      source: CartSource.calculator,
+      note:
+          '$_preset · ${result.slabCount} slabs incl. ${_wastage.toStringAsFixed(0)}% wastage',
+    );
     if (!mounted) return;
-    Toast.success(context, '${Fmt.sqft(result.requiredSqFt)} added to cart',
-        actionLabel: 'View cart',
-        onAction: () => Navigator.pushNamed(context, Routes.cart));
+    Toast.success(
+      context,
+      '${Fmt.sqft(result.requiredSqFt)} added to cart',
+      actionLabel: 'View cart',
+      onAction: () => Navigator.pushNamed(context, Routes.cart),
+    );
   }
 
   void _handBack() {
@@ -134,11 +142,13 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
           if (snap.hasError) {
             return ErrorView(
               onRetry: () => setState(
-                  () => _future = AppScope.read(context).products.all()),
+                () => _future = AppScope.read(context).products.all(),
+              ),
             );
           }
           final products = snap.data ?? const <Product>[];
-          _product ??= products
+          _product ??=
+              products
                   .where((p) => p.id == widget.args.productId)
                   .firstOrNull ??
               (products.isEmpty ? null : products.first);
@@ -179,8 +189,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 _EntryCard(
                   entry: _entries[i],
                   onChanged: (e) => _updateEntry(i, e),
-                  onRemove:
-                      _entries.length == 1 ? null : () => _removeEntry(i),
+                  onRemove: _entries.length == 1 ? null : () => _removeEntry(i),
                 ),
               Padding(
                 padding: AppDimens.screenPad,
@@ -205,7 +214,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                 estimate: estimate,
                 product: _product,
                 leftover: _service.leftoverArea(
-                    estimate, _product?.slabSqFt ?? 31),
+                  estimate,
+                  _product?.slabSqFt ?? 31,
+                ),
               ),
             ],
           );
@@ -251,8 +262,10 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('How the estimate works',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'How the estimate works',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: AppDimens.md),
             Text(
               'Net area = Σ (length × width × count) − cut-outs\n'
@@ -261,10 +274,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               'Material = order area × price per sq.ft\n'
               'Polishing = order area × ₹28 · Installation = net area × ₹65\n'
               'GST of 18% applies to the total.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(height: 1.7),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(height: 1.7),
             ),
             const SizedBox(height: AppDimens.md),
             Text(
@@ -294,7 +306,11 @@ class _ProductPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppDimens.lg, AppDimens.lg, AppDimens.lg, 0),
+        AppDimens.lg,
+        AppDimens.lg,
+        AppDimens.lg,
+        0,
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppDimens.radiusMd),
         onTap: () async {
@@ -315,8 +331,12 @@ class _ProductPicker extends StatelessWidget {
           child: Row(
             children: [
               if (product != null)
-                AppImage(product!.image,
-                    width: 52, height: 52, radius: AppDimens.radiusSm)
+                AppImage(
+                  product!.image,
+                  width: 52,
+                  height: 52,
+                  radius: AppDimens.radiusSm,
+                )
               else
                 const Icon(Icons.grid_view_rounded, size: 28),
               const SizedBox(width: AppDimens.md),
@@ -324,8 +344,10 @@ class _ProductPicker extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Marble',
-                        style: Theme.of(context).textTheme.labelSmall),
+                    Text(
+                      'Marble',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
                     Text(
                       product?.name ?? 'Select a marble',
                       style: Theme.of(context).textTheme.titleSmall,
@@ -365,11 +387,17 @@ class _ProductSheet extends StatelessWidget {
         itemBuilder: (context, i) {
           final p = products[i];
           return ListTile(
-            leading: AppImage(p.image,
-                width: 46, height: 46, radius: AppDimens.radiusSm),
+            leading: AppImage(
+              p.image,
+              width: 46,
+              height: 46,
+              radius: AppDimens.radiusSm,
+            ),
             title: Text(p.name, style: Theme.of(context).textTheme.titleSmall),
-            subtitle: Text('${Fmt.rupees(p.pricePerSqFt)}/sq.ft',
-                style: Theme.of(context).textTheme.bodySmall),
+            subtitle: Text(
+              '${Fmt.rupees(p.pricePerSqFt)}/sq.ft',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             onTap: () => Navigator.pop(context, p),
           );
         },
@@ -393,7 +421,11 @@ class _EntryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.fromLTRB(
-          AppDimens.lg, 0, AppDimens.lg, AppDimens.md),
+        AppDimens.lg,
+        0,
+        AppDimens.lg,
+        AppDimens.md,
+      ),
       padding: const EdgeInsets.all(AppDimens.md),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -408,15 +440,20 @@ class _EntryCard extends StatelessWidget {
                 child: TextFormField(
                   initialValue: entry.label,
                   decoration: const InputDecoration(
-                      labelText: 'Surface', isDense: true),
+                    labelText: 'Surface',
+                    isDense: true,
+                  ),
                   onChanged: (v) => onChanged(entry.copyWith(label: v)),
                 ),
               ),
               if (onRemove != null)
                 IconButton(
                   onPressed: onRemove,
-                  icon: const Icon(Icons.delete_outline_rounded,
-                      size: 20, color: AppColors.danger),
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    size: 20,
+                    color: AppColors.danger,
+                  ),
                 ),
             ],
           ),
@@ -445,11 +482,12 @@ class _EntryCard extends StatelessWidget {
                   initialValue: entry.unit,
                   isDense: true,
                   decoration: const InputDecoration(
-                      labelText: 'Unit', isDense: true),
+                    labelText: 'Unit',
+                    isDense: true,
+                  ),
                   items: [
                     for (final unit in MeasureUnit.values)
-                      DropdownMenuItem(
-                          value: unit, child: Text(unit.short)),
+                      DropdownMenuItem(value: unit, child: Text(unit.short)),
                   ],
                   onChanged: (v) =>
                       v == null ? null : onChanged(entry.copyWith(unit: v)),
@@ -483,10 +521,9 @@ class _EntryCard extends StatelessWidget {
                   Text('Area', style: Theme.of(context).textTheme.labelSmall),
                   Text(
                     Fmt.sqft(entry.areaSqFt),
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(color: AppColors.deep),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleSmall?.copyWith(color: AppColors.deep),
                   ),
                 ],
               ),
@@ -557,14 +594,17 @@ class _Options extends StatelessWidget {
           children: [
             Row(
               children: [
-                Text('Wastage allowance',
-                    style: Theme.of(context).textTheme.titleSmall),
+                Text(
+                  'Wastage allowance',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
                 const Spacer(),
-                Text('${wastage.toStringAsFixed(0)}%',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(color: AppColors.deep)),
+                Text(
+                  '${wastage.toStringAsFixed(0)}%',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(color: AppColors.deep),
+                ),
               ],
             ),
             Slider(
@@ -580,17 +620,23 @@ class _Options extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const Divider(height: AppDimens.xl),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              value: polishing,
-              onChanged: onPolishing,
-              title: const Text('Include edge polishing (₹28 / sq.ft)'),
+            Material(
+              color: Colors.transparent,
+              child: SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: polishing,
+                onChanged: onPolishing,
+                title: const Text('Include edge polishing (₹28 / sq.ft)'),
+              ),
             ),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              value: installation,
-              onChanged: onInstallation,
-              title: const Text('Include installation (₹65 / sq.ft)'),
+            Material(
+              color: Colors.transparent,
+              child: SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: installation,
+                onChanged: onInstallation,
+                title: const Text('Include installation (₹65 / sq.ft)'),
+              ),
             ),
           ],
         ),
@@ -624,11 +670,14 @@ class _EstimateCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Estimated total',
-                style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
+            const Text(
+              'Estimated total',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 4),
             Text(
               Fmt.rupees(estimate.grandTotal),
@@ -641,17 +690,26 @@ class _EstimateCard extends StatelessWidget {
             ),
             const SizedBox(height: AppDimens.md),
             _line(context, 'Net area', Fmt.sqft(estimate.netAreaSqFt)),
-            _line(context, 'With ${estimate.wastagePercent.toStringAsFixed(0)}% wastage',
-                Fmt.sqft(estimate.totalAreaSqFt)),
-            _line(context, 'Slabs needed',
-                '${estimate.slabCount} (${Fmt.sqft(leftover)} spare)'),
+            _line(
+              context,
+              'With ${estimate.wastagePercent.toStringAsFixed(0)}% wastage',
+              Fmt.sqft(estimate.totalAreaSqFt),
+            ),
+            _line(
+              context,
+              'Slabs needed',
+              '${estimate.slabCount} (${Fmt.sqft(leftover)} spare)',
+            ),
             const Divider(color: Colors.white24, height: AppDimens.xl),
             _line(context, 'Material', Fmt.rupees(estimate.materialCost)),
             if (estimate.polishingCost > 0)
               _line(context, 'Polishing', Fmt.rupees(estimate.polishingCost)),
             if (estimate.installationCost > 0)
-              _line(context, 'Installation',
-                  Fmt.rupees(estimate.installationCost)),
+              _line(
+                context,
+                'Installation',
+                Fmt.rupees(estimate.installationCost),
+              ),
             _line(context, 'GST 18%', Fmt.rupees(estimate.tax)),
             const SizedBox(height: AppDimens.md),
             Text(
@@ -665,18 +723,23 @@ class _EstimateCard extends StatelessWidget {
   }
 
   Widget _line(BuildContext context, String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          children: [
-            Text(label,
-                style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
-            const Spacer(),
-            Text(value,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700)),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12.5),
         ),
-      );
+        const Spacer(),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
 }

@@ -10,12 +10,14 @@ class Shimmer extends StatefulWidget {
     this.height = 14,
     this.radius = 8,
     this.margin,
+    this.tint,
   });
 
   final double? width;
   final double height;
   final double radius;
   final EdgeInsets? margin;
+  final Color? tint;
 
   @override
   State<Shimmer> createState() => _ShimmerState();
@@ -25,7 +27,18 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1250),
-  )..repeat();
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context) ||
+        !TickerMode.valuesOf(context).enabled) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
 
   @override
   void dispose() {
@@ -36,7 +49,9 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final base = dark ? Colors.white10 : AppColors.line.withValues(alpha: 0.75);
+    final base =
+        widget.tint ??
+        (dark ? Colors.white10 : AppColors.line.withValues(alpha: 0.75));
     final highlight = dark ? Colors.white24 : Colors.white;
     return AnimatedBuilder(
       animation: _c,

@@ -28,9 +28,11 @@ class AccountScreen extends StatelessWidget {
             builder: (context, theme) => IconButton(
               tooltip: theme.isDark ? 'Light theme' : 'Dark theme',
               onPressed: theme.toggle,
-              icon: Icon(theme.isDark
-                  ? Icons.light_mode_rounded
-                  : Icons.dark_mode_outlined),
+              icon: Icon(
+                theme.isDark
+                    ? Icons.light_mode_rounded
+                    : Icons.dark_mode_outlined,
+              ),
             ),
           ),
         ],
@@ -124,13 +126,15 @@ class AccountScreen extends StatelessWidget {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.danger,
                         side: BorderSide(
-                            color: AppColors.danger.withValues(alpha: 0.4)),
+                          color: AppColors.danger.withValues(alpha: 0.4),
+                        ),
                       ),
                       onPressed: () async {
                         final ok = await confirmDialog(
                           context,
                           title: 'Sign out?',
-                          message: 'Your cart and wishlist stay on this device.',
+                          message:
+                              'Your cart and wishlist stay on this device.',
                           confirmLabel: 'Sign out',
                           destructive: true,
                         );
@@ -257,7 +261,11 @@ class _Group extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(
-              AppDimens.lg, AppDimens.lg, AppDimens.lg, AppDimens.sm),
+            AppDimens.lg,
+            AppDimens.lg,
+            AppDimens.lg,
+            AppDimens.sm,
+          ),
           child: Text(title, style: Theme.of(context).textTheme.labelMedium),
         ),
         Container(
@@ -295,13 +303,18 @@ class _Tile extends StatelessWidget {
   final String? subtitle;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-        leading: Icon(icon, size: 21, color: AppColors.deep),
-        title: Text(label, style: Theme.of(context).textTheme.titleSmall),
-        subtitle: subtitle == null
-            ? null
-            : Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
-        trailing: const Icon(Icons.chevron_right_rounded, size: 20),
-        onTap: () => Navigator.pushNamed(context, route),
-      );
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+    clipBehavior: Clip.antiAlias,
+    child: ListTile(
+      leading: Icon(icon, size: 21, color: AppColors.deep),
+      title: Text(label, style: Theme.of(context).textTheme.titleSmall),
+      subtitle: subtitle == null
+          ? null
+          : Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+      onTap: () => Navigator.pushNamed(context, route),
+    ),
+  );
 }

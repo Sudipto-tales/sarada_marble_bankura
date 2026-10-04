@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/routing/routes.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_dimens.dart';
+import '../../../core/widgets/stone_motion.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../data/models/product.dart';
 
@@ -47,7 +49,26 @@ class _ProductGalleryState extends State<ProductGallery> {
                 title: widget.product.name,
               ),
             ),
-            child: AppImage(images[i], fit: BoxFit.cover),
+            child: Container(
+              margin: EdgeInsets.fromLTRB(
+                16,
+                MediaQuery.paddingOf(context).top + 56,
+                16,
+                32,
+              ),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: stoneTint(
+                  widget.product.color,
+                  Theme.of(context).brightness,
+                ),
+                borderRadius: AppDimens.stoneCurve,
+              ),
+              child: ClipRRect(
+                borderRadius: AppDimens.stoneCurve,
+                child: AppImage(images[i], fit: BoxFit.cover),
+              ),
+            ),
           ),
         ),
         Positioned(
@@ -108,8 +129,9 @@ class GalleryScreen extends StatefulWidget {
 }
 
 class _GalleryScreenState extends State<GalleryScreen> {
-  late final PageController _controller =
-      PageController(initialPage: widget.args.initialIndex);
+  late final PageController _controller = PageController(
+    initialPage: widget.args.initialIndex,
+  );
   late int _index = widget.args.initialIndex;
 
   @override

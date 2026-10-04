@@ -23,16 +23,18 @@ Future<AppDependencies> _boot(WidgetTester tester) async {
 
   final deps = AppDependencies.static(LocalStore.memory());
   await tester.pumpWidget(MaaSaradaApp(deps: deps));
-  await _tick(tester);          // splash timer + first repository loads
+  await _tick(tester); // splash timer + first repository loads
   await _tick(tester);
   return deps;
 }
 
 void main() {
-  testWidgets('the app boots through the splash into the shell', (tester) async {
+  testWidgets('the app boots through the splash into the shell', (
+    tester,
+  ) async {
     await _boot(tester);
 
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byKey(const ValueKey('stone-navigation')), findsOneWidget);
     for (final label in ['Home', 'Catalog', '3D Room', 'Cart', 'Account']) {
       expect(find.text(label), findsWidgets, reason: label);
     }
@@ -49,8 +51,9 @@ void main() {
     }
   });
 
-  testWidgets('the cart tab reflects lines added through the controller',
-      (tester) async {
+  testWidgets('the cart tab reflects lines added through the controller', (
+    tester,
+  ) async {
     final deps = await _boot(tester);
 
     await deps.cart.add(kProducts.first, sqFt: 60);
@@ -150,8 +153,9 @@ void main() {
       expect(find.byType(CustomPaint), findsWidgets);
     });
 
-    testWidgets('an unknown route falls back instead of crashing',
-        (tester) async {
+    testWidgets('an unknown route falls back instead of crashing', (
+      tester,
+    ) async {
       await _boot(tester);
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
       navigator.pushNamed('/does-not-exist');

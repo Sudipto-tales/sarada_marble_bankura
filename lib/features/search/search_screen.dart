@@ -23,8 +23,9 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initialQuery);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialQuery,
+  );
   final FocusNode _focus = FocusNode();
   Timer? _debounce;
   Future<List<Product>>? _future;
@@ -67,14 +68,13 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  Future<List<Product>> _search(String value) => AppScope.read(context)
-      .products
-      .query(ProductFilter(query: value, sort: SortOption.relevance));
+  Future<List<Product>> _search(String value) => AppScope.read(
+    context,
+  ).products.query(ProductFilter(query: value, sort: SortOption.relevance));
 
   void _run(String value) {
     _controller.text = value;
-    _controller.selection =
-        TextSelection.collapsed(offset: value.length);
+    _controller.selection = TextSelection.collapsed(offset: value.length);
     AppScope.read(context).browsing.recordSearch(value);
     setState(() {
       _query = value;
@@ -140,11 +140,12 @@ class _SearchScreenState extends State<SearchScreen> {
               future: _future,
               builder: (context, snap) {
                 if (snap.connectionState != ConnectionState.done) {
-                  return const LoadingView();
+                  return const ProductListSkeleton();
                 }
                 if (snap.hasError) {
                   return ErrorView(
-                      onRetry: () => setState(() => _future = _search(_query)));
+                    onRetry: () => setState(() => _future = _search(_query)),
+                  );
                 }
                 final results = snap.data ?? const <Product>[];
                 if (results.isEmpty) {
@@ -155,15 +156,19 @@ class _SearchScreenState extends State<SearchScreen> {
                         'Try a colour ("beige"), a place ("Makrana") or a use ("counter").',
                     actionLabel: 'Browse all marble',
                     onAction: () => Navigator.pushReplacementNamed(
-                        context, Routes.catalog,
-                        arguments: const CatalogArgs()),
+                      context,
+                      Routes.catalog,
+                      arguments: const CatalogArgs(),
+                    ),
                   );
                 }
                 return Column(
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimens.lg, vertical: AppDimens.sm),
+                        horizontal: AppDimens.lg,
+                        vertical: AppDimens.sm,
+                      ),
                       child: Row(
                         children: [
                           Text(
@@ -176,7 +181,9 @@ class _SearchScreenState extends State<SearchScreen> {
                               context,
                               Routes.catalog,
                               arguments: CatalogArgs(
-                                  query: _query, title: 'Results'),
+                                query: _query,
+                                title: 'Results',
+                              ),
                             ),
                             child: const Text('Filter & sort'),
                           ),
@@ -233,8 +240,11 @@ class _Suggestions extends StatelessWidget {
             ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.history_rounded,
-                  size: 19, color: AppColors.muted),
+              leading: const Icon(
+                Icons.history_rounded,
+                size: 19,
+                color: AppColors.muted,
+              ),
               title: Text(term, style: t.bodyMedium),
               trailing: IconButton(
                 icon: const Icon(Icons.close_rounded, size: 17),
@@ -251,10 +261,7 @@ class _Suggestions extends StatelessWidget {
           runSpacing: 8,
           children: [
             for (final term in popular)
-              ActionChip(
-                label: Text(term),
-                onPressed: () => onTap(term),
-              ),
+              ActionChip(label: Text(term), onPressed: () => onTap(term)),
           ],
         ),
       ],

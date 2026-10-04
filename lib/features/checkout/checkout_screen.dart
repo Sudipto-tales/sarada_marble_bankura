@@ -99,28 +99,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               message: 'Your cart is empty.',
               actionLabel: 'Browse marble',
               onAction: () => Navigator.pushReplacementNamed(
-                  context, Routes.catalog,
-                  arguments: const CatalogArgs()),
+                context,
+                Routes.catalog,
+                arguments: const CatalogArgs(),
+              ),
             );
           }
           return switch (_step) {
             0 => _AddressStep(
-                selected: _address,
-                onSelect: (a) => setState(() => _address = a),
-              ),
+              selected: _address,
+              onSelect: (a) => setState(() => _address = a),
+            ),
             1 => _DeliveryStep(
-                slots: _slots,
-                selected: _slot,
-                onSelect: (i) => setState(() => _slot = i),
-                address: _address,
-              ),
+              slots: _slots,
+              selected: _slot,
+              onSelect: (i) => setState(() => _slot = i),
+              address: _address,
+            ),
             _ => _SummaryStep(
-                items: _items,
-                cart: cart,
-                address: _address!,
-                slotLabel: _slots[_slot].$1,
-                deliveryExtra: _deliveryExtra,
-              ),
+              items: _items,
+              cart: cart,
+              address: _address!,
+              slotLabel: _slots[_slot].$1,
+              deliveryExtra: _deliveryExtra,
+            ),
           };
         },
       ),
@@ -130,12 +132,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           builder: (context, cart) {
             if (_items.isEmpty) return const SizedBox.shrink();
             final subtotal = _items.fold(
-                0.0, (sum, item) => sum + cart.lineTotal(item));
+              0.0,
+              (sum, item) => sum + cart.lineTotal(item),
+            );
             return Container(
               padding: const EdgeInsets.all(AppDimens.lg),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                border: const Border(top: BorderSide(color: AppColors.line)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.ink.withValues(alpha: 0.05),
+                    blurRadius: 20,
+                  ),
+                ],
               ),
               child: Row(
                 children: [
@@ -149,10 +161,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(Fmt.rupees(subtotal),
-                            style: Theme.of(context).textTheme.titleMedium),
-                        Text('before tax & delivery',
-                            style: Theme.of(context).textTheme.labelSmall),
+                        Text(
+                          Fmt.rupees(subtotal),
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text(
+                          'before tax & delivery',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
                       ],
                     ),
                   ),
@@ -224,7 +240,11 @@ class _StepBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppDimens.lg, 0, AppDimens.lg, AppDimens.md),
+        AppDimens.lg,
+        0,
+        AppDimens.lg,
+        AppDimens.md,
+      ),
       child: Row(
         children: [
           for (var i = 0; i < _labels.length; i++) ...[
@@ -292,8 +312,11 @@ class _AddressStep extends StatelessWidget {
               title: 'No address yet',
               message: 'Add where the slabs should be delivered.',
               actionLabel: 'Add address',
-              onAction: () => Navigator.pushNamed(context, Routes.addressForm,
-                  arguments: const AddressFormArgs()),
+              onAction: () => Navigator.pushNamed(
+                context,
+                Routes.addressForm,
+                arguments: const AddressFormArgs(),
+              ),
             )
           else
             for (final address in session.addresses)
@@ -312,34 +335,43 @@ class _AddressStep extends StatelessWidget {
                 child: RadioGroup<String>(
                   groupValue: selected?.id,
                   onChanged: (_) => onSelect(address),
-                  child: ListTile(
-                    onTap: () => onSelect(address),
-                    leading: Radio<String>(value: address.id),
-                    title: Row(
-                      children: [
-                        Text(address.name,
-                            style: Theme.of(context).textTheme.titleSmall),
-                        const SizedBox(width: 8),
-                        TagChip(label: address.label, dense: true),
-                      ],
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '${address.formatted}\n${address.phone}',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(height: 1.4),
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      onTap: () => onSelect(address),
+                      leading: Radio<String>(value: address.id),
+                      title: Row(
+                        children: [
+                          Text(
+                            address.name,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          const SizedBox(width: 8),
+                          TagChip(label: address.label, dense: true),
+                        ],
                       ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          '${address.formatted}\n${address.phone}',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(height: 1.4),
+                        ),
+                      ),
+                      isThreeLine: true,
                     ),
-                    isThreeLine: true,
                   ),
                 ),
               ),
           OutlinedButton.icon(
-            onPressed: () => Navigator.pushNamed(context, Routes.addressForm,
-                arguments: const AddressFormArgs()),
+            onPressed: () => Navigator.pushNamed(
+              context,
+              Routes.addressForm,
+              arguments: const AddressFormArgs(),
+            ),
             icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('Add a new address'),
           ),
@@ -401,16 +433,21 @@ class _DeliveryStep extends StatelessWidget {
                 width: selected == i ? 1.8 : 1,
               ),
             ),
-            child: ListTile(
-              onTap: () => onSelect(i),
-              leading: Icon(
-                selected == i
-                    ? Icons.radio_button_checked_rounded
-                    : Icons.radio_button_off_rounded,
-                color: selected == i ? AppColors.teal : AppColors.mutedSoft,
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                onTap: () => onSelect(i),
+                leading: Icon(
+                  selected == i
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_off_rounded,
+                  color: selected == i ? AppColors.teal : AppColors.mutedSoft,
+                ),
+                title: Text(slots[i].$1, style: t.titleSmall),
+                subtitle: Text(slots[i].$2, style: t.bodySmall),
               ),
-              title: Text(slots[i].$1, style: t.titleSmall),
-              subtitle: Text(slots[i].$2, style: t.bodySmall),
             ),
           ),
         const SizedBox(height: AppDimens.lg),
@@ -446,9 +483,15 @@ class _SummaryStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final subtotal = items.fold(0.0, (sum, item) => sum + cart.lineTotal(item));
-    final savings = items.fold(0.0, (sum, item) => sum + cart.lineSavings(item));
+    final savings = items.fold(
+      0.0,
+      (sum, item) => sum + cart.lineSavings(item),
+    );
     final couponDiscount = cart.couponDiscount;
-    final delivery = (subtotal >= AppConfig.freeDeliveryAbove ? 0.0 : AppConfig.deliveryCharge) +
+    final delivery =
+        (subtotal >= AppConfig.freeDeliveryAbove
+            ? 0.0
+            : AppConfig.deliveryCharge) +
         deliveryExtra;
     final tax = (subtotal - couponDiscount) * AppConfig.gstPercent / 100;
 
@@ -457,7 +500,11 @@ class _SummaryStep extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(
-              AppDimens.lg, AppDimens.lg, AppDimens.lg, AppDimens.sm),
+            AppDimens.lg,
+            AppDimens.lg,
+            AppDimens.lg,
+            AppDimens.sm,
+          ),
           child: Text('Order summary', style: t.titleMedium),
         ),
         for (final item in items)
@@ -478,13 +525,18 @@ class _SummaryStep extends StatelessWidget {
                 Text('Delivering to', style: t.labelSmall),
                 const SizedBox(height: 4),
                 Text(address.name, style: t.titleSmall),
-                Text(address.formatted,
-                    style: t.bodySmall?.copyWith(height: 1.4)),
+                Text(
+                  address.formatted,
+                  style: t.bodySmall?.copyWith(height: 1.4),
+                ),
                 const Divider(height: AppDimens.xl),
                 Row(
                   children: [
-                    const Icon(Icons.local_shipping_outlined,
-                        size: 17, color: AppColors.deep),
+                    const Icon(
+                      Icons.local_shipping_outlined,
+                      size: 17,
+                      color: AppColors.deep,
+                    ),
                     const SizedBox(width: 8),
                     Text('$slotLabel delivery', style: t.titleSmall),
                   ],
@@ -519,7 +571,11 @@ class _SummaryLine extends StatelessWidget {
     if (p == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppDimens.lg, 0, AppDimens.lg, AppDimens.md),
+        AppDimens.lg,
+        0,
+        AppDimens.lg,
+        AppDimens.md,
+      ),
       child: Row(
         children: [
           AppImage(p.image, width: 54, height: 54, radius: AppDimens.radiusSm),
