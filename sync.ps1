@@ -13,7 +13,7 @@ foreach ($option in $args) {
         '--no-deploy' { $noDeploy = $true }
         '--help' {
             Write-Output 'sync.ps1 [--website|--mobile|--deploy|--status] [--release] [--dry-run] [--no-deploy]'
-            Write-Output 'Commit work on main first. Default syncs website, deploy and mobile_app.'
+            Write-Output 'Automatically commit changes on main, integrate origin/main, and push selected targets.'
             Write-Output '--mobile builds only; add --release for a versioned release.'
             exit 0
         }
@@ -79,13 +79,53 @@ try {
         exit 0
     }
     if ($branch -ne 'main') { throw 'Run from main. Generated branches must never be edited.' }
-    if ($status.Count) { throw 'Commit or stash changes first. This script only publishes committed work.' }
+    foreach ($operation in @('MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply', 'sequencer')) {
+        $operationPath = Invoke-Git rev-parse --git-path $operation
+        if (Test-Path -LiteralPath $operationPath) { throw 'Finish or abort the current Git operation before syncing.' }
+    }
+    if (@(Invoke-Git ls-files --unmerged).Count) { throw 'Resolve existing conflicts before syncing.' }
     $null = Invoke-Git remote get-url origin
     if (!$dry) { Invoke-Git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' --tags | Out-Host }
+    # Commit each source area separately, including tracked deletions and untracked files.
+    # --only keeps staged changes from other areas out of each area's commit.
+    $groups = @(
+        @{ Scope = 'website'; Paths = @(':(top)Website') },
+        @{ Scope = 'mobile'; Paths = @(':(top)Mobile') },
+        @{ Scope = 'repo'; Paths = @(':(top)**', ':(top,exclude)Website/**', ':(top,exclude)Mobile/**') }
+    )
+    foreach ($group in $groups) {
+        $paths = $group.Paths
+        if (@(Invoke-Git status --porcelain --untracked-files=all -- @paths).Count) {
+            if ($dry) { Write-Output "Would commit pending $($group.Scope) changes"; continue }
+            Invoke-Git add -A -- @paths | Out-Host
+            $summary = @(Invoke-Git diff --cached --stat -- @paths) -join "`n"
+            $message = "chore($($group.Scope)): sync pending changes"
+            if ($noDeploy) { $message += ' [skip ci]' }
+            Invoke-Git commit --only -m $message -m $summary -- @paths | Out-Host
+        }
+    }
+    if ($dry -and $status.Count) {
+        Write-Output 'Dry run: target trees and versions below reflect committed work only; rerun after automatic commits/pull for the final plan.'
+    }
     $remoteMain = Resolve-Ref refs/remotes/origin/main
     if ($remoteMain) {
         & git merge-base --is-ancestor $remoteMain HEAD
-        if ($LASTEXITCODE -ne 0) { throw 'main is behind or diverged from origin/main. Integrate it first, then rerun.' }
+        if ($LASTEXITCODE -eq 1) {
+            if ($dry) { Write-Output 'Would integrate origin/main before publishing (remote state is from the last fetch).' }
+            else {
+                Write-Output 'Integrating origin/main before publishing...'
+                # Merge preserves existing commits and release tags, unlike rebasing.
+                & git -c merge.ff=true merge --no-edit $remoteMain
+                if ($LASTEXITCODE -ne 0) {
+                    throw 'Could not integrate origin/main. Local commits are saved; resolve/commit conflicts or abort the merge, then rerun sync. Nothing was pushed.'
+                }
+            }
+        } elseif ($LASTEXITCODE -ne 0) { throw 'Could not compare main with origin/main.' }
+    }
+    # A remote update may have changed release metadata.
+    $versions = Get-Content versions.json -Raw | ConvertFrom-Json
+    foreach ($product in @('website', 'mobile')) {
+        if ($versions.$product -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid $product version." }
     }
     $plans = @()
     foreach ($product in $products) {

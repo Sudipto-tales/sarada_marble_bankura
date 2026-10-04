@@ -1,7 +1,8 @@
 # Runs against an isolated local bare remote. Does not contact GitHub or Hostinger.
 $ErrorActionPreference = 'Stop'
 $sourceRoot = Split-Path $PSScriptRoot -Parent
-$fixtureRoot = Join-Path $env:TEMP ('sarada-sync-test-' + [guid]::NewGuid().ToString('N'))
+$powerShell = (Get-Process -Id $PID).Path
+$fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('sarada-sync-test-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixtureRoot | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'Website'), (Join-Path $fixtureRoot 'Mobile') | Out-Null
 Copy-Item (Join-Path $sourceRoot 'sync.ps1'), (Join-Path $sourceRoot 'versions.json') $fixtureRoot
@@ -20,14 +21,14 @@ try {
 $ErrorActionPreference = 'Stop'
 function Check([bool]$condition, [string]$message) { if (!$condition) { throw $message }; Write-Host "PASS $message" }
 function Run-Sync([string[]]$options) {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./sync.ps1 @options
+    & $powerShell -NoProfile -ExecutionPolicy Bypass -File ./sync.ps1 @options
     if ($LASTEXITCODE -ne 0) { throw 'sync failed' }
 }
 function Reject-Sync([string[]]$options) {
     $savedPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./sync.ps1 @options 2>&1 | Out-Host
+        & $powerShell -NoProfile -ExecutionPolicy Bypass -File ./sync.ps1 @options 2>&1 | Out-Host
         $rejected = $LASTEXITCODE -ne 0
     } finally { $ErrorActionPreference = $savedPreference }
     Check $rejected 'unsafe or rejected operation returns a failure'
@@ -79,9 +80,64 @@ Check ($deployBefore -eq (git rev-parse deploy)) 'website only excludes deploy'
 $before = git show-ref
 Run-Sync @('--status')
 Check (($before -join "`n") -eq ((git show-ref) -join "`n")) 'status changes no refs'
+# Auto-commit includes staged, unstaged, untracked and deleted files per area.
+$before = git rev-parse HEAD
+$deployBefore = git rev-parse deploy
 'dirty' | Set-Content Website/dirty.txt
-Reject-Sync @('--release')
-Remove-Item -LiteralPath Website/dirty.txt
+'mobile edit' | Add-Content Mobile/screen.txt
+'shared' | Set-Content shared.txt
+git add Mobile/screen.txt shared.txt
+Remove-Item Website/api.txt
+$dirtyBefore = @(git status --porcelain) -join "`n"
+Run-Sync @('--website', '--dry-run')
+Run-Sync @('--status')
+Check ($before -eq (git rev-parse HEAD)) 'dirty previews do not commit'
+Check ($dirtyBefore -eq (@(git status --porcelain) -join "`n")) 'dirty previews preserve index and worktree'
+Run-Sync @('--website', '--no-deploy')
+Check (@(git status --porcelain).Count -eq 0) 'sync commits all pending changes'
+Check ((git rev-list --count "$before..HEAD") -eq 3) 'one separate commit per changed area'
+Check ((git show --format= --name-only HEAD) -eq 'shared.txt') 'shared commit excludes staged product changes'
+Check ((git show --format= --name-only 'HEAD~1') -eq 'Mobile/screen.txt') 'mobile commit contains only mobile files'
+Check ((git log -1 --format=%s) -match '\[skip ci\]') 'no-deploy marks automatic commits to skip CI'
+Check ($deployBefore -eq (git rev-parse deploy)) 'auto-commit preserves selected target behavior'
+Check ((git --git-dir=origin.git rev-parse main) -eq (git rev-parse HEAD)) 'auto commits pushed to main'
+
+# Use a second checkout outside the source worktree to simulate remote updates.
+$peer = "$fixtureRoot-peer"
+git clone --branch main origin.git $peer
+git -C $peer config user.email test@example.com
+git -C $peer config user.name 'Remote test'
+'remote' | Set-Content (Join-Path $peer 'Website/remote.txt')
+git -C $peer add .
+git -C $peer commit -m 'fix: remote update'
+git -C $peer push origin main
+$remoteTip = git -C $peer rev-parse HEAD
+Run-Sync @('--website')
+Check ((git rev-parse HEAD) -eq $remoteTip) 'behind main fast-forwards automatically'
+'second remote' | Add-Content (Join-Path $peer 'Website/remote.txt')
+git -C $peer commit -am 'fix: second remote update'
+git -C $peer push origin main
+'local' | Set-Content Mobile/local.txt
+Run-Sync @('--mobile')
+Check (@((git rev-list --parents -n 1 HEAD) -split ' ').Count -eq 3) 'diverged main merges automatically'
+Check (Test-Path Website/remote.txt) 'remote changes retained alongside local changes'
+Check ((git --git-dir=origin.git rev-parse main) -eq (git rev-parse HEAD)) 'merged main pushed'
+
+# Conflicts keep the automatic local commit and do not publish anything.
+git -C $peer pull --ff-only origin main
+'remote conflict' | Set-Content (Join-Path $peer 'Website/remote.txt')
+git -C $peer commit -am 'fix: conflicting remote update'
+git -C $peer push origin main
+'local conflict' | Set-Content Website/remote.txt
+$remoteBeforeConflict = @(git --git-dir=origin.git show-ref) -join "`n"
+Reject-Sync @('--website')
+Check (@(git ls-files --unmerged).Count -gt 0) 'conflicts are retained for resolution'
+Check ($remoteBeforeConflict -eq (@(git --git-dir=origin.git show-ref) -join "`n")) 'conflicts prevent all pushes'
+Reject-Sync @('--website')
+git checkout --theirs Website/remote.txt
+git add Website/remote.txt
+git commit --no-edit
+Run-Sync @('--website')
 git switch -c test-feature
 Reject-Sync @()
 git switch main
@@ -90,6 +146,7 @@ Reject-Sync @('--unknown')
 $remoteBefore = git --git-dir=origin.git show-ref
 $hook = Join-Path $PWD 'origin.git/hooks/pre-receive'
 [IO.File]::WriteAllText($hook, "#!/bin/sh`nexit 1`n", (New-Object Text.UTF8Encoding($false)))
+if ([IO.Path]::DirectorySeparatorChar -eq '/') { & chmod +x $hook }
 Reject-Sync @('--deploy')
 Check (($remoteBefore -join "`n") -eq ((git --git-dir=origin.git show-ref) -join "`n")) 'failed atomic push leaves remote unchanged'
 $versionAfterFailure = (Get-Content versions.json -Raw | ConvertFrom-Json).website

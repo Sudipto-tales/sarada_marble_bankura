@@ -1,6 +1,6 @@
 # Sync and release
 
-Develop and commit on the root `main` branch. `Website/` and `Mobile/` are the
+Develop on the root `main` branch; sync commits pending changes automatically. `Website/` and `Mobile/` are the
 actual source folders. Never edit `website`, `deploy`, or `mobile_app` branches.
 All commands require Git and PowerShell; `sync.cmd` also allows `sync` in this
 directory. `sync.sh` forwards to the same PowerShell implementation.
@@ -41,9 +41,20 @@ Run `powershell -NoProfile -ExecutionPolicy Bypass -File Tests/sync.integration.
 to verify sync against an isolated local bare remote. Fixtures are retained under
 the temporary directory for inspection; the test never contacts GitHub/Hostinger.
 
-Use `git add` and a conventional commit before sync. The script refuses dirty
-worktrees, other branches, or main that does not contain origin/main. Resolve
-divergence yourself, then rerun. Generated commits preserve the remote branch
+Sync automatically stages additions, edits and deletions, creating separate
+`chore(website)`, `chore(mobile)` and `chore(repo)` commits with a change summary.
+All pending changes are committed to main, even with a single-target option;
+the option controls which generated branches are published. Ignored files stay
+ignored. `--no-deploy` adds `[skip ci]` to automatic commit messages.
+Make a conventional commit yourself before sync when you need a `feat:` or
+breaking-change message; automatic commits count as patch changes on release.
+
+Sync fetches origin, saves local changes, then fast-forwards or merges origin/main
+automatically before generating targets. Existing commits and release tags are
+preserved. Conflicts stop publication and leave local commits saved; resolve and
+commit the merge (or abort it), then rerun. Other branches and unfinished Git
+operations are refused. Status and dry-run never commit, fetch, merge or push;
+dry-run plans use committed files and last-fetched refs. Generated commits preserve the remote branch
 parent, so pushes fast-forward without force. Main, selected branches and tags
 are pushed atomically. A failed push leaves local commits/tags for retry.
 
