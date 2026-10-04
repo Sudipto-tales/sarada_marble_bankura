@@ -4,6 +4,8 @@ import '../../../core/routing/routes.dart';
 import '../../../core/state/app_scope.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimens.dart';
+import '../../../core/theme/glossy_surface.dart';
+import '../../../core/widgets/product_image_gallery.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../core/widgets/brand_widgets.dart';
 import '../../../core/widgets/price_text.dart';
@@ -39,135 +41,165 @@ class ProductCard extends StatelessWidget {
       width: width,
       child: StoneMotion(
         child: Material(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: AppDimens.stoneCurve,
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
           clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap:
-                onTap ??
-                () => Navigator.pushNamed(
-                  context,
-                  Routes.productDetails,
-                  arguments: ProductArgs(product.id, heroTag: heroTag),
-                ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: tint,
-                    borderRadius: AppDimens.stoneCurve,
+          child: Ink(
+            decoration: glossySurface(context, radius: 20),
+            child: InkWell(
+              onTap:
+                  onTap ??
+                  () => Navigator.pushNamed(
+                    context,
+                    Routes.productDetails,
+                    arguments: ProductArgs(product.id, heroTag: heroTag),
                   ),
-                  child: Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: AppDimens.stoneCurve,
-                        child: AspectRatio(
-                          aspectRatio: compact ? 1.35 : 1.15,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ProductImageFrame(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
                           child: Hero(
                             tag: heroTag,
-                            child: AppImage(
-                              product.image,
+                            child: ProductImageGallery(
+                              key: ValueKey(product.id),
+                              images: [product.image, ...product.gallery],
                               placeholderColor: tint,
                             ),
                           ),
                         ),
-                      ),
-                      if (showWishlist)
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Observer(
-                            listenable: deps.wishlist,
-                            builder: (context, wishlist) => IconButton(
-                              tooltip: wishlist.contains(product.id)
-                                  ? 'Remove from wishlist'
-                                  : 'Save marble',
-                              style: IconButton.styleFrom(
-                                backgroundColor: AppColors.surfaceAlt,
-                                minimumSize: const Size(44, 44),
+                        if (showWishlist)
+                          Positioned(
+                            right: 6,
+                            top: 6,
+                            child: Observer(
+                              listenable: deps.wishlist,
+                              builder: (context, wishlist) => IconButton(
+                                tooltip: wishlist.contains(product.id)
+                                    ? 'Remove from wishlist'
+                                    : 'Save marble',
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.surface.withValues(alpha: .92),
+                                  side: BorderSide(
+                                    color: Colors.white.withValues(alpha: .6),
+                                  ),
+                                  minimumSize: const Size(44, 44),
+                                ),
+                                icon: Icon(
+                                  wishlist.contains(product.id)
+                                      ? Icons.favorite_rounded
+                                      : Icons.favorite_border_rounded,
+                                  size: 19,
+                                  color: wishlist.contains(product.id)
+                                      ? AppColors.clay
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                                onPressed: () => wishlist.toggle(product.id),
                               ),
-                              icon: Icon(
-                                wishlist.contains(product.id)
-                                    ? Icons.favorite_rounded
-                                    : Icons.favorite_border_rounded,
-                                size: 19,
-                                color: wishlist.contains(product.id)
-                                    ? AppColors.clay
-                                    : AppColors.ink,
-                              ),
-                              onPressed: () => wishlist.toggle(product.id),
                             ),
                           ),
-                        ),
-                      if (!product.inStock)
-                        const Positioned(
-                          left: 8,
-                          bottom: 8,
-                          child: TagChip(
-                            label: 'OUT OF STOCK',
-                            color: Colors.white,
-                            background: AppColors.ink,
-                            dense: true,
+                        if (!product.inStock)
+                          const Positioned(
+                            left: 8,
+                            bottom: 8,
+                            child: TagChip(
+                              label: 'OUT OF STOCK',
+                              color: Colors.white,
+                              background: AppColors.ink,
+                              dense: true,
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        product.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: t.titleSmall,
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '${product.finish} · ${product.origin.split(',').first}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: t.bodySmall,
-                      ),
-                      const SizedBox(height: 7),
-                      RatingBadge(
-                        rating: product.rating,
-                        count: product.reviewCount,
-                        dense: true,
-                      ),
-                      const SizedBox(height: 7),
-                      PriceText(
-                        price: product.pricePerSqFt,
-                        original: product.originalPrice,
-                        discount: product.discount,
-                        size: compact ? 14 : 15,
-                        showDiscount: false,
-                      ),
-                      if (product.isLowStock) ...[
-                        const SizedBox(height: 6),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         Text(
-                          'Only ${product.stock} sq.ft left',
+                          product.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: t.labelSmall?.copyWith(color: AppColors.clay),
+                          style: t.titleSmall,
                         ),
+                        const SizedBox(height: 3),
+                        Text(
+                          product.brand,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.labelSmall?.copyWith(
+                            fontSize: 10,
+                            letterSpacing: .35,
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${product.finish} · ${product.origin.split(',').first}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.bodySmall,
+                        ),
+                        const SizedBox(height: 5),
+                        RatingBadge(
+                          rating: product.rating,
+                          count: product.reviewCount,
+                          dense: true,
+                        ),
+                        const SizedBox(height: 5),
+                        PriceText(
+                          price: product.pricePerSqFt,
+                          original: product.originalPrice,
+                          discount: product.discount,
+                          size: compact ? 14 : 15,
+                          showDiscount: false,
+                        ),
+                        if (product.isLowStock) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Only ${product.stock} sq.ft left',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: t.labelSmall?.copyWith(
+                              color: AppColors.clay,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+/// Thin inset with fixed geometry independent of the source image dimensions.
+class _ProductImageFrame extends StatelessWidget {
+  const _ProductImageFrame({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => SizedBox(
+      height: AppDimens.productImageHeight(constraints.maxWidth),
+      child: Padding(padding: const EdgeInsets.all(5), child: child),
+    ),
+  );
 }
 
 /// Wide list-style tile used in search results and order/cart contexts.
@@ -204,12 +236,7 @@ class ProductListTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AppImage(
-              product.image,
-              width: 78,
-              height: 78,
-              radius: AppDimens.radiusSm,
-            ),
+            AppImage(product.image, width: 78, height: 78, radius: 0),
             const SizedBox(width: AppDimens.md),
             Expanded(
               child: Column(
@@ -264,33 +291,32 @@ class ProductCardSkeleton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
-          borderRadius: AppDimens.stoneCurve,
+          borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Padding(
-              padding: const EdgeInsets.all(8),
+            _ProductImageFrame(
               child: ClipRRect(
-                borderRadius: AppDimens.stoneCurve,
+                borderRadius: BorderRadius.circular(20),
                 child: const AspectRatio(
-                  aspectRatio: 1.15,
+                  aspectRatio: 4 / 3,
                   child: Shimmer(height: double.infinity, radius: 0),
                 ),
               ),
             ),
             const Padding(
-              padding: EdgeInsets.fromLTRB(12, 10, 12, 12),
+              padding: EdgeInsets.fromLTRB(12, 8, 12, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Shimmer(width: double.infinity, height: 16),
-                  SizedBox(height: 7),
+                  SizedBox(height: 5),
                   Shimmer(width: 90, height: 12),
-                  SizedBox(height: 7),
+                  SizedBox(height: 5),
                   Shimmer(width: 64, height: 14),
-                  SizedBox(height: 7),
+                  SizedBox(height: 5),
                   Shimmer(width: 100, height: 18),
                 ],
               ),
@@ -310,8 +336,8 @@ class ProductGridSkeleton extends StatelessWidget {
     padding: const EdgeInsets.all(AppDimens.lg),
     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
       crossAxisCount: AppDimens.gridColumns(MediaQuery.sizeOf(context).width),
-      mainAxisSpacing: AppDimens.md,
-      crossAxisSpacing: AppDimens.md,
+      mainAxisSpacing: AppDimens.sm,
+      crossAxisSpacing: AppDimens.sm,
       mainAxisExtent: AppDimens.gridProductHeight(context),
     ),
     itemCount: 6,

@@ -27,16 +27,20 @@ class SceneSurface {
   final ui.Image? texture;
   final double glossiness;
 
-  SceneSurface withTexture(ui.Image? image, {Color? color, double? gloss}) =>
-      SceneSurface(
-        id: id,
-        corners: corners,
-        tileMetres: tileMetres,
-        baseColor: color ?? baseColor,
-        brightness: brightness,
-        texture: image,
-        glossiness: gloss ?? glossiness,
-      );
+  SceneSurface withTexture(
+    ui.Image? image, {
+    Color? color,
+    double? gloss,
+    double? repeatMetres,
+  }) => SceneSurface(
+    id: id,
+    corners: corners,
+    tileMetres: repeatMetres ?? tileMetres,
+    baseColor: color ?? baseColor,
+    brightness: brightness,
+    texture: image,
+    glossiness: gloss ?? glossiness,
+  );
 }
 
 /// A hotspot anchored in world space.
@@ -66,10 +70,7 @@ class RoomScene {
   final List<SceneHotspot> hotspots;
   final Camera3D camera;
 
-  RoomScene copyWith({
-    List<SceneSurface>? surfaces,
-    Camera3D? camera,
-  }) =>
+  RoomScene copyWith({List<SceneSurface>? surfaces, Camera3D? camera}) =>
       RoomScene(
         surfaces: surfaces ?? this.surfaces,
         hotspots: hotspots,
@@ -90,7 +91,12 @@ abstract class RoomRenderer {
   void setCamera(Camera3D camera);
 
   /// Apply a texture to one surface.
-  void applyTexture(String surfaceId, ui.Image? texture, {Color? tint, double? gloss});
+  void applyTexture(
+    String surfaceId,
+    ui.Image? texture, {
+    Color? tint,
+    double? gloss,
+  });
 
   /// The widget that paints the current scene.
   Widget build(BuildContext context);

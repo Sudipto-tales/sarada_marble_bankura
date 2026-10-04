@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/glossy_surface.dart';
+
 import '../../../core/config/feature_flags.dart';
 import '../../../core/routing/routes.dart';
 import '../../../core/theme/app_colors.dart';
@@ -17,7 +19,7 @@ class ProductRail extends StatelessWidget {
   const ProductRail({
     super.key,
     required this.products,
-    this.height = 292,
+    this.height = 0,
     this.cardWidth = 168,
   });
 
@@ -37,7 +39,7 @@ class ProductRail extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: AppDimens.screenPad,
         itemCount: products.length,
-        separatorBuilder: (_, _) => const SizedBox(width: AppDimens.md),
+        separatorBuilder: (_, _) => const SizedBox(width: AppDimens.sm),
         itemBuilder: (context, i) =>
             ProductCard(product: products[i], width: cardWidth),
       ),
@@ -117,7 +119,7 @@ class ModuleShortcuts extends StatelessWidget {
       if (FeatureFlags.visualizationEnabled)
         _ShortcutTile(
           title: 'See it in your room',
-          subtitle: 'Walk through a 3D room and swap marble live',
+          subtitle: 'Try stone finishes in 2D photos or 3D rooms',
           icon: Icons.view_in_ar_rounded,
           image: 'assets/images/rooms/luxury_living_thumb.webp',
           onTap: () => Navigator.pushNamed(
@@ -397,11 +399,7 @@ class TrustStrip extends StatelessWidget {
       padding: AppDimens.screenPad,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppDimens.lg),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-          border: Border.all(color: AppColors.line),
-        ),
+        decoration: glossySurface(context),
         child: Row(
           children: [
             for (final (icon, title, sub) in _items)
@@ -478,7 +476,7 @@ class VisualizerPromo extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const TagChip(
-                      label: '3D ROOM PREVIEW',
+                      label: 'ROOM VISUALIZER',
                       color: AppColors.ink,
                       background: AppColors.cyan,
                       dense: true,
@@ -501,7 +499,7 @@ class VisualizerPromo extends StatelessWidget {
                     SizedBox(
                       width: 180,
                       child: GradientButton(
-                        label: 'Open 3D room',
+                        label: 'Visualize your room',
                         icon: Icons.view_in_ar_rounded,
                         height: 44,
                         onPressed: () => Navigator.pushNamed(

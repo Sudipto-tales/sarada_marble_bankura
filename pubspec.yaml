@@ -7,8 +7,12 @@ environment:
   sdk: ^3.10.7
 
 dependencies:
+  file_selector: 1.1.0
   flutter:
     sdk: flutter
+  pdfrx: 2.6.5
+  turnable_page: 1.1.0
+  video_player: ^2.14.1
 
 dev_dependencies:
   flutter_test:
@@ -19,6 +23,8 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/videos/
+    - assets/catalogs/kasamood/
     - assets/brand/
     - assets/images/rooms/
     - assets/images/categories/

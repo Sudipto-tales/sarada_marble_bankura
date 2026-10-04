@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/glossy_surface.dart';
+
 import '../../core/routing/routes.dart';
 import '../../core/state/app_scope.dart';
 import '../../core/state/cart_controller.dart';
@@ -172,11 +174,7 @@ class _CartLine extends StatelessWidget {
           0,
         ),
         padding: const EdgeInsets.all(AppDimens.md),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-          border: Border.all(color: AppColors.line),
-        ),
+        decoration: glossySurface(context),
         child: Column(
           children: [
             Row(

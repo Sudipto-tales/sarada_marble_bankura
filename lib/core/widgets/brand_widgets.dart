@@ -36,7 +36,10 @@ class GradientButton extends StatelessWidget {
           const SizedBox(
             width: 18,
             height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white,
+            ),
           )
         else if (icon != null) ...[
           Icon(icon, size: 19, color: Colors.white),
@@ -63,10 +66,31 @@ class GradientButton extends StatelessWidget {
       opacity: enabled ? 1 : 0.55,
       child: Material(
         color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+        clipBehavior: Clip.antiAlias,
         child: Ink(
           height: height,
           decoration: BoxDecoration(
-            gradient: gradient ?? AppColors.brandGradient,
+            gradient:
+                gradient ??
+                LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color.lerp(
+                      Theme.of(context).colorScheme.primary,
+                      Colors.white,
+                      .18,
+                    )!,
+                    Theme.of(context).colorScheme.primary,
+                    Color.lerp(
+                      Theme.of(context).colorScheme.primary,
+                      Colors.black,
+                      .16,
+                    )!,
+                  ],
+                  stops: const [0, .48, 1],
+                ),
             borderRadius: BorderRadius.circular(AppDimens.radiusMd),
             boxShadow: enabled
                 ? [
@@ -111,7 +135,9 @@ class TagChip extends StatelessWidget {
     final c = color ?? AppColors.deep;
     return Container(
       padding: EdgeInsets.symmetric(
-          horizontal: dense ? 6 : 8, vertical: dense ? 2 : 4),
+        horizontal: dense ? 6 : 8,
+        vertical: dense ? 2 : 4,
+      ),
       decoration: BoxDecoration(
         color: background ?? c.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(AppDimens.radiusSm - 2),
@@ -139,7 +165,12 @@ class TagChip extends StatelessWidget {
 }
 
 class RatingBadge extends StatelessWidget {
-  const RatingBadge({super.key, required this.rating, this.count, this.dense = false});
+  const RatingBadge({
+    super.key,
+    required this.rating,
+    this.count,
+    this.dense = false,
+  });
 
   final double rating;
   final int? count;
@@ -150,14 +181,16 @@ class RatingBadge extends StatelessWidget {
     final color = rating >= 4.3
         ? AppColors.success
         : rating >= 3.5
-            ? AppColors.warning
-            : AppColors.danger;
+        ? AppColors.warning
+        : AppColors.danger;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           padding: EdgeInsets.symmetric(
-              horizontal: dense ? 5 : 6, vertical: dense ? 1.5 : 2.5),
+            horizontal: dense ? 5 : 6,
+            vertical: dense ? 1.5 : 2.5,
+          ),
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(4),
@@ -174,7 +207,11 @@ class RatingBadge extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 2),
-              Icon(Icons.star_rounded, size: dense ? 10 : 12, color: Colors.white),
+              Icon(
+                Icons.star_rounded,
+                size: dense ? 10 : 12,
+                color: Colors.white,
+              ),
             ],
           ),
         ),
@@ -225,8 +262,10 @@ class SectionHeader extends StatelessWidget {
                 Text(title, style: t.titleLarge),
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),
-                  Text(subtitle!,
-                      style: t.bodySmall?.copyWith(color: AppColors.muted)),
+                  Text(
+                    subtitle!,
+                    style: t.bodySmall?.copyWith(color: AppColors.muted),
+                  ),
                 ],
               ],
             ),

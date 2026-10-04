@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../data/repositories/repositories.dart';
+import '../../data/repositories/brand_catalog_repository.dart';
 import '../../data/repositories/static_repositories.dart';
 import '../store/local_store.dart';
 import 'browsing_controller.dart';
@@ -24,24 +25,27 @@ class AppDependencies {
     required this.rooms,
     required this.promos,
     required this.notifications,
-  })  : cart = CartController(store, products),
-        wishlist = WishlistController(store),
-        session = SessionController(users),
-        browsing = BrowsingController(store),
-        theme = ThemeController(store),
-        notificationCenter = NotificationController(notifications);
+  }) : cart = CartController(store, products),
+       wishlist = WishlistController(store),
+       session = SessionController(users),
+       browsing = BrowsingController(store),
+       theme = ThemeController(store),
+       notificationCenter = NotificationController(notifications);
 
   factory AppDependencies.static(LocalStore store) => AppDependencies._(
-        store: store,
-        products: const StaticProductRepository(),
-        categories: const StaticCategoryRepository(),
-        reviews: StaticReviewRepository(),
-        orders: StaticOrderRepository(store),
-        users: StaticUserRepository(store),
-        rooms: StaticRoomRepository(store),
-        promos: const StaticPromoRepository(),
-        notifications: StaticNotificationRepository(store),
-      );
+    store: store,
+    products: const StaticProductRepository(),
+    categories: const StaticCategoryRepository(),
+    reviews: StaticReviewRepository(),
+    orders: StaticOrderRepository(store),
+    users: StaticUserRepository(store),
+    rooms: StaticRoomRepository(store),
+    promos: const StaticPromoRepository(),
+    notifications: StaticNotificationRepository(store),
+  );
+
+  final BrandCatalogRepository brandCatalogs =
+      const BundledBrandCatalogRepository();
 
   final LocalStore store;
 
@@ -103,7 +107,7 @@ class Observer<T extends Listenable> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: listenable,
-        builder: (context, _) => builder(context, listenable),
-      );
+    listenable: listenable,
+    builder: (context, _) => builder(context, listenable),
+  );
 }

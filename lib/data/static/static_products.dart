@@ -19,6 +19,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'italian_marble',
     brand: 'Maa Sarada Select',
+    brandId: 'maa-sarada-select',
     image: 'assets/images/products/carrara_white_main.webp',
     gallery: [
       'assets/images/products/carrara_white_main.webp',
@@ -50,6 +51,7 @@ const List<Product> kProducts = [
     dimensions: '2600 x 1300 mm slab',
     categoryId: 'italian_marble',
     brand: 'Maa Sarada Signature',
+    brandId: 'maa-sarada-signature',
     image: 'assets/images/products/statuario_main.webp',
     gallery: [
       'assets/images/products/statuario_main.webp',
@@ -81,6 +83,7 @@ const List<Product> kProducts = [
     dimensions: '2800 x 1400 mm slab',
     categoryId: 'italian_marble',
     brand: 'Maa Sarada Signature',
+    brandId: 'maa-sarada-signature',
     image: 'assets/images/products/calacatta_gold_main.webp',
     gallery: [
       'assets/images/products/calacatta_gold_main.webp',
@@ -112,6 +115,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'black_marble',
     brand: 'Maa Sarada Select',
+    brandId: 'maa-sarada-select',
     image: 'assets/images/products/nero_marquina_main.webp',
     gallery: [
       'assets/images/products/nero_marquina_main.webp',
@@ -142,6 +146,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'green_marble',
     brand: 'Maa Sarada Select',
+    brandId: 'maa-sarada-select',
     image: 'assets/images/products/imperial_green_main.webp',
     gallery: [
       'assets/images/products/imperial_green_main.webp',
@@ -171,6 +176,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'indian_marble',
     brand: 'Maa Sarada Heritage',
+    brandId: 'maa-sarada-heritage',
     image: 'assets/images/products/makrana_white_main.webp',
     gallery: [
       'assets/images/products/makrana_white_main.webp',
@@ -202,6 +208,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'indian_marble',
     brand: 'Maa Sarada Value',
+    brandId: 'maa-sarada-value',
     image: 'assets/images/products/rajasthan_pink_main.webp',
     gallery: [
       'assets/images/products/rajasthan_pink_main.webp',
@@ -231,6 +238,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'indian_marble',
     brand: 'Maa Sarada Value',
+    brandId: 'maa-sarada-value',
     image: 'assets/images/products/ambaji_white_main.webp',
     gallery: [
       'assets/images/products/ambaji_white_main.webp',
@@ -261,6 +269,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'beige_marble',
     brand: 'Maa Sarada Select',
+    brandId: 'maa-sarada-select',
     image: 'assets/images/products/botticino_beige_main.webp',
     gallery: [
       'assets/images/products/botticino_beige_main.webp',
@@ -291,6 +300,7 @@ const List<Product> kProducts = [
     dimensions: '2600 x 1300 mm slab',
     categoryId: 'beige_marble',
     brand: 'Maa Sarada Select',
+    brandId: 'maa-sarada-select',
     image: 'assets/images/products/crema_marfil_main.webp',
     gallery: [
       'assets/images/products/crema_marfil_main.webp',
@@ -321,6 +331,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'premium_marble',
     brand: 'Maa Sarada Select',
+    brandId: 'maa-sarada-select',
     image: 'assets/images/products/travertine_classic_main.webp',
     gallery: [
       'assets/images/products/travertine_classic_main.webp',
@@ -350,6 +361,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'premium_marble',
     brand: 'Maa Sarada Signature',
+    brandId: 'maa-sarada-signature',
     image: 'assets/images/products/emperador_dark_main.webp',
     gallery: [
       'assets/images/products/emperador_dark_main.webp',
@@ -379,6 +391,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'premium_marble',
     brand: 'Maa Sarada Signature',
+    brandId: 'maa-sarada-signature',
     image: 'assets/images/products/onyx_honey_main.webp',
     gallery: [
       'assets/images/products/onyx_honey_main.webp',
@@ -410,6 +423,7 @@ const List<Product> kProducts = [
     dimensions: '2600 x 1300 mm slab',
     categoryId: 'white_marble',
     brand: 'Maa Sarada Select',
+    brandId: 'maa-sarada-select',
     image: 'assets/images/products/grey_william_main.webp',
     gallery: [
       'assets/images/products/grey_william_main.webp',
@@ -440,6 +454,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'indian_marble',
     brand: 'Maa Sarada Value',
+    brandId: 'maa-sarada-value',
     image: 'assets/images/products/katni_beige_main.webp',
     gallery: [
       'assets/images/products/katni_beige_main.webp',
@@ -469,6 +484,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'green_marble',
     brand: 'Maa Sarada Heritage',
+    brandId: 'maa-sarada-heritage',
     image: 'assets/images/products/udaipur_green_main.webp',
     gallery: [
       'assets/images/products/udaipur_green_main.webp',
@@ -498,6 +514,7 @@ const List<Product> kProducts = [
     dimensions: '2700 x 1300 mm slab',
     categoryId: 'granite',
     brand: 'Maa Sarada Select',
+    brandId: 'maa-sarada-select',
     image: 'assets/images/products/black_galaxy_main.webp',
     gallery: [
       'assets/images/products/black_galaxy_main.webp',
@@ -529,6 +546,7 @@ const List<Product> kProducts = [
     dimensions: '2700 x 1300 mm slab',
     categoryId: 'granite',
     brand: 'Maa Sarada Select',
+    brandId: 'maa-sarada-select',
     image: 'assets/images/products/kashmir_white_granite_main.webp',
     gallery: [
       'assets/images/products/kashmir_white_granite_main.webp',
@@ -558,6 +576,7 @@ const List<Product> kProducts = [
     dimensions: '2400 x 1200 mm slab',
     categoryId: 'beige_marble',
     brand: 'Maa Sarada Value',
+    brandId: 'maa-sarada-value',
     image: 'assets/images/products/sahara_beige_main.webp',
     gallery: [
       'assets/images/products/sahara_beige_main.webp',
@@ -587,6 +606,7 @@ const List<Product> kProducts = [
     dimensions: '2600 x 1300 mm slab',
     categoryId: 'white_marble',
     brand: 'Maa Sarada Signature',
+    brandId: 'maa-sarada-signature',
     image: 'assets/images/products/bianco_dolomite_main.webp',
     gallery: [
       'assets/images/products/bianco_dolomite_main.webp',

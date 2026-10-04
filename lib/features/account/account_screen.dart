@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/glossy_surface.dart';
+
 import '../../core/config/app_config.dart';
 import '../../core/config/feature_flags.dart';
 import '../../core/routing/routes.dart';
@@ -95,6 +97,17 @@ class AccountScreen extends StatelessWidget {
                     subtitle: 'Your 3D room combinations',
                     route: Routes.savedDesigns,
                   ),
+              ],
+            ),
+            const _Group(
+              title: 'Settings',
+              tiles: [
+                _Tile(
+                  icon: Icons.palette_outlined,
+                  label: 'Appearance',
+                  subtitle: 'Theme and accent color',
+                  route: Routes.appearance,
+                ),
               ],
             ),
             const _Group(
@@ -270,11 +283,7 @@ class _Group extends StatelessWidget {
         ),
         Container(
           margin: AppDimens.screenPad,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-            border: Border.all(color: AppColors.line),
-          ),
+          decoration: glossySurface(context),
           child: Column(
             children: [
               for (var i = 0; i < tiles.length; i++) ...[

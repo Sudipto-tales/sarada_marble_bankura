@@ -93,14 +93,17 @@ const List<Offer> kOffers = [
 const List<PromoBanner> kBanners = [
   PromoBanner(
     id: 'b1',
+    badge: 'Top marble picks',
     title: 'Marble that makes the room',
     subtitle: 'Hand-picked Italian & Indian slabs, delivered to site',
     image: 'assets/images/banners/hero_1.webp',
+    animatedImage: 'assets/images/banners/marble_motion.gif',
     ctaLabel: 'Shop premium',
     categoryId: 'italian_marble',
   ),
   PromoBanner(
     id: 'b2',
+    backgroundColor: 0xFFE6D8C4,
     title: 'Lobby-grade stone',
     subtitle: 'Mirror-polished Nero Marquina & back-lit onyx',
     image: 'assets/images/banners/hero_2.webp',
@@ -109,6 +112,7 @@ const List<PromoBanner> kBanners = [
   ),
   PromoBanner(
     id: 'b3',
+    backgroundColor: 0xFFD1E5EE,
     title: 'Built for real kitchens',
     subtitle: 'Heat, acid and knife resistant granite tops',
     image: 'assets/images/banners/hero_3.webp',
@@ -134,13 +138,62 @@ const List<PromoBanner> kBanners = [
 
 /// Editorial "get the look" strip on the home screen.
 const List<PromoBanner> kInspiration = [
-  PromoBanner(id: 'i1', title: 'Statuario living room', subtitle: 'White field, gold accents', image: 'assets/images/inspiration/insp_living.webp', ctaLabel: 'Get the look', productId: 'p_statuario'),
-  PromoBanner(id: 'i2', title: 'Black galaxy kitchen', subtitle: 'Dark counters, warm wood', image: 'assets/images/inspiration/insp_kitchen.webp', ctaLabel: 'Get the look', productId: 'p_black_galaxy'),
-  PromoBanner(id: 'i3', title: 'Onyx reception', subtitle: 'Back-lit stone that glows', image: 'assets/images/inspiration/insp_lobby.webp', ctaLabel: 'Get the look', productId: 'p_onyx_honey'),
-  PromoBanner(id: 'i4', title: 'Crema bedroom', subtitle: 'Cream floor, dark headboard', image: 'assets/images/inspiration/insp_bedroom.webp', ctaLabel: 'Get the look', productId: 'p_crema_marfil'),
-  PromoBanner(id: 'i5', title: 'Carrara bathroom', subtitle: 'Cool white, brass fittings', image: 'assets/images/inspiration/insp_bath.webp', ctaLabel: 'Get the look', productId: 'p_carrara_white'),
-  PromoBanner(id: 'i6', title: 'Green study wall', subtitle: 'Imperial green feature', image: 'assets/images/inspiration/insp_office.webp', ctaLabel: 'Get the look', productId: 'p_imperial_green'),
-  PromoBanner(id: 'i7', title: 'Travertine villa hall', subtitle: 'Honed, matt, glare-free', image: 'assets/images/inspiration/insp_villa.webp', ctaLabel: 'Get the look', productId: 'p_travertine_classic'),
+  PromoBanner(
+    id: 'i1',
+    title: 'Statuario living room',
+    subtitle: 'White field, gold accents',
+    image: 'assets/images/inspiration/insp_living.webp',
+    ctaLabel: 'Get the look',
+    productId: 'p_statuario',
+  ),
+  PromoBanner(
+    id: 'i2',
+    title: 'Black galaxy kitchen',
+    subtitle: 'Dark counters, warm wood',
+    image: 'assets/images/inspiration/insp_kitchen.webp',
+    ctaLabel: 'Get the look',
+    productId: 'p_black_galaxy',
+  ),
+  PromoBanner(
+    id: 'i3',
+    title: 'Onyx reception',
+    subtitle: 'Back-lit stone that glows',
+    image: 'assets/images/inspiration/insp_lobby.webp',
+    ctaLabel: 'Get the look',
+    productId: 'p_onyx_honey',
+  ),
+  PromoBanner(
+    id: 'i4',
+    title: 'Crema bedroom',
+    subtitle: 'Cream floor, dark headboard',
+    image: 'assets/images/inspiration/insp_bedroom.webp',
+    ctaLabel: 'Get the look',
+    productId: 'p_crema_marfil',
+  ),
+  PromoBanner(
+    id: 'i5',
+    title: 'Carrara bathroom',
+    subtitle: 'Cool white, brass fittings',
+    image: 'assets/images/inspiration/insp_bath.webp',
+    ctaLabel: 'Get the look',
+    productId: 'p_carrara_white',
+  ),
+  PromoBanner(
+    id: 'i6',
+    title: 'Green study wall',
+    subtitle: 'Imperial green feature',
+    image: 'assets/images/inspiration/insp_office.webp',
+    ctaLabel: 'Get the look',
+    productId: 'p_imperial_green',
+  ),
+  PromoBanner(
+    id: 'i7',
+    title: 'Travertine villa hall',
+    subtitle: 'Honed, matt, glare-free',
+    image: 'assets/images/inspiration/insp_villa.webp',
+    ctaLabel: 'Get the look',
+    productId: 'p_travertine_classic',
+  ),
 ];
 
 DateTime _inDays(int d) => DateTime.now().add(Duration(days: d));

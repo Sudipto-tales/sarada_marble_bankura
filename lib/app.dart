@@ -5,6 +5,7 @@ import 'core/routing/router.dart';
 import 'core/routing/routes.dart';
 import 'core/state/app_scope.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/glossy_surface.dart';
 
 class MaaSaradaApp extends StatefulWidget {
   const MaaSaradaApp({super.key, required this.deps});
@@ -31,8 +32,9 @@ class _MaaSaradaAppState extends State<MaaSaradaApp> {
         builder: (context, theme) => MaterialApp(
           title: '${AppConfig.appName} · ${AppConfig.tagline}',
           debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(),
-          darkTheme: AppTheme.dark(),
+          builder: (context, child) => GlossyBackdrop(child: child!),
+          theme: AppTheme.light(accent: theme.accent),
+          darkTheme: AppTheme.dark(accent: theme.accent),
           themeMode: theme.mode,
           initialRoute: Routes.splash,
           onGenerateRoute: AppRouter.generate,

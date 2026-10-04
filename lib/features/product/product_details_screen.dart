@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../brand_catalogs/brand_catalog_widgets.dart';
 
 import '../../core/bridge/module_bridge.dart';
 import '../../core/config/feature_flags.dart';
@@ -15,7 +16,7 @@ import '../../core/widgets/state_views.dart';
 import '../../core/widgets/shimmer.dart';
 import '../../data/models/product.dart';
 import '../../data/models/review.dart';
-import '../catalog/widgets/product_card.dart';
+import 'widgets/product_discovery.dart';
 import 'widgets/product_gallery.dart';
 import 'widgets/product_specs.dart';
 import 'widgets/review_summary.dart';
@@ -43,13 +44,15 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     final results = await Future.wait([
       deps.reviews.forProduct(product.id),
       deps.reviews.ratingBreakdown(product.id),
-      deps.products.similarTo(product.id),
+      deps.products.similarTo(product.id, limit: 8),
+      deps.products.all(),
     ]);
     return _Details(
       product: product,
       reviews: results[0] as List<Review>,
       breakdown: results[1] as Map<int, int>,
       similar: results[2] as List<Product>,
+      catalog: results[3] as List<Product>,
     );
   }
 
@@ -181,12 +184,14 @@ class _Details {
     required this.reviews,
     required this.breakdown,
     required this.similar,
+    required this.catalog,
   });
 
   final Product product;
   final List<Review> reviews;
   final Map<int, int> breakdown;
   final List<Product> similar;
+  final List<Product> catalog;
 }
 
 class _Content extends StatelessWidget {
@@ -346,6 +351,7 @@ class _Content extends StatelessWidget {
                     style: t.labelSmall,
                   ),
                   const SizedBox(height: AppDimens.lg),
+                  ProductBrandCatalogAction(product: product),
                   _QuantityBlock(
                     sqFt: sqFt,
                     onSqFt: onSqFt,
@@ -392,24 +398,12 @@ class _Content extends StatelessWidget {
               breakdown: data.breakdown,
             ),
             const SectionGap(),
-            if (data.similar.isNotEmpty) ...[
-              const SectionHeader(
-                title: 'Similar marble',
-                subtitle: 'Same family, different budget',
-              ),
-              SizedBox(
-                height: AppDimens.productHeight(context, 168),
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: AppDimens.screenPad,
-                  itemCount: data.similar.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(width: AppDimens.md),
-                  itemBuilder: (context, i) =>
-                      ProductCard(product: data.similar[i], width: 168),
-                ),
-              ),
-            ],
+            ProductDiscovery(
+              product: product,
+              similar: data.similar,
+              catalog: data.catalog,
+              sqFt: sqFt,
+            ),
             const SizedBox(height: AppDimens.xxxl),
           ],
         ),

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../core/routing/routes.dart';
@@ -46,10 +48,13 @@ class _SavedDesignsScreenState extends State<SavedDesignsScreen> {
               icon: Icons.bookmark_border_rounded,
               title: 'No saved designs',
               message:
-                  'Open a room in the 3D preview, apply marble and save the combination.',
-              actionLabel: 'Open 3D rooms',
-              onAction: () => Navigator.pushNamed(context, Routes.visualizer,
-                  arguments: const VisualizerArgs()),
+                  'Open a room in the room visualizer, apply marble and save the combination.',
+              actionLabel: 'Open room visualizer',
+              onAction: () => Navigator.pushNamed(
+                context,
+                Routes.visualizer,
+                arguments: const VisualizerArgs(),
+              ),
             );
           }
           return ListView.builder(
@@ -57,11 +62,16 @@ class _SavedDesignsScreenState extends State<SavedDesignsScreen> {
             itemCount: designs.length,
             itemBuilder: (context, i) {
               final design = designs[i];
-              final room =
-                  rooms.where((r) => r.id == design.roomId).firstOrNull;
+              final room = rooms
+                  .where((r) => r.id == design.roomId)
+                  .firstOrNull;
               return Container(
                 margin: const EdgeInsets.fromLTRB(
-                    AppDimens.lg, AppDimens.md, AppDimens.lg, 0),
+                  AppDimens.lg,
+                  AppDimens.md,
+                  AppDimens.lg,
+                  0,
+                ),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(AppDimens.radiusMd),
@@ -71,23 +81,46 @@ class _SavedDesignsScreenState extends State<SavedDesignsScreen> {
                   borderRadius: BorderRadius.circular(AppDimens.radiusMd),
                   onTap: room == null
                       ? null
-                      : () => Navigator.pushNamed(context, Routes.visualizer,
-                          arguments: VisualizerArgs(roomId: room.id)),
+                      : () => Navigator.pushNamed(
+                          context,
+                          Routes.visualizer,
+                          arguments: VisualizerArgs(
+                            roomId: room.id,
+                            designId: design.id,
+                          ),
+                        ),
                   child: Padding(
                     padding: const EdgeInsets.all(AppDimens.md),
                     child: Row(
                       children: [
-                        if (room != null)
-                          AppImage(room.thumb,
-                              width: 76, height: 62, radius: AppDimens.radiusSm),
+                        if (design.photoPng != null)
+                          Image.memory(
+                            base64Decode(design.photoPng!),
+                            width: 76,
+                            height: 62,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const SizedBox(
+                              width: 76,
+                              height: 62,
+                              child: Icon(Icons.broken_image_outlined),
+                            ),
+                          )
+                        else if (room != null)
+                          AppImage(
+                            room.thumb,
+                            width: 76,
+                            height: 62,
+                            radius: AppDimens.radiusSm,
+                          ),
                         const SizedBox(width: AppDimens.md),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(design.name,
-                                  style:
-                                      Theme.of(context).textTheme.titleSmall),
+                              Text(
+                                design.name,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
                               const SizedBox(height: 2),
                               Text(
                                 '${room?.name ?? 'Room'} · '
@@ -95,9 +128,10 @@ class _SavedDesignsScreenState extends State<SavedDesignsScreen> {
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                               const SizedBox(height: 2),
-                              Text(Fmt.relative(design.createdOn),
-                                  style:
-                                      Theme.of(context).textTheme.labelSmall),
+                              Text(
+                                Fmt.relative(design.createdOn),
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
                             ],
                           ),
                         ),
@@ -111,15 +145,18 @@ class _SavedDesignsScreenState extends State<SavedDesignsScreen> {
                               destructive: true,
                             );
                             if (!ok || !context.mounted) return;
-                            await AppScope.read(context)
-                                .rooms
-                                .deleteDesign(design.id);
+                            await AppScope.read(
+                              context,
+                            ).rooms.deleteDesign(design.id);
                             if (context.mounted) {
                               setState(() => _future = _load());
                             }
                           },
-                          icon: const Icon(Icons.delete_outline_rounded,
-                              size: 20, color: AppColors.danger),
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            size: 20,
+                            color: AppColors.danger,
+                          ),
                         ),
                       ],
                     ),

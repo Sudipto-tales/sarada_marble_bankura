@@ -1,60 +1,44 @@
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../../core/bridge/module_bridge.dart';
 import '../../../core/routing/routes.dart';
 import '../../../core/state/app_scope.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_dimens.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../core/widgets/brand_widgets.dart';
 import '../../../core/widgets/feedback.dart';
 import '../../../core/widgets/state_views.dart';
-import '../../../data/models/cart_item.dart';
-import '../../../data/models/marble_texture.dart';
+import '../../../data/models/photo_surface.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/room.dart';
-import '../../../data/models/saved_design.dart';
 import '../camera/camera_state.dart';
+import '../photo/photo_room_viewport.dart';
+import '../photo/photo_source_service.dart';
+import '../photo/photo_surface_editor.dart';
 import '../rooms/cuboid_room_renderer.dart';
-import '../rooms/room_scene_builder.dart';
-import '../textures/texture_cache.dart';
+import '../state/visualizer_controller.dart';
 import 'texture_picker.dart';
+import '../widgets/visualizer_loading.dart';
 
-/// The immersive room. Look around, tap a surface, swap the marble, compare
-/// before/after, then hand a [VisualizationResult] back to the shop.
-///
-/// This screen knows nothing about carts or orders: when the user acts on a
-/// design it emits a result object and lets the host decide.
+/// Both viewports consume one design; only the host handles shopping actions.
 class RoomCustomizerScreen extends StatefulWidget {
-  const RoomCustomizerScreen({super.key, required this.args});
-
+  const RoomCustomizerScreen({super.key, required this.args, this.onUseDesign});
   final VisualizerArgs args;
-
+  final Future<void> Function(VisualizationResult)? onUseDesign;
   @override
   State<RoomCustomizerScreen> createState() => _RoomCustomizerScreenState();
 }
 
 class _RoomCustomizerScreenState extends State<RoomCustomizerScreen> {
-  final CuboidRoomRenderer _renderer = CuboidRoomRenderer();
-
-  Room? _room;
-  List<Product> _products = const [];
-  Map<String, MarbleTexture> _textures = const {};
-  Object? _error;
-  bool _loading = true;
-
-  /// surfaceId -> productId, plus the untouched baseline for before/after.
-  final Map<String, String> _applied = {};
-  final Map<String, String> _original = {};
-
-  String _selectedSurface = 'floor';
-  bool _showOriginal = false;
-  bool _immersive = false;
-  Camera3D? _camera;
-  double _fovAtGestureStart = 74;
+  final _renderer = CuboidRoomRenderer();
+  final _photoKey = GlobalKey();
+  final _photoTransform = TransformationController();
+  VisualizerController? _design;
+  bool _loading = true, _importing = false, _saving = false, _adding = false;
+  String? _error;
+  double _gestureFov = 74;
 
   @override
   void initState() {
@@ -62,694 +46,850 @@ class _RoomCustomizerScreenState extends State<RoomCustomizerScreen> {
     _load();
   }
 
-  @override
-  void dispose() {
-    _renderer.dispose();
-    super.dispose();
-  }
-
   Future<void> _load() async {
+    final deps = AppScope.read(context);
+    _design?.removeListener(_changed);
+    _design?.dispose();
+    final design = VisualizerController(
+      rooms: deps.rooms,
+      catalog: deps.products,
+    );
+    _design = design;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final deps = AppScope.read(context);
-      final rooms = await deps.rooms.all();
-      final room = rooms.firstWhere(
-        (r) => r.id == (widget.args.roomId ?? rooms.first.id),
-        orElse: () => rooms.first,
+      await design.load(
+        roomId: widget.args.roomId,
+        productId: widget.args.productId,
+        savedId: widget.args.designId,
+        initialMode: widget.args.initialMode,
+        photoPngOverride: widget.args.photoPng,
       );
-      final textures = await deps.rooms.textures();
-      final products = await deps.products.all();
-      final byTexture = {for (final t in textures) t.id: t};
-
-      _applied.clear();
-      _original.clear();
-      for (final surface in room.surfaces) {
-        final product = products
-            .where((p) => p.textureId == surface.defaultTextureId)
-            .firstOrNull;
-        if (product != null) {
-          _applied[surface.id] = product.id;
-          _original[surface.id] = product.id;
-        }
-      }
-
-      // Product handed in from a details screen lands on the floor first.
-      final incoming = widget.args.productId;
-      if (incoming != null) {
-        _applied['floor'] = incoming;
-      }
-
-      final scene = await RoomSceneBuilder.build(
-        room,
-        {
-          for (final entry in _applied.entries)
-            if (byTexture[_textureIdOf(entry.value, products)] != null)
-              entry.key: byTexture[_textureIdOf(entry.value, products)]!,
-        },
-      );
-      await _renderer.load(scene);
-
       if (!mounted) return;
-      setState(() {
-        _room = room;
-        _products = products;
-        _textures = byTexture;
-        _camera = scene.camera;
-        _selectedSurface = room.surfaces.first.id;
-        _loading = false;
-      });
-    } catch (e) {
+      if (design.scene == null) throw StateError('No scene available.');
+      await _renderer.load(design.scene!);
       if (!mounted) return;
-      setState(() {
-        _error = e;
-        _loading = false;
-      });
+      design.addListener(_changed);
+      setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Could not open this room or saved design.';
+        });
+      }
     }
   }
 
-  String _textureIdOf(String productId, [List<Product>? products]) {
-    final list = products ?? _products;
-    return list.where((p) => p.id == productId).firstOrNull?.textureId ?? '';
-  }
-
-  Product? _productFor(String surfaceId) {
-    final id = (_showOriginal ? _original : _applied)[surfaceId];
-    if (id == null) return null;
-    return _products.where((p) => p.id == id).firstOrNull;
-  }
-
-  RoomSurface? get _surface =>
-      _room?.surfaces.where((s) => s.id == _selectedSurface).firstOrNull;
-
-  Future<void> _apply(String surfaceId, Product product) async {
-    final texture = _textures[product.textureId];
-    if (texture == null) return;
-    final image = await TextureCache.instance.load(texture.asset);
+  void _changed() {
     if (!mounted) return;
-    setState(() {
-      _applied[surfaceId] = product.id;
-      _showOriginal = false;
-    });
-    _renderer.applyTexture(surfaceId, image,
-        tint: Color(texture.baseColor), gloss: texture.glossiness);
+    final scene = _design?.scene;
+    if (scene != null) _renderer.load(scene);
+    setState(() {});
   }
 
-  Future<void> _toggleOriginal(bool value) async {
-    setState(() => _showOriginal = value);
-    final source = value ? _original : _applied;
-    for (final entry in source.entries) {
-      final product = _products.where((p) => p.id == entry.value).firstOrNull;
-      if (product == null) continue;
-      final texture = _textures[product.textureId];
-      if (texture == null) continue;
-      final image = await TextureCache.instance.load(texture.asset);
-      if (!mounted) return;
-      _renderer.applyTexture(entry.key, image,
-          tint: Color(texture.baseColor), gloss: texture.glossiness);
-    }
+  @override
+  void dispose() {
+    _design?.removeListener(_changed);
+    _design?.dispose();
+    _renderer.dispose();
+    _photoTransform.dispose();
+    super.dispose();
   }
 
-  void _look(Offset delta) {
-    final camera = _camera;
-    if (camera == null) return;
-    final next = camera.rotatedBy(-delta.dx * 0.24, delta.dy * 0.18);
-    setState(() => _camera = next);
-    _renderer.setCamera(next);
-  }
-
-  void _resetCamera() {
-    final room = _room;
-    if (room == null) return;
-    final next = Camera3D(
-      position: Vec3(0, room.eyeHeight, -room.depth / 2 + 0.55),
-      yaw: room.defaultYaw,
-      pitch: room.defaultPitch,
-      fov: room.fov,
+  Future<void> _chooseStone() async {
+    final d = _design!;
+    final surfaceId = d.selectedSurface;
+    final product = await showModalBottomSheet<Product>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => TexturePicker(
+        products: d.products,
+        selectedId: d.assignments[surfaceId],
+        surfaceLabel: d.surface?.label ?? 'Surface',
+        areaSqFt: d.selectedArea ?? 0,
+      ),
     );
-    setState(() => _camera = next);
-    _renderer.setCamera(next);
+    if (!mounted || product == null) return;
+    await d.apply(surfaceId, product);
   }
 
-  /// The single hand-off point back to the e-commerce module.
-  VisualizationResult _result(String surfaceId, Product product) {
-    final surface = _room?.surfaces.where((s) => s.id == surfaceId).firstOrNull;
-    return VisualizationResult(
-      productId: product.id,
-      surfaceId: surfaceId,
-      estimatedSqFt: surface?.areaSqFt ?? 0,
-      roomId: _room?.id,
-    );
-  }
-
-  Future<void> _addToCart() async {
-    final product = _productFor(_selectedSurface);
-    if (product == null) return;
-    final result = _result(_selectedSurface, product);
-    final deps = AppScope.read(context);
-    await deps.cart.setQuantity(
-      product,
-      result.estimatedSqFt,
-      source: CartSource.visualizer,
-      note: '${_room?.name} · ${_surface?.label}',
-    );
-    if (!mounted) return;
-    Toast.success(
+  Future<void> _editSurface() async {
+    final d = _design!;
+    if (d.photo == null) return;
+    final id = d.selectedSurface;
+    final result = await Navigator.push<PhotoSurface>(
       context,
-      '${product.name} · ${Fmt.sqft(result.estimatedSqFt)} added',
-      actionLabel: 'View cart',
-      onAction: () => Navigator.pushNamed(context, Routes.cart),
+      MaterialPageRoute(
+        builder: (_) => PhotoSurfaceEditor(
+          photo: d.photo!,
+          label: d.surface?.label ?? 'Surface',
+          initial: d.photoSurfaces[id],
+        ),
+      ),
+    );
+    if (mounted && result != null) d.setPhotoSurface(id, result);
+  }
+
+  Future<void> _importPhoto() async {
+    if (_importing) return;
+    if (_design!.photoSurfaces.isNotEmpty) {
+      final ok = await confirmDialog(
+        context,
+        title: 'Replace room photo?',
+        message:
+            'Surface markings will be cleared. Save your current design first if you want to keep them.',
+        confirmLabel: 'Replace',
+      );
+      if (!mounted || !ok) return;
+    }
+    setState(() => _importing = true);
+    try {
+      final bytes = await PhotoSourceService.choose();
+      if (!mounted || bytes == null) return;
+      await _design!.importPhoto(bytes);
+      _photoTransform.value = Matrix4.identity();
+    } catch (_) {
+      if (mounted) {
+        Toast.error(
+          context,
+          'Could not open the photo. Choose a JPG, PNG or WebP under 15 MB and 40 megapixels.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
+  }
+
+  Future<void> _presetPhoto() async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Return to the preset room?',
+      message:
+          'Your imported photo and surface markings will be replaced. Save first to keep this design.',
+      confirmLabel: 'Use preset',
+    );
+    if (!mounted || !ok) return;
+    try {
+      await _design!.usePresetPhoto();
+      _photoTransform.value = Matrix4.identity();
+    } catch (_) {
+      if (mounted) Toast.error(context, 'Could not load the preset photo.');
+    }
+  }
+
+  void _resetView() {
+    final d = _design!, room = _design!.room!;
+    if (d.mode == VisualizerMode.twoD) {
+      _photoTransform.value = Matrix4.identity();
+      return;
+    }
+    d.setCamera(
+      Camera3D(
+        position: Vec3(0, room.eyeHeight, -room.depth / 2 + .55),
+        yaw: room.defaultYaw,
+        pitch: room.defaultPitch,
+        fov: room.fov,
+      ),
     );
   }
 
-  Future<void> _saveDesign() async {
-    final room = _room;
-    if (room == null) return;
-    final controller = TextEditingController(
-        text: '${room.name} · ${Fmt.shortDate(DateTime.now())}');
+  Future<void> _save() async {
+    if (_saving) return;
+    var designName =
+        '${_design!.imported ? 'My room' : _design!.room!.name} · ${Fmt.shortDate(DateTime.now())}';
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Save this design'),
-        content: TextField(
-          controller: controller,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Save design'),
+        content: TextFormField(
+          initialValue: designName,
+          onChanged: (value) => designName = value,
           autofocus: true,
           decoration: const InputDecoration(labelText: 'Design name'),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            onPressed: () {
+              if (designName.trim().isNotEmpty) {
+                Navigator.pop(ctx, designName.trim());
+              }
+            },
             child: const Text('Save'),
           ),
         ],
       ),
     );
-    if (name == null || name.isEmpty || !mounted) return;
-    await AppScope.read(context).rooms.saveDesign(SavedDesign(
-          id: 'd_${DateTime.now().millisecondsSinceEpoch}',
-          name: name,
-          roomId: room.id,
-          assignments: Map.of(_applied),
-          createdOn: DateTime.now(),
-        ));
-    if (!mounted) return;
-    Toast.success(context, 'Design saved',
+    if (!mounted || name == null) return;
+    setState(() => _saving = true);
+    try {
+      final saved = _design!.saveAs(name);
+      await AppScope.read(context).rooms.saveDesign(saved);
+      if (!mounted) return;
+      _design!.designId = saved.id;
+      Toast.success(
+        context,
+        'Design saved',
         actionLabel: 'View',
-        onAction: () => Navigator.pushNamed(context, Routes.savedDesigns));
+        onAction: () => Navigator.pushNamed(context, Routes.savedDesigns),
+      );
+    } catch (_) {
+      if (mounted) {
+        Toast.error(context, 'Could not save the design. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _preview() async {
+    ui.Image? image;
+    try {
+      if (_design!.mode == VisualizerMode.twoD) {
+        final boundary =
+            _photoKey.currentContext?.findRenderObject()
+                as RenderRepaintBoundary?;
+        image = await boundary?.toImage(pixelRatio: 2);
+      } else {
+        image = await _renderer.snapshot();
+      }
+      if (!mounted || image == null) return;
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (!mounted || png == null) return;
+      final bytes = png.buffer.asUint8List();
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Design preview',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: MediaQuery.sizeOf(context).height * .55,
+                  child: Image.memory(bytes, fit: BoxFit.contain),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        Toast.error(context, 'Could not capture the preview. Try again.');
+      }
+    } finally {
+      image?.dispose();
+    }
+  }
+
+  Future<void> _changeRoom() async {
+    final deps = AppScope.read(context);
+    final allRooms = await deps.rooms.all();
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<Room>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Text(
+                'Change room',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: allRooms.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, i) {
+                  final r = allRooms[i];
+                  final isCurrent = r.id == _design?.room?.id;
+                  return ListTile(
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.asset(
+                        r.thumb,
+                        width: 56,
+                        height: 40,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    title: Text(r.name),
+                    subtitle: Text('${r.type} · ${r.surfaces.length} surfaces'),
+                    trailing: isCurrent
+                        ? const Icon(Icons.check, color: AppColors.teal)
+                        : null,
+                    onTap: () => Navigator.pop(context, r),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    await _design?.switchRoom(selected);
+    _resetView();
   }
 
   Future<void> _share() async {
-    final image = await _renderer.snapshot();
-    if (!mounted) return;
-    final summary = _applied.entries
-        .map((e) {
-          final product = _products.where((p) => p.id == e.value).firstOrNull;
-          final label = _room?.surfaces
-              .where((s) => s.id == e.key)
-              .firstOrNull
-              ?.label;
-          return product == null ? null : '$label: ${product.name}';
-        })
-        .whereType<String>()
-        .join('\n');
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (context) => _ShareSheet(
-        title: _room?.name ?? 'Room design',
-        body: summary,
-        snapshot: image,
-      ),
-    );
+    ui.Image? image;
+    try {
+      if (_design!.mode == VisualizerMode.twoD) {
+        final boundary =
+            _photoKey.currentContext?.findRenderObject()
+                as RenderRepaintBoundary?;
+        image = await boundary?.toImage(pixelRatio: 2);
+      } else {
+        image = await _renderer.snapshot();
+      }
+      if (!mounted || image == null) return;
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (!mounted || png == null) return;
+      final bytes = png.buffer.asUint8List();
+      final d = _design!;
+      final summary = d.visibleAssignments.entries
+          .map((e) {
+            final p = d.productFor(e.key);
+            final s = d.room?.surface(e.key);
+            return p != null && s != null ? '${s.label}: ${p.name}' : null;
+          })
+          .whereType<String>()
+          .join('\n');
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Share this design',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  d.imported ? 'My room photo' : d.room!.name,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    height: 200,
+                    width: double.infinity,
+                    child: Image.memory(bytes, fit: BoxFit.contain),
+                  ),
+                ),
+                if (summary.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Materials applied:',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(summary, style: Theme.of(context).textTheme.bodySmall),
+                ],
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Toast.success(context, 'Design ready to share');
+                  },
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Share design'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        Toast.error(context, 'Could not share the design. Try again.');
+      }
+    } finally {
+      image?.dispose();
+    }
+  }
+
+  Future<void> _useDesign() async {
+    final d = _design!, area = _design!.selectedArea;
+    final product = d.productFor(d.selectedSurface);
+    if (_adding ||
+        product == null ||
+        area == null ||
+        area <= 0 ||
+        widget.onUseDesign == null) {
+      return;
+    }
+    setState(() => _adding = true);
+    try {
+      await widget.onUseDesign!(
+        VisualizationResult(
+          productId: product.id,
+          surfaceId: d.selectedSurface,
+          estimatedSqFt: area,
+          roomId: d.room!.id,
+          designId: d.designId,
+        ),
+      );
+      if (mounted) Toast.success(context, '${product.name} added to cart');
+    } catch (_) {
+      if (mounted) {
+        Toast.error(context, 'Could not use this design. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: LoadingView(label: 'Building the room…'));
-    }
-    if (_error != null || _room == null) {
       return Scaffold(
-        appBar: AppBar(),
-        body: ErrorView(
-          onRetry: _load,
-          title: 'Could not open the 3D room',
-          message: 'The room preset failed to load. Browsing and ordering are unaffected.',
+        appBar: AppBar(title: const Text('Preparing your room')),
+        body: VisualizerLoading(
+          label: widget.args.initialMode == 'twoD'
+              ? 'Preparing your 2D canvas'
+              : 'Preparing your 3D room',
         ),
       );
     }
-
-    final room = _room!;
-    final selectedProduct = _productFor(_selectedSurface);
-
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Room Visualizer')),
+        body: ErrorView(title: _error!, onRetry: _load),
+      );
+    }
+    final d = _design!, scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: AppColors.ink,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          _viewport(room),
-          _topBar(room),
-          if (!_immersive) _bottomPanel(room, selectedProduct),
-          if (_immersive)
-            Positioned(
-              right: AppDimens.lg,
-              bottom: AppDimens.xl,
-              child: FloatingActionButton.small(
-                heroTag: 'exit-immersive',
-                backgroundColor: Colors.white,
-                onPressed: () => setState(() => _immersive = false),
-                child: const Icon(Icons.close_fullscreen_rounded,
-                    color: AppColors.ink),
+      appBar: AppBar(
+        title: const Text('Room Visualizer', overflow: TextOverflow.ellipsis),
+        actions: [
+          IconButton(
+            tooltip: 'Preview design',
+            onPressed: _preview,
+            icon: const Icon(Icons.image_outlined),
+          ),
+          IconButton(
+            tooltip: 'Share design',
+            onPressed: _share,
+            icon: const Icon(Icons.ios_share_rounded),
+          ),
+          IconButton(
+            tooltip: 'Save design',
+            onPressed: _saving ? null : _save,
+            icon: const Icon(Icons.bookmark_add_outlined),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      d.imported ? 'My room photo' : d.room!.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  if (!d.imported)
+                    TextButton(
+                      onPressed: _changeRoom,
+                      child: const Text('Change'),
+                    ),
+                  IconButton(
+                    tooltip: 'Reset view',
+                    onPressed: _resetView,
+                    icon: const Icon(Icons.restart_alt, size: 20),
+                  ),
+                ],
               ),
             ),
+            SegmentedButton<VisualizerMode>(
+              segments: [
+                ButtonSegment(
+                  value: VisualizerMode.threeD,
+                  label: const Text('3D View'),
+                  icon: const Icon(Icons.view_in_ar_outlined),
+                  enabled: d.canShow3D,
+                ),
+                const ButtonSegment(
+                  value: VisualizerMode.twoD,
+                  label: Text('2D View'),
+                  icon: Icon(Icons.photo_outlined),
+                ),
+              ],
+              selected: {d.mode},
+              onSelectionChanged: (v) => d.setMode(v.single),
+            ),
+            if (d.imported)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Your photo is available in 2D.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ColoredBox(
+                color: scheme.surfaceContainerHighest,
+                child: d.mode == VisualizerMode.twoD
+                    ? _photoViewport(d)
+                    : _threeDViewport(d),
+              ),
+            ),
+            if (d.error != null)
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(d.error!, style: TextStyle(color: scheme.error)),
+              ),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * .4,
+              ),
+              child: SingleChildScrollView(child: _controls(d)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _photoViewport(VisualizerController d) {
+    if (d.photo == null) return const Center(child: Text('Photo unavailable'));
+    return PhotoRoomViewport(
+      photo: d.photo!,
+      surfaces: d.photoSurfaces,
+      patterns: d.patterns,
+      styles: {for (final id in d.photoSurfaces.keys) id: d.styleFor(id)},
+      original: d.showOriginal,
+      captureKey: _photoKey,
+      transformationController: _photoTransform,
+    );
+  }
+
+  Widget _threeDViewport(VisualizerController d) => LayoutBuilder(
+    builder: (context, constraints) {
+      final size = constraints.biggest;
+      return GestureDetector(
+        onDoubleTap: _resetView,
+        onScaleStart: (_) => _gestureFov = d.scene!.camera.fov,
+        onScaleUpdate: (details) {
+          final camera = d.scene!.camera;
+          d.setCamera(
+            details.pointerCount < 2
+                ? camera.rotatedBy(
+                    -details.focalPointDelta.dx * .24,
+                    details.focalPointDelta.dy * .18,
+                  )
+                : camera.copyWith(
+                    fov: (_gestureFov / details.scale).clamp(
+                      Camera3D.minFov,
+                      Camera3D.maxFov,
+                    ),
+                  ),
+          );
+        },
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _renderer.build(context),
+            for (final hotspot in d.room!.hotspots)
+              if (d.room!.surface(hotspot.surfaceId)?.applyable == true)
+                ..._hotspot(
+                  d,
+                  hotspot.surfaceId,
+                  hotspot.label,
+                  Vec3(hotspot.x, hotspot.y, hotspot.z),
+                  size,
+                ),
+          ],
+        ),
+      );
+    },
+  );
+  List<Widget> _hotspot(
+    VisualizerController d,
+    String id,
+    String label,
+    Vec3 position,
+    Size size,
+  ) {
+    final p = d.scene!.camera.project(position, size);
+    if (!p.visible ||
+        p.offset.dx < 0 ||
+        p.offset.dx > size.width ||
+        p.offset.dy < 0 ||
+        p.offset.dy > size.height) {
+      return [];
+    }
+    return [
+      Positioned(
+        left: (p.offset.dx - 22).clamp(0, size.width - 44),
+        top: (p.offset.dy - 22).clamp(
+          0,
+          (size.height - 44).clamp(0, double.infinity),
+        ),
+        child: IconButton.filledTonal(
+          tooltip: label,
+          onPressed: () => d.selectSurface(id),
+          icon: Icon(
+            d.selectedSurface == id
+                ? Icons.check_circle
+                : Icons.add_circle_outline,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Widget _controls(VisualizerController d) {
+    final product = d.productFor(d.selectedSurface), area = d.selectedArea;
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 46,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final s in d.room!.surfaces)
+                  if (s.applyable)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        label: Text(s.label),
+                        selected: d.selectedSurface == s.id,
+                        onSelected: (_) => d.selectSurface(s.id),
+                      ),
+                    ),
+              ],
+            ),
+          ),
+          if (d.mode == VisualizerMode.twoD) ...[
+            Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _editSurface,
+                  icon: const Icon(Icons.crop_free, size: 18),
+                  label: Text(
+                    d.photoSurfaces.containsKey(d.selectedSurface)
+                        ? 'Edit surface'
+                        : 'Mark surface',
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _importing ? null : _importPhoto,
+                  icon: const Icon(
+                    Icons.add_photo_alternate_outlined,
+                    size: 18,
+                  ),
+                  label: Text(_importing ? 'Opening…' : 'Upload photo'),
+                ),
+                if (d.imported)
+                  TextButton(
+                    onPressed: _presetPhoto,
+                    child: const Text('Use preset photo'),
+                  ),
+              ],
+            ),
+            if (!d.photoSurfaces.containsKey(d.selectedSurface))
+              const Text(
+                'Mark this surface’s four corners to preview stone.',
+                style: TextStyle(fontSize: 12),
+              ),
+          ],
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product?.name ?? 'Choose a stone',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    if (product != null)
+                      Text(
+                        product.brand,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    Text(
+                      area == null
+                          ? 'Visual preview · add dimensions for area'
+                          : '${Fmt.sqft(area)} · measured/preset area',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                children: [
+                  const Text('Before', style: TextStyle(fontSize: 11)),
+                  Switch(value: d.showOriginal, onChanged: d.compare),
+                ],
+              ),
+            ],
+          ),
+          Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed: _chooseStone,
+                child: const Text('Change marble'),
+              ),
+              TextButton(
+                onPressed: _patternSettings,
+                child: const Text('Tile settings'),
+              ),
+              FilledButton(
+                onPressed:
+                    d.busy ||
+                        _adding ||
+                        area == null ||
+                        area <= 0 ||
+                        widget.onUseDesign == null
+                    ? null
+                    : _useDesign,
+                child: Text(_adding ? 'Adding…' : 'Add to cart'),
+              ),
+            ],
+          ),
+          if (d.busy)
+            const Text('Updating stone…', style: TextStyle(fontSize: 11)),
         ],
       ),
     );
   }
 
-  Widget _viewport(Room room) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = Size(constraints.maxWidth, constraints.maxHeight);
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onDoubleTap: _resetCamera,
-          onScaleStart: (_) => _fovAtGestureStart = _camera?.fov ?? room.fov,
-          onScaleUpdate: (d) {
-            if (d.pointerCount < 2) {
-              _look(d.focalPointDelta);
-              return;
-            }
-            final camera = _camera;
-            if (camera == null) return;
-            final next = camera.copyWith(
-                fov: (_fovAtGestureStart / d.scale)
-                    .clamp(Camera3D.minFov, Camera3D.maxFov));
-            setState(() => _camera = next);
-            _renderer.setCamera(next);
-          },
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _renderer.build(context),
-              ..._hotspots(room, size),
-              IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.ink.withValues(alpha: 0.55),
-                        Colors.transparent,
-                        Colors.transparent,
-                        AppColors.ink.withValues(alpha: _immersive ? 0.2 : 0.72),
-                      ],
-                      stops: const [0, 0.22, 0.62, 1],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  List<Widget> _hotspots(Room room, Size size) {
-    final camera = _camera;
-    if (camera == null) return const [];
-    final widgets = <Widget>[];
-    for (final hotspot in room.hotspots) {
-      final surface =
-          room.surfaces.where((s) => s.id == hotspot.surfaceId).firstOrNull;
-      if (surface == null || !surface.applyable) continue;
-      final p = camera.project(
-          Vec3(hotspot.x, hotspot.y, hotspot.z), size);
-      if (!p.visible) continue;
-      if (p.offset.dx < -40 ||
-          p.offset.dy < -40 ||
-          p.offset.dx > size.width + 40 ||
-          p.offset.dy > size.height + 40) {
-        continue;
-      }
-      final selected = _selectedSurface == hotspot.surfaceId;
-      final scale = (2.6 / math.max(p.depth, 1.2)).clamp(0.7, 1.25);
-      widgets.add(Positioned(
-        left: p.offset.dx - 60 * scale,
-        top: p.offset.dy - 20 * scale,
-        child: Transform.scale(
-          scale: scale,
-          child: _HotspotMarker(
-            label: hotspot.label,
-            selected: selected,
-            onTap: () {
-              setState(() => _selectedSurface = hotspot.surfaceId);
-              _openPicker();
-            },
-          ),
-        ),
-      ));
-    }
-    return widgets;
-  }
-
-  Widget _topBar(Room room) {
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppDimens.sm, vertical: AppDimens.sm),
-          child: Row(
-            children: [
-              _GlassButton(
-                icon: Icons.arrow_back_rounded,
-                onTap: () => Navigator.maybePop(context),
-              ),
-              const SizedBox(width: AppDimens.sm),
-              if (!_immersive)
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        room.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        'Drag to look · pinch to zoom · double-tap to reset',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.66),
-                          fontSize: 10.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                const Spacer(),
-              _GlassButton(
-                icon: _immersive
-                    ? Icons.fullscreen_exit_rounded
-                    : Icons.fullscreen_rounded,
-                onTap: () => setState(() => _immersive = !_immersive),
-              ),
-              const SizedBox(width: AppDimens.sm),
-              _GlassButton(icon: Icons.ios_share_rounded, onTap: _share),
-              const SizedBox(width: AppDimens.sm),
-              _GlassButton(
-                  icon: Icons.bookmark_add_outlined, onTap: _saveDesign),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _bottomPanel(Room room, Product? product) {
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: 42,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: AppDimens.lg),
-                children: [
-                  for (final surface in room.surfaces)
-                    if (surface.applyable)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(surface.label),
-                          selected: _selectedSurface == surface.id,
-                          backgroundColor: Colors.white24,
-                          selectedColor: Colors.white,
-                          labelStyle: TextStyle(
-                            color: _selectedSurface == surface.id
-                                ? AppColors.ink
-                                : Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                          onSelected: (_) =>
-                              setState(() => _selectedSurface = surface.id),
-                        ),
-                      ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppDimens.md),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: AppDimens.md),
-              padding: const EdgeInsets.all(AppDimens.md),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(AppDimens.radiusLg),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _surface?.label ?? 'Surface',
-                              style: Theme.of(context).textTheme.labelSmall,
-                            ),
-                            Text(
-                              product?.name ?? 'No marble applied',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(color: AppColors.ink),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${Fmt.sqft(_surface?.areaSqFt ?? 0)} · '
-                              '${product == null ? '—' : Fmt.rupees(product.pricePerSqFt * (_surface?.areaSqFt ?? 0))} est.',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        children: [
-                          Text('Before/after',
-                              style: Theme.of(context).textTheme.labelSmall),
-                          Switch.adaptive(
-                            value: _showOriginal,
-                            onChanged: _toggleOriginal,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppDimens.sm),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _openPicker,
-                          icon: const Icon(Icons.grid_view_rounded, size: 17),
-                          label: const Text('Change marble'),
-                        ),
-                      ),
-                      const SizedBox(width: AppDimens.sm),
-                      Expanded(
-                        child: GradientButton(
-                          label: 'Add to cart',
-                          icon: Icons.shopping_cart_rounded,
-                          height: 50,
-                          onPressed: product == null ? null : _addToCart,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (product != null) ...[
-                    const SizedBox(height: 6),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        onPressed: () => Navigator.pushNamed(
-                          context,
-                          Routes.productDetails,
-                          arguments: ProductArgs(product.id),
-                        ),
-                        child: const Text('View product details'),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: AppDimens.sm),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openPicker() async {
-    final selected = await showModalBottomSheet<Product>(
+  Future<void> _patternSettings() async {
+    final d = _design!, id = _design!.selectedSurface;
+    var style = d.styleFor(id);
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => TexturePicker(
-        products: _products,
-        selectedId: _applied[_selectedSurface],
-        surfaceLabel: _surface?.label ?? 'Surface',
-        areaSqFt: _surface?.areaSqFt ?? 0,
-      ),
-    );
-    if (selected != null) await _apply(_selectedSurface, selected);
-  }
-}
-
-class _HotspotMarker extends StatelessWidget {
-  const _HotspotMarker({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? Colors.white
-              : AppColors.ink.withValues(alpha: 0.62),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? AppColors.teal : Colors.white54,
-            width: 1.2,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Tile settings · ${d.room!.surface(id)?.label}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                Text('Square tile: ${(style.tileMetres * 100).round()} cm'),
+                Slider(
+                  value: style.tileMetres.clamp(.3, 2),
+                  min: .3,
+                  max: 2,
+                  divisions: 17,
+                  onChanged: (v) =>
+                      update(() => style = style.copyWith(tileMetres: v)),
+                  onChangeEnd: (_) => d.setStyle(id, style),
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final angle in [0, 90, 180, 270])
+                      ChoiceChip(
+                        label: Text('$angle°'),
+                        selected: style.rotation == angle,
+                        onSelected: (_) {
+                          update(() => style = style.copyWith(rotation: angle));
+                          d.setStyle(id, style);
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text('Grout: ${style.groutMm.round()} mm'),
+                Slider(
+                  value: style.groutMm,
+                  min: 0,
+                  max: 10,
+                  divisions: 10,
+                  onChanged: (v) =>
+                      update(() => style = style.copyWith(groutMm: v)),
+                  onChangeEnd: (_) => d.setStyle(id, style),
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final color in const {
+                      0xFFD6D2CB: 'Warm',
+                      0xFFF5F5F5: 'White',
+                      0xFF555555: 'Dark',
+                    }.entries)
+                      ChoiceChip(
+                        label: Text(color.value),
+                        selected: style.groutColor == color.key,
+                        onSelected: (_) {
+                          update(
+                            () => style = style.copyWith(groutColor: color.key),
+                          );
+                          d.setStyle(id, style);
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Done'),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              selected ? Icons.check_circle_rounded : Icons.add_circle_outline,
-              size: 13,
-              color: selected ? AppColors.teal : Colors.white,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: selected ? AppColors.ink : Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GlassButton extends StatelessWidget {
-  const _GlassButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-        color: AppColors.ink.withValues(alpha: 0.5),
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(9),
-            child: Icon(icon, size: 19, color: Colors.white),
-          ),
-        ),
-      );
-}
-
-class _ShareSheet extends StatelessWidget {
-  const _ShareSheet({
-    required this.title,
-    required this.body,
-    required this.snapshot,
-  });
-
-  final String title;
-  final String body;
-  final ui.Image? snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Share this design',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppDimens.sm),
-            Text(title, style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: AppDimens.sm),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppDimens.md),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-                border: Border.all(color: AppColors.line),
-              ),
-              child: Text(body.isEmpty ? 'No marble applied yet' : body,
-                  style: Theme.of(context).textTheme.bodyMedium),
-            ),
-            const SizedBox(height: AppDimens.md),
-            Text(
-              'Sharing is disabled in this prototype build — the design summary '
-              'above is what would be sent.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: AppDimens.lg),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ),
-          ],
         ),
       ),
     );

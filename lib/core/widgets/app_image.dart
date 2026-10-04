@@ -33,6 +33,8 @@ class AppImage extends StatelessWidget {
       width: width,
       height: height,
       gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+      isAntiAlias: true,
       frameBuilder: (context, child, frame, wasSync) {
         if (frame == null && !wasSync) {
           return Stack(
@@ -57,17 +59,20 @@ class AppImage extends StatelessWidget {
       },
       errorBuilder: (context, _, _) => _fallback(context),
     );
-    if (radius > 0) {
-      image = ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: image,
-      );
-    }
-    return Container(
-      width: width,
-      height: height,
+    image = ColoredBox(
       color: placeholderColor ?? AppColors.line.withValues(alpha: 0.6),
       child: image,
+    );
+    return SizedBox(
+      width: width,
+      height: height,
+      child: radius > 0
+          ? ClipRRect(
+              clipBehavior: Clip.antiAlias,
+              borderRadius: BorderRadius.circular(radius),
+              child: image,
+            )
+          : image,
     );
   }
 

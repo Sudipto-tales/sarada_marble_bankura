@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../core/config/feature_flags.dart';
 import '../../core/state/app_scope.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/glossy_surface.dart';
+import '../../core/widgets/navigation_glyph.dart';
 import '../account/account_screen.dart';
 import '../cart/cart_screen.dart';
 import '../catalog/catalog_screen.dart';
 import '../home/home_screen.dart';
 import '../visualization/visualizer_entry_screen.dart';
 
-/// Bottom-nav host. The 3D tab disappears entirely when the visualization
+/// Bottom-nav host. The room visualization tab disappears entirely when the visualization
 /// module is switched off — nothing else in the shell changes.
 class AppShell extends StatefulWidget {
   const AppShell({super.key, this.initialIndex = 0});
@@ -40,7 +41,7 @@ class _AppShellState extends State<AppShell> {
       const _Tab(
         icon: Icons.view_in_ar_outlined,
         activeIcon: Icons.view_in_ar_rounded,
-        label: '3D Room',
+        label: 'Room View',
         child: VisualizerEntryScreen(embedded: true),
       ),
     const _Tab(
@@ -61,6 +62,7 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final deps = AppScope.of(context);
     return Scaffold(
+      extendBody: true,
       body: IndexedStack(
         index: _index,
         children: [
@@ -77,20 +79,7 @@ class _AppShellState extends State<AppShell> {
             child: Container(
               key: const ValueKey('stone-navigation'),
               padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(36),
-                border: Border.all(
-                  color: AppColors.sage.withValues(alpha: 0.2),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.ink.withValues(alpha: 0.08),
-                    blurRadius: 24,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
+              decoration: glossySurface(context, radius: 36),
               child: Row(
                 children: [
                   for (var i = 0; i < _tabs.length; i++)
@@ -121,15 +110,54 @@ class _AppShellState extends State<AppShell> {
                                     : 320,
                               ),
                               curve: Curves.easeOutCubic,
-                              constraints: const BoxConstraints(minHeight: 56),
+                              constraints: const BoxConstraints(minHeight: 48),
                               padding: const EdgeInsets.symmetric(
                                 vertical: 8,
                                 horizontal: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: i == _index
-                                    ? AppColors.deep
-                                    : Colors.transparent,
+                                gradient: i == _index
+                                    ? LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        stops: const [0, .48, .5, 1],
+                                        colors: [
+                                          Color.lerp(
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                            Colors.white,
+                                            .2,
+                                          )!,
+                                          Theme.of(context).colorScheme.primary,
+                                          Theme.of(context).colorScheme.primary,
+                                          Color.lerp(
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                            Colors.black,
+                                            .22,
+                                          )!,
+                                        ],
+                                      )
+                                    : null,
+                                border: Border.all(
+                                  color: i == _index
+                                      ? Colors.white.withValues(alpha: .35)
+                                      : Colors.transparent,
+                                ),
+                                boxShadow: i == _index
+                                    ? [
+                                        BoxShadow(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                              .withValues(alpha: .25),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ]
+                                    : [],
                                 borderRadius: BorderRadius.circular(28),
                               ),
                               child: Column(
@@ -139,25 +167,29 @@ class _AppShellState extends State<AppShell> {
                                       cart.count > 0)
                                     Badge.count(
                                       count: cart.count,
-                                      child: Icon(
-                                        i == _index
-                                            ? _tabs[i].activeIcon
-                                            : _tabs[i].icon,
-                                        size: 21,
+                                      child: NavigationGlyph(
+                                        label: _tabs[i].label,
+                                        selected: i == _index,
                                         color: i == _index
-                                            ? Colors.white
-                                            : AppColors.muted,
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.onPrimary
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
                                       ),
                                     )
                                   else
-                                    Icon(
-                                      i == _index
-                                          ? _tabs[i].activeIcon
-                                          : _tabs[i].icon,
-                                      size: 21,
+                                    NavigationGlyph(
+                                      label: _tabs[i].label,
+                                      selected: i == _index,
                                       color: i == _index
-                                          ? Colors.white
-                                          : AppColors.muted,
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.onPrimary
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
                                     ),
                                   const SizedBox(height: 3),
                                   Text(
@@ -165,10 +197,12 @@ class _AppShellState extends State<AppShell> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 10,
+                                      fontSize: 9,
                                       fontWeight: FontWeight.w600,
                                       color: i == _index
-                                          ? Colors.white
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.onPrimary
                                           : Theme.of(
                                               context,
                                             ).colorScheme.onSurface,
