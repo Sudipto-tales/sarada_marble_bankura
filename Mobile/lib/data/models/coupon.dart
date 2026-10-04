@@ -57,6 +57,10 @@ class PromoBanner {
     required this.ctaLabel,
     this.categoryId,
     this.productId,
+    this.imageOnly = false,
+    this.animatedImage,
+    this.badge = 'Stone edit',
+    this.backgroundColor = 0xFFDCEAB5,
   });
 
   final String id;
@@ -66,4 +70,36 @@ class PromoBanner {
   final String ctaLabel;
   final String? categoryId;
   final String? productId;
+  final bool imageOnly;
+  final String? animatedImage;
+  final String badge;
+  final int backgroundColor;
+
+  factory PromoBanner.fromJson(Map<String, dynamic> json) => PromoBanner(
+    id: json['id'] as String,
+    title: json['title'] as String? ?? '',
+    subtitle: json['subtitle'] as String? ?? '',
+    image: json['image'] as String,
+    ctaLabel: json['ctaLabel'] as String? ?? '',
+    categoryId: json['categoryId'] as String?,
+    productId: json['productId'] as String?,
+    imageOnly: json['imageOnly'] as bool? ?? false,
+    animatedImage: json['animatedImage'] as String?,
+    badge: json['badge'] as String? ?? '',
+    backgroundColor: json['backgroundColor'] as int? ?? 0xFFDCEAB5,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'subtitle': subtitle,
+    'image': image,
+    'ctaLabel': ctaLabel,
+    'categoryId': categoryId,
+    'productId': productId,
+    'imageOnly': imageOnly,
+    'animatedImage': animatedImage,
+    'badge': badge,
+    'backgroundColor': backgroundColor,
+  };
 }

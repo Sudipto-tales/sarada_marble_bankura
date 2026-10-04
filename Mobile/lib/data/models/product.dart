@@ -16,6 +16,7 @@ class Product {
     required this.dimensions,
     required this.categoryId,
     required this.brand,
+    this.brandId,
     required this.image,
     required this.gallery,
     required this.textureId,
@@ -42,6 +43,7 @@ class Product {
   final String dimensions;
   final String categoryId;
   final String brand;
+  final String? brandId;
   final String image;
   final List<String> gallery;
   final String textureId;
@@ -62,5 +64,6 @@ class Product {
   bool get inStock => stock > 0;
   bool get isLowStock => stock > 0 && stock <= 12;
 
-  double get savingsPerSqFt => (originalPrice - pricePerSqFt).clamp(0, double.infinity);
+  double get savingsPerSqFt =>
+      (originalPrice - pricePerSqFt).clamp(0, double.infinity);
 }

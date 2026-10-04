@@ -5,6 +5,7 @@ import 'safe_notifier.dart';
 
 class ThemeController extends SafeNotifier {
   ThemeController(this._store) {
+    _accent = _store.read<int>('theme_accent') ?? 0xFF356859;
     final saved = _store.read<String>(StoreKeys.themeMode);
     _mode = ThemeMode.values.firstWhere(
       (m) => m.name == saved,
@@ -13,6 +14,14 @@ class ThemeController extends SafeNotifier {
   }
 
   final LocalStore _store;
+  int _accent = 0xFF356859;
+  Color get accent => Color(_accent);
+  void setAccent(Color color) {
+    _accent = color.toARGB32();
+    _store.write('theme_accent', _accent);
+    notifyListeners();
+  }
+
   ThemeMode _mode = ThemeMode.light;
 
   ThemeMode get mode => _mode;

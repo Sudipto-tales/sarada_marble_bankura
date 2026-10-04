@@ -8,13 +8,13 @@ import 'app_dimens.dart';
 class AppTheme {
   const AppTheme._();
 
-  static ThemeData light() {
+  static ThemeData light({Color accent = const Color(0xFF356859)}) {
     final scheme =
         ColorScheme.fromSeed(
-          seedColor: AppColors.teal,
+          seedColor: accent,
           brightness: Brightness.light,
         ).copyWith(
-          primary: AppColors.clay,
+          primary: ColorScheme.fromSeed(seedColor: accent).primary,
           onPrimary: Colors.white,
           secondary: AppColors.deep,
           tertiary: AppColors.gold,
@@ -25,13 +25,16 @@ class AppTheme {
     return _base(scheme, AppColors.surface);
   }
 
-  static ThemeData dark() {
+  static ThemeData dark({Color accent = const Color(0xFF356859)}) {
     final scheme =
         ColorScheme.fromSeed(
-          seedColor: AppColors.teal,
+          seedColor: accent,
           brightness: Brightness.dark,
         ).copyWith(
-          primary: AppColors.cyan,
+          primary: ColorScheme.fromSeed(
+            seedColor: accent,
+            brightness: Brightness.dark,
+          ).primary,
           onPrimary: AppColors.ink,
           secondary: AppColors.ice,
           tertiary: AppColors.gold,
@@ -63,6 +66,7 @@ class AppTheme {
 
     return base.copyWith(
       scaffoldBackgroundColor: scaffold,
+      cardColor: scheme.surface,
       splashFactory: InkSparkle.splashFactory,
       textTheme: base.textTheme.copyWith(
         displaySmall: t(
@@ -94,10 +98,14 @@ class AppTheme {
         ),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: scaffold,
+        backgroundColor: Color.alphaBlend(
+          scheme.primary.withValues(alpha: .035),
+          scheme.surface,
+        ),
         foregroundColor: onSurface,
         elevation: 0,
-        scrolledUnderElevation: 0,
+        scrolledUnderElevation: 2,
+        shadowColor: scheme.primary.withValues(alpha: .1),
         centerTitle: false,
         titleTextStyle: t(17, FontWeight.w700),
         systemOverlayStyle: dark
@@ -106,7 +114,9 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: scheme.surface,
-        elevation: 0,
+        surfaceTintColor: scheme.primary,
+        shadowColor: scheme.primary.withValues(alpha: .18),
+        elevation: 3,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: AppDimens.stoneCurve,
@@ -120,7 +130,7 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: dark ? Colors.white10 : AppColors.surface,
-        selectedColor: AppColors.teal.withValues(alpha: 0.14),
+        selectedColor: scheme.primary.withValues(alpha: 0.14),
         side: BorderSide(color: dark ? Colors.white12 : AppColors.line),
         labelStyle: t(12.5, FontWeight.w600),
         shape: RoundedRectangleBorder(
@@ -188,14 +198,14 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: dark ? AppColors.darkCard : Colors.white,
-        indicatorColor: AppColors.teal.withValues(alpha: 0.14),
+        indicatorColor: scheme.primary.withValues(alpha: 0.14),
         elevation: 0,
         height: AppDimens.bottomBarHeight,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStatePropertyAll(t(11, FontWeight.w600)),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.teal,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: scheme.primary,
         linearMinHeight: 3,
       ),
     );

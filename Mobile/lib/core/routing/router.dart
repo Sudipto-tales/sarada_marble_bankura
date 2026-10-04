@@ -1,4 +1,7 @@
+import '../state/app_scope.dart';
+import '../../data/models/cart_item.dart';
 import 'package:flutter/material.dart';
+import '../../features/account/appearance_screen.dart';
 
 import '../../features/account/account_screen.dart';
 import '../../features/account/profile_edit_screen.dart';
@@ -31,6 +34,8 @@ import '../../features/visualization/visualizer_entry_screen.dart';
 import '../../features/wishlist/wishlist_screen.dart';
 import '../config/feature_flags.dart';
 import 'routes.dart';
+import '../../features/brand_catalogs/brand_catalog_widgets.dart';
+import '../../features/brand_catalogs/brand_catalog_viewer.dart';
 
 /// Central route table. Optional modules are guarded by [FeatureFlags] here,
 /// so switching one off cannot leave a dangling route.
@@ -45,17 +50,27 @@ class AppRouter {
 
   static Widget _builderFor(String? name, Object? args) {
     switch (name) {
+      case Routes.appearance:
+        return const AppearanceScreen();
       case Routes.splash:
         return const SplashScreen();
       case Routes.shell:
         return const AppShell();
 
       // ---- catalog -------------------------------------------------------
+      case Routes.brandCatalogs:
+        return BrandCatalogLibrary(
+          args: args is BrandCatalogArgs ? args : const BrandCatalogArgs(),
+        );
+      case Routes.brandCatalogViewer:
+        if (args is! BrandCatalogViewerArgs) {
+          return const _NotFound(name: 'brand catalog');
+        }
+        return BrandCatalogViewer(catalogId: args.catalogId);
       case Routes.catalog:
         return CatalogScreen(args: args is CatalogArgs ? args : null);
       case Routes.search:
-        return SearchScreen(
-            initialQuery: args is String ? args : '');
+        return SearchScreen(initialQuery: args is String ? args : '');
       case Routes.productDetails:
         if (args is! ProductArgs) return const _NotFound(name: 'product');
         return ProductDetailsScreen(args: args);
@@ -82,9 +97,10 @@ class AppRouter {
         return const CouponsScreen();
       case Routes.checkout:
         return CheckoutScreen(
-            args: args is CheckoutArgs
-                ? args
-                : const CheckoutArgs(buyNowProductId: null));
+          args: args is CheckoutArgs
+              ? args
+              : const CheckoutArgs(buyNowProductId: null),
+        );
       case Routes.payment:
         if (args is! PaymentArgs) return const _NotFound(name: 'payment');
         return PaymentScreen(args: args);
@@ -105,7 +121,8 @@ class AppRouter {
         return const AddressListScreen();
       case Routes.addressForm:
         return AddressFormScreen(
-            args: args is AddressFormArgs ? args : const AddressFormArgs());
+          args: args is AddressFormArgs ? args : const AddressFormArgs(),
+        );
 
       // ---- orders --------------------------------------------------------
       case Routes.orders:
@@ -139,9 +156,26 @@ class AppRouter {
           return const _ModuleDisabled(module: '3D room preview');
         }
         final v = args is VisualizerArgs ? args : const VisualizerArgs();
-        return v.roomId == null
+        return v.roomId == null && v.designId == null && v.photoPng == null
             ? VisualizerEntryScreen(productId: v.productId)
-            : RoomCustomizerScreen(args: v);
+            : Builder(
+                builder: (context) => RoomCustomizerScreen(
+                  args: v,
+                  onUseDesign: (result) async {
+                    final deps = AppScope.read(context);
+                    final product = await deps.products.byId(result.productId);
+                    if (product == null) {
+                      throw StateError('Product is unavailable.');
+                    }
+                    await deps.cart.setQuantity(
+                      product,
+                      result.estimatedSqFt,
+                      source: CartSource.visualizer,
+                      note: result.surfaceId,
+                    );
+                  },
+                ),
+              );
       case Routes.savedDesigns:
         return FeatureFlags.visualizationEnabled
             ? const SavedDesignsScreen()
@@ -151,7 +185,8 @@ class AppRouter {
           return const _ModuleDisabled(module: 'Cost calculator');
         }
         return CalculatorScreen(
-            args: args is CalculatorArgs ? args : const CalculatorArgs());
+          args: args is CalculatorArgs ? args : const CalculatorArgs(),
+        );
 
       default:
         return _NotFound(name: name ?? 'unknown');
@@ -165,18 +200,18 @@ class _NotFound extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              'This screen could not be opened ($name).',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ),
+    appBar: AppBar(),
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          'This screen could not be opened ($name).',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyLarge,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _ModuleDisabled extends StatelessWidget {
@@ -185,16 +220,16 @@ class _ModuleDisabled extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              '$module is switched off in this build.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ),
+    appBar: AppBar(),
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          '$module is switched off in this build.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyLarge,
         ),
-      );
+      ),
+    ),
+  );
 }

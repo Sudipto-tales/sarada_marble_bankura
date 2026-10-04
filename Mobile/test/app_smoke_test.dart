@@ -35,7 +35,7 @@ void main() {
     await _boot(tester);
 
     expect(find.byKey(const ValueKey('stone-navigation')), findsOneWidget);
-    for (final label in ['Home', 'Catalog', '3D Room', 'Cart', 'Account']) {
+    for (final label in ['Home', 'Catalog', 'Room View', 'Cart', 'Account']) {
       expect(find.text(label), findsWidgets, reason: label);
     }
     expect(tester.takeException(), isNull);
@@ -44,7 +44,7 @@ void main() {
   testWidgets('every bottom tab opens without throwing', (tester) async {
     await _boot(tester);
 
-    for (final label in ['Catalog', '3D Room', 'Cart', 'Account', 'Home']) {
+    for (final label in ['Catalog', 'Room View', 'Cart', 'Account', 'Home']) {
       await tester.tap(find.text(label).last);
       await _tick(tester);
       expect(tester.takeException(), isNull, reason: 'tab $label');

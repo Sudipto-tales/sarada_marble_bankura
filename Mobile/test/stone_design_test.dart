@@ -116,6 +116,32 @@ void main() {
         await tick(tester);
         expect(tester.takeException(), isNull);
         if (width == 390 && !dark) await capture(tester, 'product');
+        final scroll = find.byType(CustomScrollView).hitTestable().last;
+        await tester.scrollUntilVisible(
+          find.text('Add the combo'),
+          400,
+          scrollable: find
+              .descendant(of: scroll, matching: find.byType(Scrollable))
+              .first,
+          maxScrolls: 30,
+        );
+        await tick(tester);
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text('Add the combo'));
+        await tick(tester);
+        expect(deps.cart.count, 2);
+        expect(deps.cart.sqFtOf(kProducts.first.id), 50);
+        await tester.scrollUntilVisible(
+          find.text('Shop by brands'),
+          400,
+          scrollable: find
+              .descendant(of: scroll, matching: find.byType(Scrollable))
+              .first,
+          maxScrolls: 30,
+        );
+        await tick(tester);
+        expect(tester.takeException(), isNull);
+
         await tester.pumpWidget(const SizedBox.shrink());
       });
     }

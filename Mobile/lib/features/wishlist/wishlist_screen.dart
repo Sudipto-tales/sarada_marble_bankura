@@ -90,8 +90,8 @@ class _WishlistScreenState extends State<WishlistScreen> {
                 padding: const EdgeInsets.all(AppDimens.lg),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columns,
-                  mainAxisSpacing: AppDimens.md,
-                  crossAxisSpacing: AppDimens.md,
+                  mainAxisSpacing: AppDimens.sm,
+                  crossAxisSpacing: AppDimens.sm,
                   mainAxisExtent: AppDimens.gridProductHeight(context),
                 ),
                 itemCount: saved.length,

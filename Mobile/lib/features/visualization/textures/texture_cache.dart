@@ -17,16 +17,19 @@ class TextureCache {
   Future<ui.Image> load(String asset, {int targetWidth = 512}) {
     final cached = _images[asset];
     if (cached != null) return Future.value(cached);
-    return _inFlight[asset] ??= _decode(asset, targetWidth).then((image) {
-      _images[asset] = image;
-      _inFlight.remove(asset);
-      return image;
-    });
+    return _inFlight[asset] ??= _decode(asset, targetWidth)
+        .then((image) {
+          _images[asset] = image;
+          _inFlight.remove(asset);
+          return image;
+        })
+        .whenComplete(() => _inFlight.remove(asset));
   }
 
-  Future<List<ui.Image>> loadAll(Iterable<String> assets,
-      {int targetWidth = 512}) =>
-      Future.wait(assets.map((a) => load(a, targetWidth: targetWidth)));
+  Future<List<ui.Image>> loadAll(
+    Iterable<String> assets, {
+    int targetWidth = 512,
+  }) => Future.wait(assets.map((a) => load(a, targetWidth: targetWidth)));
 
   Future<ui.Image> _decode(String asset, int targetWidth) async {
     final data = await rootBundle.load(asset);
@@ -34,8 +37,12 @@ class TextureCache {
       data.buffer.asUint8List(),
       targetWidth: targetWidth,
     );
-    final frame = await codec.getNextFrame();
-    return frame.image;
+    try {
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    } finally {
+      codec.dispose();
+    }
   }
 
   void evict(String asset) => _images.remove(asset)?.dispose();

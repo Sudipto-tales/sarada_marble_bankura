@@ -10,10 +10,13 @@ import '../../core/widgets/shimmer.dart';
 import '../../data/models/category.dart';
 import '../../data/models/coupon.dart';
 import '../../data/models/product.dart';
-import '../catalog/widgets/product_card.dart';
+import '../../data/models/order.dart';
+import 'widgets/deals_showcase.dart';
 import 'widgets/banner_carousel.dart';
+import '../catalog/widgets/product_card.dart';
 import 'widgets/home_header.dart';
 import 'widgets/home_sections.dart';
+import '../brand_catalogs/brand_catalog_widgets.dart';
 
 /// Everything the home screen needs, fetched once so there is a single
 /// loading / error / retry surface instead of fifteen.
@@ -28,6 +31,8 @@ class HomeFeed {
     required this.inspiration,
     required this.recentlyViewed,
     required this.deals,
+    required this.buyAgain,
+    required this.pastPurchaseSimilar,
   });
 
   final List<PromoBanner> banners;
@@ -39,6 +44,8 @@ class HomeFeed {
   final List<PromoBanner> inspiration;
   final List<Product> recentlyViewed;
   final List<Product> deals;
+  final List<Product> buyAgain;
+  final List<Product> pastPurchaseSimilar;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -73,10 +80,23 @@ class _HomeScreenState extends State<HomeScreen>
       deps.promos.inspiration(),
       deps.products.byIds(deps.browsing.recentlyViewed),
       deps.products.all(),
+      deps.orders.all(),
     ]);
     final all = results[8] as List<Product>;
     final deals = all.where((p) => p.discount >= 25).toList()
       ..sort((a, b) => b.discount.compareTo(a.discount));
+    final orders = results[9] as List<Order>;
+    final purchasedIds = orders
+        .where(
+          (o) =>
+              o.status != OrderStatus.cancelled &&
+              o.status != OrderStatus.returned,
+        )
+        .expand((o) => o.items)
+        .map((i) => i.productId)
+        .toSet();
+    final purchased = all.where((p) => purchasedIds.contains(p.id)).toList();
+    final categories = purchased.map((p) => p.categoryId).toSet();
     return HomeFeed(
       banners: results[0] as List<PromoBanner>,
       categories: results[1] as List<Category>,
@@ -87,6 +107,15 @@ class _HomeScreenState extends State<HomeScreen>
       inspiration: results[6] as List<PromoBanner>,
       recentlyViewed: results[7] as List<Product>,
       deals: deals.take(8).toList(),
+      buyAgain: purchased,
+      pastPurchaseSimilar: all
+          .where(
+            (p) =>
+                !purchasedIds.contains(p.id) &&
+                categories.contains(p.categoryId),
+          )
+          .take(8)
+          .toList(),
     );
   }
 
@@ -144,6 +173,7 @@ class _HomeContent extends StatelessWidget {
         const HomeHeader(),
         SliverList.list(
           children: [
+            DealsShowcase(banners: feed.banners),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
               child: Column(
@@ -205,15 +235,42 @@ class _HomeContent extends StatelessWidget {
             OfferStrip(offers: feed.offers),
             const SectionGap(),
             if (feed.deals.isNotEmpty) ...[
-              const SectionHeader(
-                title: 'Biggest discounts',
-                subtitle: 'Lots clearing at 25% off or more',
+              SectionHeader(
+                title: 'Today’s deals',
+                subtitle: 'Beautiful finds, better prices',
+                actionLabel: 'All deals',
+                onAction: () => Navigator.pushNamed(
+                  context,
+                  Routes.catalog,
+                  arguments: const CatalogArgs(
+                    title: 'Top deals',
+                    onlyOffers: true,
+                  ),
+                ),
               ),
               ProductRail(products: feed.deals),
               const SectionGap(),
             ],
             if (FeatureFlags.visualizationEnabled) ...[
               const VisualizerPromo(),
+              const SectionGap(),
+            ],
+            if (feed.buyAgain.isNotEmpty) ...[
+              SectionHeader(
+                title: 'Buy again',
+                subtitle: 'Your past purchases, ready for the next project',
+                actionLabel: 'Orders',
+                onAction: () => Navigator.pushNamed(context, Routes.orders),
+              ),
+              ProductRail(products: feed.buyAgain),
+              const SectionGap(),
+            ],
+            if (feed.pastPurchaseSimilar.isNotEmpty) ...[
+              const SectionHeader(
+                title: 'Inspired by your purchases',
+                subtitle: 'More stones in the styles you chose',
+              ),
+              ProductRail(products: feed.pastPurchaseSimilar),
               const SectionGap(),
             ],
             const SectionHeader(
@@ -245,8 +302,10 @@ class _HomeContent extends StatelessWidget {
               RecentlyViewedRail(products: feed.recentlyViewed),
               const SectionGap(),
             ],
+            const HomeBrandCatalogs(),
+            const SizedBox(height: 16),
             const SupportCard(),
-            const SizedBox(height: AppDimens.xxxl),
+            const SizedBox(height: 110),
           ],
         ),
       ],
@@ -303,7 +362,7 @@ class _HomeSkeleton extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               padding: AppDimens.screenPad,
               itemCount: 4,
-              separatorBuilder: (_, _) => const SizedBox(width: AppDimens.md),
+              separatorBuilder: (_, _) => const SizedBox(width: AppDimens.sm),
               itemBuilder: (context, _) =>
                   const ProductCardSkeleton(width: 168),
             ),

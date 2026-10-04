@@ -7,6 +7,8 @@ class Routes {
   static const String shell = '/shell';
 
   static const String catalog = '/catalog';
+  static const String brandCatalogs = '/brand-catalogs';
+  static const String brandCatalogViewer = '/brand-catalogs/view';
   static const String search = '/search';
   static const String productDetails = '/product';
   static const String gallery = '/gallery';
@@ -32,6 +34,7 @@ class Routes {
   static const String trackOrder = '/order/track';
   static const String returnRequest = '/order/return';
 
+  static const String appearance = '/settings/appearance';
   static const String account = '/account';
   static const String profileEdit = '/account/profile';
   static const String notifications = '/notifications';
@@ -55,7 +58,12 @@ class ProductArgs {
 }
 
 class CatalogArgs {
-  const CatalogArgs({this.categoryId, this.title, this.query, this.onlyOffers = false});
+  const CatalogArgs({
+    this.categoryId,
+    this.title,
+    this.query,
+    this.onlyOffers = false,
+  });
   final String? categoryId;
   final String? title;
   final String? query;
@@ -70,9 +78,18 @@ class GalleryArgs {
 }
 
 class VisualizerArgs {
-  const VisualizerArgs({this.roomId, this.productId});
+  const VisualizerArgs({
+    this.roomId,
+    this.productId,
+    this.designId,
+    this.initialMode,
+    this.photoPng,
+  });
+  final String? designId;
   final String? roomId;
   final String? productId;
+  final String? initialMode;
+  final String? photoPng;
 }
 
 class CalculatorArgs {
@@ -99,4 +116,15 @@ class AddressFormArgs {
 class ReviewArgs {
   const ReviewArgs(this.productId);
   final String productId;
+}
+
+class BrandCatalogArgs {
+  const BrandCatalogArgs({this.brandId, this.brandName});
+  final String? brandId;
+  final String? brandName;
+}
+
+class BrandCatalogViewerArgs {
+  const BrandCatalogViewerArgs(this.catalogId);
+  final String catalogId;
 }

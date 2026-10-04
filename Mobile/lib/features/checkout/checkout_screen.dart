@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/glossy_surface.dart';
+
 import '../../core/config/app_config.dart';
 import '../../core/routing/routes.dart';
 import '../../core/state/app_scope.dart';
@@ -514,11 +516,7 @@ class _SummaryStep extends StatelessWidget {
           padding: AppDimens.screenPad,
           child: Container(
             padding: const EdgeInsets.all(AppDimens.md),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-              border: Border.all(color: AppColors.line),
-            ),
+            decoration: glossySurface(context),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
