@@ -9,7 +9,8 @@ class ApiGatewayProvider extends RouteProvider
         return [
             ... (DEVELOPER_ENABLED ? ['api/developer/metrics' => ['Developer', 'metrics']] : []),
             // Add API routes here, for example:
-            // 'api/status' => ['ApiController', 'status'],
+            // Register controllers in config/classes.php. New routes can use method maps:
+            // 'api/v1/products/{id}' => ['GET' => ['StorefrontProductController', 'show']],
         ];
     }
 }

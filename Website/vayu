@@ -29,16 +29,34 @@ if (PHP_SAPI !== 'cli') {
 $command = $argv[1] ?? 'help';
 if (in_array($command, ['help', '--help', '-h'], true)) {
     echo "Vayu development server\n\nUsage: php vayu run [--host=127.0.0.1] [--port=8000]\n\nStop with Ctrl+C.\n";
-    echo "Create a console account: php vayu developer:create you@example.com\n";
+    echo "Apply pending migrations: php vayu migrate\nCreate a console account: php vayu developer:create you@example.com\n";
     exit(0);
 }
+if ($command === 'migrate') {
+    if (count($argv) !== 2) {
+        fwrite(STDERR, "Usage: php vayu migrate\n");
+        exit(1);
+    }
+    try {
+        require __DIR__ . '/config/cli.php';
+        require __DIR__ . '/config/migrate.php';
+        (new MigrationRunner($pdo, __DIR__ . '/database/migrations'))->run();
+        exit(0);
+    } catch (Throwable $e) {
+        $message = $e instanceof MigrationRunException ? $e->getMessage()
+            : 'Migration setup failed. Check database configuration and installed PDO drivers.';
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+}
 if ($command === 'developer:create') {
-    require __DIR__ . '/vendor/autoload.php';
-    Dotenv\Dotenv::createImmutable(__DIR__)->safeLoad();
-    require __DIR__ . '/config/env.php';
-    require __DIR__ . '/config/config.php';
-    require __DIR__ . '/config/db.php';
-    require __DIR__ . '/core/DeveloperAccess.php';
+    try {
+        require __DIR__ . '/config/cli.php';
+        require_once __DIR__ . '/core/DeveloperAccess.php';
+    } catch (Throwable $e) {
+        fwrite(STDERR, "Console setup failed. Check database configuration and installed PDO drivers.\n");
+        exit(1);
+    }
     echo "Enter a password (at least 12 characters; input is visible): ";
     $password = rtrim(fgets(STDIN) ?: '', "\r\n");
     try {

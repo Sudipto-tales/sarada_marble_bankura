@@ -1,6 +1,6 @@
 <?php
-require_once 'config/db.php';
-require_once 'Mailer.php'; // Assuming you have a Mailer class
+require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/Mailer.php';
 
 class Auth
 {
