@@ -28,7 +28,7 @@ void main() {
     expect(PromoBanner.fromJson(card.toJson()).imageOnly, isTrue);
     expect(card.ctaLabel, isEmpty);
   });
-  testWidgets('deals advance after three seconds and wrap forward', (
+  testWidgets('deals advance after four seconds and wrap forward', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -37,7 +37,7 @@ void main() {
       ),
     );
     final pages = tester.widget<PageView>(find.byType(PageView)).controller!;
-    await tester.pump(const Duration(milliseconds: 2999));
+    await tester.pump(const Duration(milliseconds: 3999));
     expect(pages.page, 0);
     await tester.pump(const Duration(milliseconds: 1));
     await tester.pump(const Duration(milliseconds: 325));
@@ -52,7 +52,7 @@ void main() {
     );
     pages.jumpToPage(kBanners.length - 1);
     await tester.pump();
-    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 4));
     await tester.pump(const Duration(milliseconds: 650));
     expect(pages.page, kBanners.length);
     expect(find.text(kBanners.first.title), findsOneWidget);
@@ -72,6 +72,9 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
     final pages = tester.widget<PageView>(find.byType(PageView)).controller!;
     expect(pages.page, 0);
+    await tester.tap(find.bySemanticsLabel('Deal 2 of 5'));
+    await tester.pump();
+    expect(pages.page, 1);
     expect(
       find.byWidgetPredicate(
         (widget) =>

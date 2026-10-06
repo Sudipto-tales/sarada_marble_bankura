@@ -11,6 +11,7 @@ class AppColors {
   static const Color ink = Color(0xFF292D29);
   static const Color inkSoft = Color(0xFF3B4036);
   static const Color clay = Color(0xFFAD573C);
+  static const Color coral = Color(0xFFFF4F58);
   static const Color sage = Color(0xFF929D89);
 
   static const Color gold = Color(0xFFC9A24B);

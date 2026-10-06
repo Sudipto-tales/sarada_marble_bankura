@@ -30,6 +30,7 @@ class _ProductImageGalleryState extends State<ProductImageGallery>
   bool _enabled = false;
   bool _foreground = true;
   bool _hovered = false;
+  bool _touching = false;
 
   List<String> get _uniqueImages =>
       widget.images.where((path) => path.trim().isNotEmpty).toSet().toList();
@@ -71,15 +72,25 @@ class _ProductImageGalleryState extends State<ProductImageGallery>
 
   void _schedule() {
     _timer?.cancel();
-    if (!_enabled || !_foreground || _hovered || _images.length < 2) return;
+    if (!_enabled ||
+        !_foreground ||
+        _hovered ||
+        _touching ||
+        _images.length < 2) {
+      return;
+    }
     // Decode the next local photo during the dwell, before the slide starts.
     precacheImage(
       AssetImage(_images[(_index + 1) % _images.length]),
       context,
       onError: (_, _) {},
     );
-    _timer = Timer(Duration(milliseconds: 1000 + _random.nextInt(2001)), () {
+    _timer = Timer(Duration(milliseconds: 3000 + _random.nextInt(2001)), () {
       if (!mounted) return;
+      if (ModalRoute.of(context)?.isCurrent == false) {
+        _schedule();
+        return;
+      }
       setState(() => _index = (_index + 1) % _images.length);
       _schedule();
     });
@@ -102,68 +113,85 @@ class _ProductImageGalleryState extends State<ProductImageGallery>
       _hovered = false;
       _schedule();
     },
-    child: ClipRect(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          AnimatedSwitcher(
-            duration: Duration(milliseconds: _enabled ? 550 : 0),
-            switchInCurve: Curves.easeInOutCubic,
-            switchOutCurve: Curves.easeInOutCubic,
-            layoutBuilder: (current, previous) =>
-                Stack(fit: StackFit.expand, children: [...previous, ?current]),
-            transitionBuilder: (child, animation) {
-              // Outgoing photo moves left; the new photo enters from the right.
-              final incoming =
-                  _images.isNotEmpty && child.key == ValueKey(_images[_index]);
-              return SlideTransition(
-                position: Tween<Offset>(
-                  begin: Offset(incoming ? 1 : -1, 0),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              );
-            },
-            child: _images.isEmpty
-                ? const SizedBox.shrink()
-                : AppImage(
-                    _images[_index],
-                    key: ValueKey(_images[_index]),
-                    fit: BoxFit.cover,
-                    fadeIn: false,
-                    placeholderColor: widget.placeholderColor,
-                  ),
-          ),
-          if (_images.length > 1)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 8,
-              child: Center(
-                child: Semantics(
-                  label: 'Photo ${_index + 1} of ${_images.length}',
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 5,
+    child: Listener(
+      onPointerDown: (_) {
+        _touching = true;
+        _schedule();
+      },
+      onPointerUp: (_) {
+        _touching = false;
+        _schedule();
+      },
+      onPointerCancel: (_) {
+        _touching = false;
+        _schedule();
+      },
+      child: ClipRect(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AnimatedSwitcher(
+              duration: Duration(milliseconds: _enabled ? 550 : 0),
+              switchInCurve: Curves.easeInOutCubic,
+              switchOutCurve: Curves.easeInOutCubic,
+              layoutBuilder: (current, previous) => Stack(
+                fit: StackFit.expand,
+                children: [...previous, ?current],
+              ),
+              transitionBuilder: (child, animation) {
+                // Outgoing photo slides up; the next photo enters from below.
+                final incoming =
+                    _images.isNotEmpty &&
+                    child.key == ValueKey(_images[_index]);
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: Offset(0, incoming ? 1 : -1),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                );
+              },
+              child: _images.isEmpty
+                  ? const SizedBox.shrink()
+                  : AppImage(
+                      _images[_index],
+                      key: ValueKey(_images[_index]),
+                      fit: BoxFit.cover,
+                      fadeIn: false,
+                      placeholderColor: widget.placeholderColor,
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: .38),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(
-                        _images.length,
-                        (i) => Container(
-                          width: i == _index ? 12 : 4,
-                          height: 4,
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(
-                              alpha: i == _index ? 1 : .5,
+            ),
+            if (_images.length > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 8,
+                child: Center(
+                  child: Semantics(
+                    label: 'Photo ${_index + 1} of ${_images.length}',
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: .38),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(
+                          _images.length,
+                          (i) => Container(
+                            width: i == _index ? 12 : 4,
+                            height: 4,
+                            margin: const EdgeInsets.symmetric(horizontal: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(
+                                alpha: i == _index ? 1 : .5,
+                              ),
+                              borderRadius: BorderRadius.circular(3),
                             ),
-                            borderRadius: BorderRadius.circular(3),
                           ),
                         ),
                       ),
@@ -171,8 +199,8 @@ class _ProductImageGalleryState extends State<ProductImageGallery>
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     ),
   );

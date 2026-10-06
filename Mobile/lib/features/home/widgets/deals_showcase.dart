@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../../../core/routing/routes.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/app_image.dart';
 import '../../../data/models/coupon.dart';
 
@@ -15,7 +16,7 @@ class DealsShowcase extends StatefulWidget {
 
 class _DealsShowcaseState extends State<DealsShowcase>
     with WidgetsBindingObserver {
-  final _pages = PageController();
+  final _pages = PageController(viewportFraction: .9);
   Timer? _timer;
   int _page = 0;
   bool _touching = false;
@@ -26,6 +27,8 @@ class _DealsShowcaseState extends State<DealsShowcase>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final state = WidgetsBinding.instance.lifecycleState;
+    _resumed = state == null || state == AppLifecycleState.resumed;
   }
 
   void _schedule() {
@@ -38,7 +41,7 @@ class _DealsShowcaseState extends State<DealsShowcase>
         !TickerMode.valuesOf(context).enabled) {
       return;
     }
-    _timer = Timer(const Duration(seconds: 3), () {
+    _timer = Timer(const Duration(seconds: 4), () {
       if (!mounted || !_pages.hasClients) return;
       if (ModalRoute.of(context)?.isCurrent == false ||
           _pages.position.isScrollingNotifier.value) {
@@ -52,12 +55,16 @@ class _DealsShowcaseState extends State<DealsShowcase>
   void _goTo(int page) {
     _timer?.cancel();
     if (!_pages.hasClients) return;
+    if (MediaQuery.disableAnimationsOf(context) ||
+        !TickerMode.valuesOf(context).enabled) {
+      _pages.jumpToPage(page);
+      _schedule();
+      return;
+    }
     _pages
         .animateToPage(
           page,
-          duration: Duration(
-            milliseconds: MediaQuery.disableAnimationsOf(context) ? 0 : 650,
-          ),
+          duration: const Duration(milliseconds: 650),
           curve: Curves.easeInOutCubic,
         )
         .then((_) {
@@ -102,13 +109,39 @@ class _DealsShowcaseState extends State<DealsShowcase>
     if (widget.banners.isEmpty) return const SizedBox.shrink();
     final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      padding: const EdgeInsets.only(top: 18, bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 12, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '#SpecialForYou',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    Routes.catalog,
+                    arguments: const CatalogArgs(
+                      title: 'Special offers',
+                      onlyOffers: true,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.coral),
+                  child: const Text('See all'),
+                ),
+              ],
+            ),
+          ),
           SizedBox(
-            height: 288 + (scale - 1) * 210,
+            height: 184 + (scale - 1).clamp(0, 2) * 150,
             child: Listener(
               onPointerDown: (_) {
                 _touching = true;
@@ -122,18 +155,21 @@ class _DealsShowcaseState extends State<DealsShowcase>
                 _touching = false;
                 _schedule();
               },
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: PageView.builder(
-                  controller: _pages,
-                  itemCount: widget.banners.length == 1 ? 1 : null,
-                  onPageChanged: (value) {
-                    setState(() => _page = value);
-                    _schedule();
-                  },
-                  itemBuilder: (context, i) => _DealCard(
-                    banner: widget.banners[i % widget.banners.length],
-                    active: i == _page,
+              child: PageView.builder(
+                controller: _pages,
+                itemCount: widget.banners.length == 1 ? 1 : null,
+                onPageChanged: (value) {
+                  setState(() => _page = value);
+                  _schedule();
+                },
+                itemBuilder: (context, i) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: _DealCard(
+                      banner: widget.banners[i % widget.banners.length],
+                      active: i == _page,
+                    ),
                   ),
                 ),
               ),
@@ -177,12 +213,9 @@ class _DealsShowcaseState extends State<DealsShowcase>
                                     height: 7,
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(8),
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary
-                                          .withValues(
-                                            alpha: i == _index ? 1 : .22,
-                                          ),
+                                      color: AppColors.coral.withValues(
+                                        alpha: i == _index ? 1 : .22,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -226,11 +259,6 @@ class _DealCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final background = Color(banner.backgroundColor);
-    final foreground =
-        ThemeData.estimateBrightnessForColor(background) == Brightness.dark
-        ? Colors.white
-        : const Color(0xFF18271C);
     final animate =
         active &&
         !MediaQuery.disableAnimationsOf(context) &&
@@ -249,118 +277,108 @@ class _DealCard extends StatelessWidget {
         ),
       );
     }
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.lerp(background, Colors.white, .35)!,
-            background,
-            Color.lerp(background, Colors.black, .06)!,
-          ],
-          stops: const [0, .5, 1],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        image,
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xF21C201D), Color(0xB31C201D), Color(0x221C201D)],
+              stops: [0, .52, 1],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+          ),
         ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 16, 20),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 6,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (banner.badge.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: foreground,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        banner.badge,
-                        style: TextStyle(
-                          color: background,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 7,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (banner.badge.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .94),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          banner.badge,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.ink,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ),
-                  const SizedBox(height: 10),
-                  Text(
-                    banner.title,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: 22,
-                      height: 1.08,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -.6,
-                    ),
-                  ),
-                  if (banner.subtitle.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text(
-                      banner.subtitle,
+                      banner.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: foreground.withValues(alpha: .8),
-                        fontSize: 11,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        height: 1.08,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ],
-                  if (banner.ctaLabel.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: () => _open(context),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: foreground,
-                        foregroundColor: background,
-                        minimumSize: const Size(0, 44),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        shape: const StadiumBorder(),
+                    if (banner.subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        banner.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                        ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              banner.ctaLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.north_east_rounded, size: 18),
-                        ],
-                      ),
-                    ),
+                    ],
                   ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 4,
-              child: Transform.rotate(
-                angle: .035,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: SizedBox.expand(child: image),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 3,
+                child: Align(
+                  alignment: Alignment.bottomRight,
+                  child: FilledButton(
+                    onPressed: () => _open(context),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.coral,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      banner.ctaLabel.isEmpty ? 'Explore' : banner.ctaLabel,
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }

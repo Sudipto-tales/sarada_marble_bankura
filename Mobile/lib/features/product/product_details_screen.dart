@@ -218,7 +218,9 @@ class _Content extends StatelessWidget {
       slivers: [
         SliverAppBar(
           pinned: true,
-          expandedHeight: 360,
+          expandedHeight: 420,
+          title: const Text('Product details'),
+          centerTitle: true,
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           flexibleSpace: FlexibleSpaceBar(
             background: ProductGallery(product: product),
