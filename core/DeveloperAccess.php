@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/RequestSecurity.php';
+
 /** Dedicated console identities; customer sessions never grant console access. */
 final class DeveloperAccess
 {
@@ -16,10 +18,7 @@ final class DeveloperAccess
 
     public static function session(): void
     {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start(['use_strict_mode' => true, 'cookie_httponly' => true,
-                'cookie_samesite' => 'Lax', 'cookie_secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off']);
-        }
+        RequestSecurity::session();
         if (empty($_SESSION['developer_csrf'])) $_SESSION['developer_csrf'] = bin2hex(random_bytes(32));
     }
 

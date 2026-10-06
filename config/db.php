@@ -1,80 +1,52 @@
 <?php
-$db_type = env('DB_TYPE', 'sqlite'); // Options: sqlite, mysql, mongo
 
-switch ($db_type) {
-    case 'sqlite':
-        $sqliteFile = env('DB_DATABASE', __DIR__ . '/../database/database.sqlite');
-        $pdo = new PDO("sqlite:" . $sqliteFile);
-        break;
+/** One connection shared by requests, services and transaction-aware producers. */
+function database_connect(): PDO
+{
+    $driver = strtolower((string) env('DB_TYPE', 'sqlite'));
+    $options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC];
 
-    case 'mysql':
-        $host = env('DB_HOST', 'localhost');
-        $dbname = env('DB_DATABASE', 'your_db');
-        $user = env('DB_USERNAME', 'root');
-        $pass = env('DB_PASSWORD', '');
-        $pdo = new PDO("mysql:host=$host;dbname=$dbname", $user, $pass);
-        break;
+    if ($driver === 'sqlite') {
+        $path = (string) env('DB_DATABASE', dirname(__DIR__) . '/database/database.sqlite');
+        if ($path !== ':memory:' && !str_starts_with($path, '/')) {
+            $path = dirname(__DIR__) . '/' . $path;
+        }
+        $connection = new PDO('sqlite:' . $path, null, null, $options);
+        $connection->exec('PRAGMA foreign_keys = ON');
+        $connection->exec('PRAGMA busy_timeout = 5000');
+        return $connection;
+    }
 
-    case 'mongo':
-        require_once __DIR__ . '/../vendor/autoload.php';
-        $mongoHost = env('DB_HOST', 'localhost');
-        $mongoPort = env('DB_PORT', '27017');
-        $mongoDBName = env('DB_DATABASE', 'your_database');
-        $mongoClient = new MongoDB\Client("mongodb://{$mongoHost}:{$mongoPort}");
-        $mongoDB = $mongoClient->selectDatabase($mongoDBName);
-        break;
-
-    default:
-        die("Unsupported database type: $db_type");
+    if ($driver !== 'mysql') {
+        throw new RuntimeException('Unsupported database driver. Use sqlite or mysql.');
+    }
+    $host = (string) env('DB_HOST', '127.0.0.1');
+    $database = (string) env('DB_DATABASE', '');
+    $port = (string) env('DB_PORT', '3306');
+    if ($database === '' || $host === '' || preg_match('/[;\x00]/', $host . $database)
+        || !ctype_digit($port) || (int) $port < 1 || (int) $port > 65535) {
+        throw new RuntimeException('Invalid MySQL host, database or port configuration.');
+    }
+    $options[PDO::ATTR_EMULATE_PREPARES] = false;
+    $connection = new PDO("mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4",
+        (string) env('DB_USERNAME', ''), (string) env('DB_PASSWORD', ''), $options);
+    $connection->exec("SET time_zone = '+00:00'");
+    $connection->exec('SET SESSION innodb_lock_wait_timeout = 3');
+    return $connection;
 }
 
-if (isset($pdo)) {
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-}
+$pdo = database_connect();
 
-// SQL-based reusable functions
-function db_query($sql, $params = []) {
+function db_query($sql, $params = [])
+{
     global $pdo;
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    return $stmt;
+    $statement = $pdo->prepare($sql);
+    $statement->execute($params);
+    return $statement;
 }
 
-function db_fetch_all($sql, $params = []) {
-    return db_query($sql, $params)->fetchAll();
-}
-
-function db_fetch_one($sql, $params = []) {
-    return db_query($sql, $params)->fetch();
-}
-
-function db_execute($sql, $params = []) {
-    return db_query($sql, $params)->rowCount();
-}
-
-function db_last_insert_id() {
-    global $pdo;
-    return $pdo->lastInsertId();
-}
-
-// MongoDB helper functions (basic)
-function mongo_find($collection, $filter = []) {
-    global $mongoDB;
-    return $mongoDB->$collection->find($filter)->toArray();
-}
-
-function mongo_insert($collection, $document) {
-    global $mongoDB;
-    return $mongoDB->$collection->insertOne($document);
-}
-
-function mongo_update($collection, $filter, $update) {
-    global $mongoDB;
-    return $mongoDB->$collection->updateMany($filter, ['$set' => $update]);
-}
-
-function mongo_delete($collection, $filter) {
-    global $mongoDB;
-    return $mongoDB->$collection->deleteMany($filter);
-}
-?>
+function db_fetch_all($sql, $params = []) { return db_query($sql, $params)->fetchAll(); }
+function db_fetch_one($sql, $params = []) { return db_query($sql, $params)->fetch(); }
+function db_execute($sql, $params = []) { return db_query($sql, $params)->rowCount(); }
+function db_last_insert_id() { global $pdo; return $pdo->lastInsertId(); }

@@ -3,6 +3,12 @@
 // This file is both the CLI launcher and the development-server router.
 if (PHP_SAPI === 'cli-server') {
     $path = rawurldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/');
+    if (preg_match('~(?:^|/)\.|^/(?:config|core|vendor|database|docs|tests|app|logs|cache|storage|imports|var|bin)(?:/|$)|^/(?:vayu$|composer\.)|\.(?:php[0-9]?|phtml|phar|sqlite3?|db|log|sql|bak|ini|env)(?:/|$)~i', $path)
+        && $path !== '/index.php') {
+        http_response_code(404);
+        echo 'Not found';
+        return;
+    }
     $file = realpath(__DIR__ . $path);
     $assets = realpath(__DIR__ . '/assets');
     if ($file && $assets && is_file($file)
@@ -10,11 +16,6 @@ if (PHP_SAPI === 'cli-server') {
         && in_array(strtolower(pathinfo($file, PATHINFO_EXTENSION)),
             ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'map'], true)) {
         return false;
-    }
-    if (preg_match('~^/(?:\.|config(?:/|$)|core(?:/|$)|vendor(?:/|$)|database(?:/|$)|docs(?:/|$)|app(?:/|$)|vayu$|composer\.)~i', $path)) {
-        http_response_code(404);
-        echo 'Not found';
-        return;
     }
     $_SERVER['SCRIPT_NAME'] = '/index.php';
     require __DIR__ . '/index.php';
@@ -29,16 +30,70 @@ if (PHP_SAPI !== 'cli') {
 $command = $argv[1] ?? 'help';
 if (in_array($command, ['help', '--help', '-h'], true)) {
     echo "Vayu development server\n\nUsage: php vayu run [--host=127.0.0.1] [--port=8000]\n\nStop with Ctrl+C.\n";
-    echo "Create a console account: php vayu developer:create you@example.com\n";
+    echo "Apply pending migrations: php vayu migrate\nCreate a console account: php vayu developer:create you@example.com\n";
+    echo "Create commerce staff: php vayu commerce:create you@example.com [admin|catalog_manager|operations|viewer]\n";
+    echo "Bounded worker: php vayu queue:work --queues=emails --max=20 --max-seconds=30\nRetry one failed job: php vayu queue:retry --failed-id=123\n";
     exit(0);
 }
+if ($command === 'migrate') {
+    if (count($argv) !== 2) {
+        fwrite(STDERR, "Usage: php vayu migrate\n");
+        exit(1);
+    }
+    try {
+        require __DIR__ . '/config/cli.php';
+        require __DIR__ . '/config/migrate.php';
+        (new MigrationRunner($pdo, __DIR__ . '/database/migrations'))->run();
+        exit(0);
+    } catch (Throwable $e) {
+        $message = $e instanceof MigrationRunException ? $e->getMessage()
+            : 'Migration setup failed. Check database configuration and installed PDO drivers.';
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+}
+if ($command === 'commerce:create') {
+    try {
+        require __DIR__ . '/config/cli.php';
+        require_once __DIR__ . '/core/CommerceAccess.php';
+        if (count($argv) < 3 || count($argv) > 4) throw new InvalidArgumentException();
+        $tty = function_exists('stream_isatty') && stream_isatty(STDIN);
+        if ($tty) { echo 'Password (12 to 72 bytes): '; shell_exec('stty -echo'); }
+        try { $password = rtrim(fgets(STDIN, 1024) ?: '', "\r\n"); }
+        finally { if ($tty) { shell_exec('stty echo'); echo "\n"; } }
+        $id = CommerceAccess::provision($argv[2], $password, $argv[3] ?? 'admin');
+        echo "Commerce staff account created (ID {$id}).\n";
+        exit(0);
+    } catch (Throwable $e) {
+        fwrite(STDERR, "Staff account creation failed. Apply migrations and supply a unique email, permitted role and password of 12 to 72 bytes through stdin.\n");
+        exit(1);
+    }
+}
+if (in_array($command,['queue:work','queue:retry'],true)) {
+    try {
+        require __DIR__.'/config/bootstarp.php';$options=[];
+        foreach(array_slice($argv,2) as $option) {
+            if(!preg_match('/\A--([a-z-]+)=(.*)\z/',$option,$match)||isset($options[$match[1]]))throw new InvalidArgumentException();
+            $options[$match[1]]=$match[2];
+        }
+        if($command==='queue:retry') {
+            if(array_keys($options)!==['failed-id'])throw new InvalidArgumentException();
+            $id=(new Queue($pdo))->retryFailed(CommerceValues::id($options['failed-id']));echo "Failed job replay recorded (job ID $id).\n";
+        } else {
+            if(array_diff(array_keys($options),['queues','max','max-seconds']))throw new InvalidArgumentException();
+            $stats=(new QueueWorker($pdo))->run(explode(',',$options['queues']??'emails'),CommerceValues::integer($options['max']??20,1,100,'max'),CommerceValues::integer($options['max-seconds']??30,1,300,'max_seconds'));
+            echo json_encode($stats,JSON_THROW_ON_ERROR)."\n";
+        }exit(0);
+    } catch(Throwable $e) {fwrite(STDERR,"Queue command failed. Check migrations, enabled queues, limits and database configuration.\n");exit(1);}
+}
 if ($command === 'developer:create') {
-    require __DIR__ . '/vendor/autoload.php';
-    Dotenv\Dotenv::createImmutable(__DIR__)->safeLoad();
-    require __DIR__ . '/config/env.php';
-    require __DIR__ . '/config/config.php';
-    require __DIR__ . '/config/db.php';
-    require __DIR__ . '/core/DeveloperAccess.php';
+    try {
+        require __DIR__ . '/config/cli.php';
+        require_once __DIR__ . '/core/DeveloperAccess.php';
+    } catch (Throwable $e) {
+        fwrite(STDERR, "Console setup failed. Check database configuration and installed PDO drivers.\n");
+        exit(1);
+    }
     echo "Enter a password (at least 12 characters; input is visible): ";
     $password = rtrim(fgets(STDIN) ?: '', "\r\n");
     try {

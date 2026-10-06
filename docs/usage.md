@@ -32,7 +32,7 @@ Use `.env` to configure:
 - `APP_ENV`
 - `APP_DEBUG`
 - `APP_URL`
-- `DB_TYPE` (`sqlite`, `mysql`, or `mongo`)
+- `DB_TYPE` (`sqlite` or `mysql`)
 - `DB_DATABASE`
 - `DB_HOST`
 - `DB_PORT`
@@ -110,7 +110,6 @@ Use `api_get()` and `api_post()` from controllers to fetch external JSON APIs.
 
 - SQLite
 - MySQL
-- MongoDB
 
 Reusable SQL helpers:
 
@@ -119,13 +118,6 @@ Reusable SQL helpers:
 - `db_fetch_one($sql, $params)`
 - `db_execute($sql, $params)`
 - `db_last_insert_id()`
-
-Mongo helpers:
-
-- `mongo_find($collection, $filter)`
-- `mongo_insert($collection, $document)`
-- `mongo_update($collection, $filter, $update)`
-- `mongo_delete($collection, $filter)`
 
 ## Composer
 
@@ -137,3 +129,7 @@ The project requires:
 Use `composer install` to create `vendor/` and install dependencies.
 
 > `composer.lock` is only useful after `composer.json` is present. In production, always run `composer install` to install packages from `composer.json` and lock versions from `composer.lock`.
+
+## Migrations and parameter routes
+
+Run `php vayu migrate` before working with customer tables. SQLite relative paths resolve from Website; MySQL applies DB_PORT and utf8mb4. New method maps and `{slug}`/`{id}` routes require a fixed controller registration in `config/classes.php`. See [implemented foundations](foundations.md) for full contracts, recovery and verification commands.
