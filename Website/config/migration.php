@@ -25,7 +25,7 @@ final class MigrationSchema
     {
         $quoted = self::identifier($table);
         if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
-            return array_column($pdo->query("PRAGMA table_info({$quoted})")->fetchAll(PDO::FETCH_ASSOC), null, 'name');
+            return array_column($pdo->query("PRAGMA table_xinfo({$quoted})")->fetchAll(PDO::FETCH_ASSOC), null, 'name');
         }
         return array_column($pdo->query("SHOW COLUMNS FROM {$quoted}")->fetchAll(PDO::FETCH_ASSOC), null, 'Field');
     }
@@ -74,6 +74,47 @@ final class MigrationSchema
         $columns = self::columns($pdo, $table);
         if (array_diff($required, array_keys($columns))) throw new RuntimeException("Incompatible columns in {$table}.");
         return $columns;
+    }
+
+    /** Explicit migration contracts, including type/nullability and relational ownership. */
+    public static function verifyDefinition(PDO $pdo, string $table, array $definition, array $indexes = [], array $foreignKeys = []): void
+    {
+        $sqlite = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        $columns = self::requireColumns($pdo, $table, array_keys($definition));
+        if (isset($definition['id'])) self::requireIntegerPrimaryKey($pdo, $table, $columns['id']);
+        foreach ($definition as $name => $expected) {
+            if ($name === 'id') continue;
+            $nullable = str_starts_with($expected, '?');
+            $type = ltrim($expected, '?');
+            $actual = strtolower($sqlite ? $columns[$name]['type'] : $columns[$name]['Type']);
+            $matches = in_array($type, ['int', 'bigint'], true)
+                ? (bool) preg_match('/\A' . $type . '(?:\(\d+\))?\z/', $actual) : $actual === $type;
+            if (!$matches || $nullable !== ($sqlite ? !(bool) $columns[$name]['notnull'] : $columns[$name]['Null'] === 'YES')) {
+                throw new RuntimeException("Incompatible {$table} column definition.");
+            }
+        }
+        $actualIndexes = self::indexes($pdo, $table);
+        foreach ($indexes as [$names, $unique]) {
+            if (!in_array(['unique' => $unique, 'columns' => $names, 'partial' => false], $actualIndexes, true)) {
+                throw new RuntimeException("Missing {$table} index.");
+            }
+        }
+        foreach ($foreignKeys as [$column, $parent, $parentColumn, $onDelete]) {
+            if ($sqlite) {
+                $keys = $pdo->query('PRAGMA foreign_key_list(' . self::identifier($table) . ')')->fetchAll(PDO::FETCH_ASSOC);
+                $found = array_filter($keys, static fn(array $key): bool => $key['from'] === $column
+                    && $key['table'] === $parent && $key['to'] === $parentColumn && $key['on_delete'] === $onDelete);
+            } else {
+                $query = $pdo->prepare('SELECT k.COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE k
+                    JOIN information_schema.REFERENTIAL_CONSTRAINTS r ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+                    AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME AND r.TABLE_NAME = k.TABLE_NAME
+                    WHERE k.TABLE_SCHEMA = DATABASE() AND k.TABLE_NAME = ? AND k.COLUMN_NAME = ?
+                    AND k.REFERENCED_TABLE_NAME = ? AND k.REFERENCED_COLUMN_NAME = ? AND r.DELETE_RULE = ?');
+                $query->execute([$table, $column, $parent, $parentColumn, $onDelete]);
+                $found = $query->fetchAll();
+            }
+            if (!$found) throw new RuntimeException("Missing {$table} ownership constraint.");
+        }
     }
 
     public static function requireIntegerPrimaryKey(PDO $pdo, string $table, array $column): void

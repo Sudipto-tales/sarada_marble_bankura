@@ -1,0 +1,40 @@
+<?php
+require __DIR__.'/support/CommerceTest.php';$pdo=CommerceTest::open();$check=[CommerceTest::class,'check'];$queue=new Queue($pdo);$typed=new QueueService($pdo);
+CommerceTest::fails(fn()=>$typed->orderConfirmation(1),'Enqueue cannot open or commit its own business transaction.');
+$pdo->beginTransaction();$id=$typed->orderConfirmation(1);$check($pdo->inTransaction(),'Enqueue preserves caller transaction ownership.');$pdo->rollBack();
+$check((int)$pdo->query('SELECT COUNT(*) FROM jobs')->fetchColumn()===0,'Business rollback removes its durable intent.');
+$id=CommerceDatabase::transaction($pdo,fn()=>$typed->orderConfirmation(1));
+$row=$pdo->query("SELECT * FROM jobs WHERE id=$id")->fetch();
+$check($row['status']==='ready'&&(int)$row['attempts']===0&&$row['lease_token']===null&&$row['reserved_at']===null,'New job has zero attempts and no lease.');
+$check(json_decode($row['payload'],true)===['order_id'=>1],'Queue payload stores only bounded domain references.');
+$same=CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','order_confirmation',1,['order_id'=>'1'],'order:1:confirmation:v1'));
+$check($same===$id&&(int)$pdo->query('SELECT COUNT(*) FROM jobs')->fetchColumn()===1,'Semantically equivalent payload normalizes to one active job.');
+CommerceTest::rejects(fn()=>CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','order_confirmation',1,['order_id'=>2],'order:1:confirmation:v1')),409,'Conflicting dedupe payload rejects.');
+CommerceTest::rejects(fn()=>CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','exec_shell',1,['command'=>'bad'])),422,'Arbitrary executables are not valid types.');
+CommerceTest::rejects(fn()=>CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','order_confirmation',2,['order_id'=>1])),422,'Unknown envelope version rejects.');
+CommerceTest::rejects(fn()=>CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('maintenance','order_confirmation',1,['order_id'=>1])),422,'Queue/type mismatch rejects.');
+CommerceTest::rejects(fn()=>CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','order_confirmation',1,['order_id'=>1,'email'=>'private@example.test'])),422,'Unexpected private fields reject.');
+CommerceTest::rejects(fn()=>CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','order_confirmation',1,['order_id'=>0])),422,'Invalid referenced ID rejects.');
+CommerceTest::rejects(fn()=>CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','order_confirmation',1,['order_id'=>1],'bad key')),422,'Invalid dedupe identifier rejects.');
+$future=CommerceDatabase::clock($pdo)+300;
+$delayed=CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('maintenance','reservation_expiry',1,['reservation_id'=>2],'reservation:2:delayed',$future));
+$check((int)$pdo->query("SELECT available_at FROM jobs WHERE id=$delayed")->fetchColumn()===$future,'Explicit schedule persists database-clock deadline.');
+CommerceTest::rejects(fn()=>CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('maintenance','reservation_expiry',1,['reservation_id'=>2],'reservation:2:delayed',$future+10)),409,'Conflicting schedule does not silently move an existing intent.');
+$case1=CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','order_confirmation',1,['order_id'=>5],'Case:Sensitive'));
+$case2=CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','order_confirmation',1,['order_id'=>6],'case:sensitive'));
+$check($case1!==$case2,'Dedupe key collation is explicitly case sensitive.');
+$held=CommerceDatabase::transaction($pdo,fn()=>$typed->purchase(7));
+$check(!in_array('purchase_events',JobRegistry::enabledQueues(),true)&&(int)$pdo->query("SELECT attempts FROM jobs WHERE id=$held")->fetchColumn()===0,'Purchase intent remains held until its consumer is integrated.');
+CommerceTest::fails(fn()=>$pdo->exec("UPDATE jobs SET status='running' WHERE id=$id"),'Database rejects an incomplete running lease.');
+$check(JobRegistry::decode($row)===['order_id'=>1],'Stored envelope revalidates before execution.');
+$bad=$row;$bad['payload']='{"order_id":1,"secret":"private"}';CommerceTest::rejects(fn()=>JobRegistry::decode($bad),422,'Corrupted known envelope rejects on consumption.');
+$pdo->exec("DELETE FROM jobs WHERE id=$id");$replacement=CommerceDatabase::transaction($pdo,fn()=>$typed->orderConfirmation(1));
+$check($replacement!==$id,'Active queue dedupe ends with deletion; durable effect dedupe belongs to the domain.');
+$fixture=CommerceTest::$temp.'/queue-producer-race.php';file_put_contents($fixture,'<?php require '.var_export(dirname(__DIR__).'/config/bootstarp.php',true).';'.<<<'CHILD'
+$in=json_decode(stream_get_contents(STDIN),true);file_put_contents(getenv('TEST_READY'),'ready');$deadline=microtime(true)+8;
+while(!is_file(getenv('TEST_BARRIER'))) {if(microtime(true)>$deadline)throw new RuntimeException('Barrier timeout.');usleep(10000);}
+$id=CommerceDatabase::transaction($pdo,fn()=>(new QueueService($pdo))->orderConfirmation($in['order_id']));echo json_encode(['id'=>$id]);
+CHILD);
+$race=CommerceTest::race([['order_id'=>8],['order_id'=>8]],$fixture);
+$check($race[0]['id']===$race[1]['id']&&(int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE dedupe_key='order:8:confirmation:v1'")->fetchColumn()===1,'Concurrent equivalent producers recover the same active job.');
+CommerceTest::finish('Durable queue producer');

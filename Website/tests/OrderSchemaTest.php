@@ -1,0 +1,40 @@
+<?php
+require __DIR__.'/support/CommerceTest.php';$pdo=CommerceTest::open();$check=[CommerceTest::class,'check'];
+$admin=CommerceAccess::provision('order-schema-admin@example.test','Disposable-Order-Password');$a=CommerceTest::user('order-schema-a@example.test');$b=CommerceTest::user('order-schema-b@example.test');
+$products=new ProductService($pdo);$cat=$products->saveCategory($admin,['slug'=>'order-stones','name'=>'Order Stones'],'category:order:stones');
+$input=['slug'=>'order-marble','name'=>'Original Marble','category_id'=>$cat,'status'=>'active','variants'=>[['sku'=>'ORDER-ONE','sell_unit'=>'sqft','qty_increment_milli'=>500,'unit_price_minor'=>12500]]];
+$p=$products->save($admin,$input,0,'product:order:marble');$v=$p['variant_ids'][0];$cart=(new CartService($pdo))->change('user:'.$a,$v,1500,0);
+$addressInput=['recipient'=>'Original Customer','phone'=>'9999988888','line1'=>'Original Road','city'=>'Bankura','state'=>'West Bengal','postal_code'=>'722101'];
+$address=(new AddressService($pdo))->save($a,$addressInput);
+$snapshot=json_encode(array_intersect_key($address,array_flip(['recipient','phone','line1','line2','city','state','postal_code','country_code'])),JSON_THROW_ON_ERROR);
+$insert='INSERT INTO orders (order_number,user_id,cart_id,status,currency,subtotal_minor,discount_minor,shipping_minor,tax_minor,total_minor,address_snapshot,calculation_policy,tax_bps,payment_mode,payment_status,created_at,updated_at) VALUES (?,?,?,\'placed\',\'INR\',18750,0,0,0,18750,?,\'inr-exclusive-v1\',0,\'cod\',\'unpaid\',1,1)';
+$pdo->prepare($insert)->execute(['TEST-ORDER-ONE',$a,$cart['id'],$snapshot]);$order=(int)$pdo->lastInsertId();
+$pdo->prepare("INSERT INTO order_items (order_id,product_id,variant_id,name,sku,sell_unit,coverage_sqft_milli,qty_increment_milli,qty_milli,base_price_minor,unit_price_minor,subtotal_minor,discount_minor,tax_minor,line_total_minor)
+ VALUES (?,?,?,'Original Marble','ORDER-ONE','sqft',NULL,500,1500,12500,12500,18750,0,0,18750)")->execute([$order,$p['id'],$v]);
+$pdo->prepare("INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,NULL,'placed',?,'Accepted','order:schema:placed',1)")->execute([$order,$a]);
+$pdo->prepare("INSERT INTO checkout_requests (principal_key,idempotency_key,fingerprint,state,order_id,response_json,created_at) VALUES (?,? ,?,'completed',? ,?,1)")->execute(['user:'.$a,'checkout:schema:one',str_repeat('a',64),$order,json_encode(['id'=>$order,'total_minor'=>18750])]);
+$input['id']=$p['id'];$input['name']='Changed Marble';$input['variants'][0]['id']=$v;$input['variants'][0]['unit_price_minor']=20000;$products->save($admin,$input,1,'product:order:changed');
+$addressInput['id']=$address['id'];$addressInput['line1']='Changed Road';(new AddressService($pdo))->save($a,$addressInput,1);
+$saved=$pdo->query("SELECT o.address_snapshot,o.total_minor,oi.name,oi.unit_price_minor,oi.qty_milli FROM orders o JOIN order_items oi ON oi.order_id=o.id WHERE o.id=$order")->fetch();
+$check($saved['name']==='Original Marble'&&(int)$saved['unit_price_minor']===12500&&(int)$saved['total_minor']===18750&&json_decode($saved['address_snapshot'],true)['line1']==='Original Road','Catalog and owned address edits cannot alter persisted order snapshots.');
+$products->archive($admin,$p['id'],2,'product:order:archive');$check((int)$pdo->query("SELECT COUNT(*) FROM order_items WHERE order_id=$order")->fetchColumn()===1,'Archive preserves order reference and line history.');
+CommerceTest::fails(fn()=>$pdo->exec('DELETE FROM products WHERE id='.$p['id']),'Product with order history cannot be deleted.');
+CommerceTest::fails(fn()=>$pdo->exec('DELETE FROM product_variants WHERE id='.$v),'Variant with order history cannot be deleted.');
+CommerceTest::fails(fn()=>$pdo->exec('DELETE FROM carts WHERE id='.$cart['id']),'Cart deletion cannot erase accepted orders.');
+CommerceTest::fails(fn()=>$pdo->exec('DELETE FROM orders WHERE id='.$order),'Order snapshot/history cannot cascade away.');
+CommerceTest::fails(fn()=>$pdo->prepare($insert)->execute(['TEST-ORDER-ONE',$b,$cart['id'],$snapshot]),'Duplicate order number is rejected.');
+CommerceTest::fails(fn()=>$pdo->prepare($insert)->execute(['TEST-ORDER-TWO',$a,$cart['id'],$snapshot]),'One accepted order per cart is enforced by database uniqueness.');
+CommerceTest::fails(fn()=>$pdo->exec("UPDATE orders SET total_minor=1 WHERE id=$order"),'Database rejects incoherent canonical totals.');
+CommerceTest::fails(fn()=>$pdo->exec("UPDATE order_items SET qty_milli=-1 WHERE order_id=$order"),'Database rejects negative snapshot quantity.');
+CommerceTest::fails(fn()=>$pdo->prepare("INSERT INTO checkout_requests (principal_key,idempotency_key,fingerprint,state,created_at) VALUES (?,? ,?,'pending',1)")->execute(['user:'.$a,'checkout:schema:one',str_repeat('b',64)]),'Scoped idempotency key is unique.');
+$pdo->prepare("INSERT INTO checkout_requests (principal_key,idempotency_key,fingerprint,state,created_at) VALUES (?,? ,?,'pending',1)")->execute(['user:'.$b,'checkout:schema:one',str_repeat('b',64)]);
+$check((int)$pdo->query('SELECT COUNT(*) FROM checkout_requests')->fetchColumn()===2,'Another principal may use the same idempotency key.');
+CommerceTest::fails(fn()=>$pdo->prepare("INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,'placed','confirmed',?,'Duplicate','order:schema:placed',2)")->execute([$order,$admin]),'Status history operation is unique.');
+CommerceTest::fails(fn()=>$pdo->exec("INSERT INTO inventory_movements (variant_id,on_hand_delta_milli,reserved_delta_milli,reason,order_id,business_key,created_at) VALUES ($v,0,0,'Invalid link',2147483647,'invalid:order:link',1)"),'Forward inventory movement link rejects absent order.');
+foreach([['placed','confirmed'],['confirmed','processing'],['processing','shipped'],['shipped','outForDelivery'],['outForDelivery','delivered'],['placed','cancelled'],['confirmed','cancelled'],['processing','cancelled']] as [$from,$to]) {OrderStates::validate($from,$to);$check(true,"Legal $from to $to transition accepted.");}
+foreach([['shipped','cancelled'],['delivered','returned'],['confirmed','placed'],['placed','delivered'],['cancelled','confirmed'],['unknown','confirmed']] as [$from,$to]) CommerceTest::rejects(fn()=>OrderStates::validate($from,$to),409,'Unknown/backward/unsupported transition rejected.');
+$check(OrderStates::payment('cod')==='unpaid','COD does not assert payment success.');
+$_ENV['APP_ENV']='production';$_ENV['CHECKOUT_SIMULATION_ENABLED']='true';CommerceTest::rejects(fn()=>OrderStates::payment('simulation'),422,'Simulation cannot run in production.');
+$_ENV['APP_ENV']='development';$check(OrderStates::payment('simulation')==='simulated','Explicit local simulation remains a separate payment status.');
+CommerceTest::rejects(fn()=>OrderStates::payment('paid'),422,'Browser cannot assert provider-paid status.');
+CommerceTest::finish('Order snapshots and status rules');

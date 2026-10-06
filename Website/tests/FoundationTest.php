@@ -67,7 +67,8 @@ try {
     [$code, $out, $err] = command(['vayu', 'migrate'], $env);
     check($code === 0 && $err === '', 'Fresh CLI migration succeeds without HTTP output: ' . $err);
     check(strpos($out, 'UsersTable') < strpos($out, '0001_users_foundation'), 'Legacy migration runs first.');
-    check((int) $pdo->query('SELECT COUNT(*) FROM migrations')->fetchColumn() === 2, 'Both migrations recorded.');
+    $migrationCount = count(glob($migrations . '/*.php'));
+    check((int) $pdo->query('SELECT COUNT(*) FROM migrations')->fetchColumn() === $migrationCount, 'All migrations recorded.');
     check((int) $pdo->query('SELECT COUNT(*) FROM users_tbl')->fetchColumn() === 0, 'No demo identities seeded.');
     [$code, $out, $err] = command(['vayu', 'migrate'], $env);
     check($code === 0 && str_contains($out, 'No pending') && $err === '', 'Repeat migration is a no-op.');
@@ -164,13 +165,24 @@ FIXTURE
     file_put_contents($bad . '/0002_missing_class.php', "<?php\n");
     fails(fn() => (new MigrationRunner($pdo, $bad, static function (string $line): void {}))->run(), 'Duplicate derived class is fatal.');
 
-    $pdo->exec('DROP TABLE users_tbl');
+    // Replace the schema only inside this random disposable test database. New
+    // commerce FKs make a standalone users-table replacement an invalid fixture.
+    $tables = $pdo->query($mysql ? 'SHOW TABLES' : "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")->fetchAll(PDO::FETCH_COLUMN);
+    if ($mysql) $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+    foreach ($tables as $table) {
+        if (!in_array($table, ['migrations', 'recovery_probe', 'concurrent_probe'], true)) {
+            $pdo->exec('DROP TABLE ' . MigrationSchema::identifier($table));
+        }
+    }
+    if ($mysql) $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
     $pdo->exec('CREATE TABLE users_tbl (id VARCHAR(20) PRIMARY KEY)');
     [$code, $out, $err] = command(['vayu', 'migrate'], $env);
     check($code !== 0 && str_contains($err, 'repair') && !str_contains($err, 'SQLSTATE'), 'Incompatible recorded schema gives safe, nonzero CLI failure.');
     $pdo->exec('DROP TABLE users_tbl');
-    $pdo->exec("DELETE FROM migrations WHERE migration IN ('UsersTable', '0001_users_foundation')");
-    check((new MigrationRunner($pdo, $migrations, static function (string $line): void {}))->run() === 2, 'Repair/retry works after incompatible schema.');
+    foreach (glob($migrations . '/*.php') as $file) {
+        $pdo->prepare('DELETE FROM migrations WHERE migration = ?')->execute([basename($file, '.php')]);
+    }
+    check((new MigrationRunner($pdo, $migrations, static function (string $line): void {}))->run() === $migrationCount, 'Repair/retry works after incompatible schema.');
 
     foreach ($env as $key => $value) $_ENV[$key] = $value;
     require dirname(__DIR__) . '/config/db.php';

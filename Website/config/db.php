@@ -29,8 +29,11 @@ function database_connect(): PDO
         throw new RuntimeException('Invalid MySQL host, database or port configuration.');
     }
     $options[PDO::ATTR_EMULATE_PREPARES] = false;
-    return new PDO("mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4",
+    $connection = new PDO("mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4",
         (string) env('DB_USERNAME', ''), (string) env('DB_PASSWORD', ''), $options);
+    $connection->exec("SET time_zone = '+00:00'");
+    $connection->exec('SET SESSION innodb_lock_wait_timeout = 3');
+    return $connection;
 }
 
 $pdo = database_connect();
