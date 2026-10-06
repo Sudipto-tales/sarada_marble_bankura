@@ -2,7 +2,7 @@
 
 ## INF-03
 
-References: [PDO](../../../Website/config/db.php#L31), [env()](../../../Website/config/env.php#L3), [bootstrap core loading](../../../Website/config/bootstarp.php#L19), [current environment example](../../../Website/.env.example#L1). Proposed files: `core/Cache.php`, catalog version migration/service integration and focused failure tests. No existing Redis support is assumed.
+References: [PDO](../../../Website/config/db.php#L7), [env()](../../../Website/config/env.php#L3), [bootstrap core loading](../../../Website/config/bootstarp.php#L6), [current environment example](../../../Website/.env.example#L1). Proposed files: `core/Cache.php`, catalog version migration/service integration and focused failure tests. No existing Redis support is assumed.
 
 ### Key and version contract
 

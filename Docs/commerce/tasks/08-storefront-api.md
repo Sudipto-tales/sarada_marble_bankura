@@ -16,7 +16,7 @@ Checks: invalid slug/filter/sort, empty category, inactive product, multiple var
 
 ## WEB-02
 
-Sources: [Auth.login()](../../../Website/core/Auth.php#L51), [mobile offline checkout model](../../../Mobile/lib/data/models/order.dart#L76), [cart prototype](../../../Mobile/lib/core/state/cart_controller.dart#L11). Proposed CartService and OrderService are described in their guides; mobile demo totals are not the server algorithm.
+Sources: [Auth.login()](../../../Website/core/Auth.php#L102), [mobile offline checkout model](../../../Mobile/lib/data/models/order.dart#L76), [cart prototype](../../../Mobile/lib/core/state/cart_controller.dart#L11). Proposed CartService and OrderService are described in their guides; mobile demo totals are not the server algorithm.
 
 Flow: owned guest/user cart → verified login → idempotent guest merge → owned address selection → server quote preview → configured payment mode → submit stable checkout key → persisted confirmation → owned order history. MVP preview does not reserve inventory by default; accepted placement reserves/consumes atomically. If explicit expiring checkout reservation is enabled, use the same DAT-02 state machine and validate expiry on submit.
 

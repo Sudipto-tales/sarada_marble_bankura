@@ -4,9 +4,11 @@ Scope: FND-03, IAM-01, IAM-02. Prerequisites are in the tracker. Read [contracts
 
 ## FND-03
 
-Existing references: [Auth.login()](../../../Website/core/Auth.php#L51), [createSession()](../../../Website/core/Auth.php#L161), [setRememberToken()](../../../Website/core/Auth.php#L176), [validateRememberToken()](../../../Website/core/Auth.php#L200), [DeveloperAccess.session()](../../../Website/core/DeveloperAccess.php#L17), [DeveloperAccess.login()](../../../Website/core/DeveloperAccess.php#L53), [Mailer.getMailer()](../../../Website/core/Mailer.php#L9), [bootstrap core loading](../../../Website/config/bootstarp.php#L19).
+Implemented locally on 2026-10-06; see [evidence](../tracking.md#fnd-03--completed-2026-10-06) and [runtime policy](../../../Website/docs/foundations.md#request-session-and-auth-protections). `RequestSecurity` and `PrivateStorage` are registered shared helpers. Auth uses the bootstrapped PDO without opening another connection. Registration is default-disabled; only an explicitly enabled non-production private test outbox is available until queue delivery is integrated. Real hosting probes and mail credential rotation remain pending.
 
-Implement a shared request validation/CSRF/session policy and repair the current Auth dependencies with `__DIR__`-based includes. Reuse current bootstrapped PDO; do not create a second connection during an order transaction. Keep Developer behavior and its separate session keys intact.
+Existing references: [Auth.login()](../../../Website/core/Auth.php#L102), [createSession()](../../../Website/core/Auth.php#L120), [setRememberToken()](../../../Website/core/Auth.php#L144), [validateRememberToken()](../../../Website/core/Auth.php#L175), [DeveloperAccess.session()](../../../Website/core/DeveloperAccess.php#L19), [DeveloperAccess.login()](../../../Website/core/DeveloperAccess.php#L52), [Mailer.getMailer()](../../../Website/core/Mailer.php#L28), [bootstrap core loading](../../../Website/config/bootstarp.php#L6).
+
+Maintain the implemented shared request validation/CSRF/session policy and Auth dependencies with `__DIR__`-based includes. Reuse current bootstrapped PDO; do not create a second connection during an order transaction. Keep Developer behavior and its separate session keys intact.
 
 Authentication algorithm:
 
@@ -18,7 +20,7 @@ Authentication algorithm:
 
 Verification emails need hashed/expiring tokens and queued delivery rather than synchronous network work before customer registration is publicly enabled. FND-03 designs/hardens the token flow; use INF jobs once present. Keep transport disabled or use test transport before then.
 
-Current `Mailer.getMailer()` contains embedded provider settings/credential. Do not copy their values into docs/tests. Move settings to noncommitted environment configuration and require the account operator to rotate any exposed credential before real delivery. Set transport deadlines and sanitize errors. Credential rotation is an external operator action, not evidence of local implementation.
+FND-03 removed embedded provider settings/credential from `Mailer.getMailer()`. SMTP configuration now comes from noncommitted environment settings, with finite deadlines and sanitized errors. Transport defaults disabled. The account operator must rotate/revoke the previously exposed credential before real delivery; this remains an external operator action, not evidence of local implementation.
 
 Private-path algorithm: choose outside-document-root storage → restrict permissions → deny config/vendor/database/cache/import/log paths if exposed by hosting layout → verify HTTP probes on the target. Do not rely solely on development-server rules in `vayu`. Image policy is in [admin guide](07-admin.md#adm-02).
 
@@ -26,7 +28,7 @@ Checks: wrong/missing CSRF, login fixation attempt, disabled/locked user, stale 
 
 ## IAM-01
 
-References: [existing users schema](../../../Website/database/migrations/UsersTable.php#L12), [Developer identity lookup](../../../Website/core/DeveloperAccess.php#L32), [Developer provisioning](../../../Website/core/DeveloperAccess.php#L83). Proposed additions: ordered role/grant migrations and `core/CommerceAccess.php`.
+References: [existing users schema](../../../Website/database/migrations/UsersTable.php#L6), [Developer identity lookup](../../../Website/core/DeveloperAccess.php#L31), [Developer provisioning](../../../Website/core/DeveloperAccess.php#L82). Proposed additions: ordered role/grant migrations and `core/CommerceAccess.php`.
 
 Schema: roles unique name, permissions unique key, user_roles unique `(user_id, role_id)`, role_permissions unique `(role_id, permission_id)`. FK user type matches users_tbl. Seed grant definitions/roles idempotently; seed no usable staff password. Existing `users_tbl.role` is legacy information, not automatic wildcard permission. Map existing staff grants through an explicit reviewed migration/provisioning command.
 

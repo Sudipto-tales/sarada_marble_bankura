@@ -12,7 +12,7 @@ Coupon algorithm: normalize code → lock campaign/coupon and owned redemption k
 
 ## OPT-02
 
-Sources: [migration pattern](../../../Website/database/migrations/UsersTable.php#L4), [prepared DB helper](../../../Website/config/db.php#L36). Existing import module is absent. Build CSV first; XLSX requires an explicitly chosen compatible parser/license/resource policy.
+Sources: [migration pattern](../../../Website/database/migrations/UsersTable.php#L4), [prepared DB helper](../../../Website/config/db.php#L38). Existing import module is absent. Build CSV first; XLSX requires an explicitly chosen compatible parser/license/resource policy.
 
 Algorithm: authorized staff/private upload → generated staged file ID/checksum/schema version → dry-run parse in bounded batches → strict header/types/units/SKU/image-reference validation → report line-level redacted errors → explicit accepted import → per-batch ProductService upsert using stable SKU + import row key → write progress/checkpoint with batch commit → bounded queue continuation → final summary. No raw spreadsheet in job payload; no whole-file transaction or customer-request import.
 
@@ -28,7 +28,7 @@ Keep provider file IDs/version keys for replay, bounded pagination/download size
 
 ## OPT-04
 
-References: [mobile payment methods](../../../Mobile/lib/data/models/order.dart#L64), [current Mailer](../../../Website/core/Mailer.php#L9). Mobile simulated payment is not a provider implementation.
+References: [mobile payment methods](../../../Mobile/lib/data/models/order.dart#L64), [current Mailer](../../../Website/core/Mailer.php#L28). Mobile simulated payment is not a provider implementation.
 
 Choose/configure provider and read current official integration docs at implementation time. Create payment intents against immutable server orders outside SQL locks, with durable local/provider idempotency keys. Verified signed webhook → deduplicate provider event → lock payment/order → validate amount/currency/allowed state → commit payment/history and required jobs. Browser success redirects only refresh verified state. Handle out-of-order/duplicate webhooks, unknown outcomes, refunds, reconciliation and cancellation/stock reservation policy before enabling live checkout.
 

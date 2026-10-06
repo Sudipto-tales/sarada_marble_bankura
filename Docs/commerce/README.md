@@ -2,7 +2,7 @@
 
 Prepared on 2026-10-05 for `sarada_marble_bankura`.
 
-This pack turns the proposed Hostinger architecture into repository-specific work. This delivery is documentation only; commerce features, migrations, workers, and deployment have not been implemented.
+This pack turns the proposed Hostinger architecture into repository-specific work. The documentation pack is complete and FND-01/02/03 foundations are implemented and verified locally. Commerce modules, workers and deployment remain upcoming work; see the tracker for evidence and hosting checks.
 
 ## Files
 
@@ -22,7 +22,7 @@ This pack turns the proposed Hostinger architecture into repository-specific wor
 
 1. Read the implementation plan and root `AGENTS.md` for scope and dependencies.
 2. Select one task from the task index; read its guide, shared contracts and linked code symbols. Use the smaller-model prompt in that index to keep the session focused.
-3. Claim the first dependency-ready task in the tracker. Start with `HST-01` and `FND-01`; local foundation work can continue while hosting details are collected.
+3. Claim the first dependency-ready task in the tracker. Continue with `IAM-01` commerce grants/provisioning after verified foundations; hosting discovery remains open for account observations.
 4. Record changed files, verification results, and unresolved issues after each task.
 5. Advance through the MVP gates before attempting optional integrations or Flutter networking.
 

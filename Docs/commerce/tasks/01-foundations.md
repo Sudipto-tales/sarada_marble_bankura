@@ -4,7 +4,7 @@ Scope: HST-01, FND-01, FND-02 only. Read [contracts](../contracts.md) and the se
 
 ## HST-01
 
-Existing references: [env()](../../../Website/config/env.php#L3), [database configuration](../../../Website/config/db.php#L2), [CLI command dispatcher](../../../Website/vayu#L29), [release process](../../releases.md).
+Existing references: [env()](../../../Website/config/env.php#L3), [database configuration](../../../Website/config/db.php#L6), [CLI command dispatcher](../../../Website/vayu#L29), [release process](../../releases.md).
 
 Create a capability record under `Website/docs/` during implementation, separating local observations from account observations. Collect PHP version/architecture, PDO drivers, CLI path, DB version/engine, charset/collation, cron minimum and timeout, document root/rewrite, private writable path, outbound connection policy, SMTP configuration and optional Redis extension. Redact connection/password values. Test capabilities in a disposable database, not with a production schema reset.
 
@@ -14,10 +14,10 @@ Algorithm: gather available settings → mark each capability observed/unverifie
 
 ### Open these functions first
 
-- [PDO driver switch](../../../Website/config/db.php#L4), `db_query()` at [line 36](../../../Website/config/db.php#L36).
+- [PDO driver switch](../../../Website/config/db.php#L4), `db_query()` at [line 38](../../../Website/config/db.php#L38).
 - [Migration runner](../../../Website/config/migrate.php#L8), `Migration` at [line 3](../../../Website/config/migration.php#L3).
-- [UsersTable.up()](../../../Website/database/migrations/UsersTable.php#L12), existing seed method in that file.
-- [vayu command branch](../../../Website/vayu#L29), [CLI developer provisioning](../../../Website/vayu#L35), [bootstrap](../../../Website/config/bootstarp.php#L14).
+- [UsersTable.up()](../../../Website/database/migrations/UsersTable.php#L6), driver-aware up/verify; no seed method remains.
+- [vayu command branch](../../../Website/vayu#L29), [CLI developer provisioning](../../../Website/vayu#L52), [bootstrap](../../../Website/config/bootstarp.php#L3).
 
 ### Edit boundary and algorithm
 
@@ -35,13 +35,13 @@ MySQL DDL is not a reliable transaction rollback boundary. Each migration must b
 
 ### Evidence required
 
-Fresh SQLite; existing SQLite with `UsersTable` ledger/data; fresh disposable MySQL; repeated migrate; failed midway then repaired/rerun; two concurrent runners; incompatible schema stops instead of reporting success. Existing identities/password hashes remain intact. Record versions, commands and actual outcomes. `php vayu migrate` is a proposed command until this task is implemented.
+Fresh SQLite; existing SQLite with `UsersTable` ledger/data; fresh disposable MySQL; repeated migrate; failed midway then repaired/rerun; two concurrent runners; incompatible schema stops instead of reporting success. Existing identities/password hashes remain intact. Record versions, commands and actual outcomes. `php vayu migrate` is now implemented; see [runtime guide](../../../Website/docs/foundations.md) and tracker evidence.
 
 ## FND-02
 
 ### Existing references
 
-- [RouteManager.dispatch()](../../../Website/core/RouteManager.php#L5), [resolveRoute()](../../../Website/core/RouteManager.php#L31).
+- [RouteManager.dispatch()](../../../Website/core/RouteManager.php#L5), [resolveRoute()](../../../Website/core/RouteManager.php#L131).
 - [View routes](../../../Website/app/view.php#L5), [API routes](../../../Website/api/gateway.php#L5), [merged routes](../../../Website/config/config.php#L24).
 - [Explicit controller includes](../../../Website/config/route.php#L3), [BaseController.respond()](../../../Website/core/BaseController.php#L10).
 
@@ -60,3 +60,7 @@ Keep legacy entries `[ControllerClass, method]`. New entries use a method map at
 7. Call the controller; preserve legacy controller-level method guards. Do not widen Developer methods merely to make new route registration simpler.
 
 Checks: `/`, existing Welcome/Developer routes, disabled Developer flag, `/product/valid-slug`, bad ID/slug, unknown route, wrong method, query-route mode, root/subdirectory deployment, `/shopper` prefix collision, duplicate template rejection and identical controller short names in different folders. New view arguments must be full `app/page/...php` paths.
+
+## Implemented foundation handoff
+
+FND-01/02 now have runtime implementations and checks. Read [foundations](../../../Website/docs/foundations.md), [CLI bootstrap](../../../Website/config/cli.php), [runtime configuration](../../../Website/config/runtime.php), [class map](../../../Website/config/classes.php), [ClassLoader](../../../Website/core/ClassLoader.php), [FoundationTest](../../../Website/tests/FoundationTest.php), [RoutingTest](../../../Website/tests/RoutingTest.php) and [HTTP checks](../../../Website/tests/routing_http_test.py). HST-01 account observations remain pending in the [capability record](../../../Website/docs/hosting-capabilities.md). Existing route providers retain legacy guards; future commerce providers should use method maps.

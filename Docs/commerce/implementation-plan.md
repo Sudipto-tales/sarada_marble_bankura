@@ -4,7 +4,7 @@ Date: 2026-10-05. Target: the existing Vayu application on Hostinger shared host
 
 ## Scope and delivery boundary
 
-The current delivery creates planning documents and agent instructions. All implementation tasks remain open until completed with evidence in [tracking.md](tracking.md).
+The planning pack is complete and local foundation implementation has started. Task completion is recorded with evidence in [tracking.md](tracking.md).
 
 Implementation detail is split into [11 focused task guides](tasks/README.md), backed by [verified code references](code-map.md), [shared contracts](contracts.md), and [data-flow diagrams](data-flow.md). Read the guide for one selected task; the plan below defines scope, dependencies and acceptance. Guides supply concrete algorithms and targeted SQL rather than boilerplate classes.
 
@@ -12,7 +12,9 @@ The first implementation milestone is a working, locally verified commerce MVP: 
 
 Preserve Vayu and the Developer console. Build server-rendered PHP pages with existing/local Bootstrap assets. Do not add Laravel, Nuxt, search daemons, Kafka, Kubernetes, or dedicated pricing/recommendation services to this milestone.
 
-## Verified repository baseline
+## Original baseline and implemented foundations
+
+The table records the initial inspection. FND-01/02 have since implemented migration/PDO/CLI and routing/class-map support; FND-03 adds verified request/session/auth/private-path protections with customer registration default-disabled until queued verification delivery exists. Use the [refreshed code map](code-map.md), [runtime guide](../../Website/docs/foundations.md) and tracker for current behavior. Commerce modules and queue commands are still pending.
 
 | Area | Observed code | Consequence |
 | --- | --- | --- |

@@ -5,3 +5,6 @@
 *.jks
 *.keystore
 key.properties
+
+# Private PHP runtime storage outside Website/
+/var/

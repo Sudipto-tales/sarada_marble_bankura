@@ -62,7 +62,7 @@ After discovering a concurrency failure, retry the entire top-level transaction,
 
 ## HTTP/API contract
 
-Use globally unique controller class names (`AdminProductController`, `StorefrontProductController`) unless an agreed namespace loader is implemented. Use the existing render contract: [respond](../../Website/core/BaseController.php#L10) ultimately passes its argument directly to [load_view](../../Website/config/bootstarp.php#L25); actual views require paths such as `app/page/admin/products/index.php`, including the extension.
+Use globally unique controller class names (`AdminProductController`, `StorefrontProductController`) unless an agreed namespace loader is implemented. Use the existing render contract: [respond](../../Website/core/BaseController.php#L10) ultimately passes its argument directly to [load_view](../../Website/config/bootstarp.php#L10); actual views require paths such as `app/page/admin/products/index.php`, including the extension.
 
 New parameterized routes group handlers by HTTP method; legacy `[class, method]` entries keep their current controller guards. Route selection never resolves a client-supplied controller filename. JSON errors contain `error.code`, `error.message`, optional safe field errors, and `request_id`. Use 401 unauthenticated, 403 unauthorized, 404 absent/not-visible record, 405 method mismatch, 409 revision/idempotency/stock conflict, 422 invalid business input, 429 throttled, 503 temporary infrastructure failure. Do not return SQL or SMTP exception text.
 

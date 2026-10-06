@@ -2,7 +2,7 @@
 
 Scope: EVT-01/02, PRC-01, SRCH-01, REC-01. Read [contracts](../contracts.md) and [queue](05-queue.md) first. Heavy scans/rebuilds run in bounded maintenance jobs, not customer requests. Names below are proposed services/tables.
 
-Existing references: [PDO helper](../../../Website/config/db.php#L36), [API registration](../../../Website/api/gateway.php#L5), [mobile product filters](../../../Mobile/lib/data/models/filters.dart#L1), [static product query behavior](../../../Mobile/lib/data/repositories/static_repositories.dart#L32), [mobile rating/price fields](../../../Mobile/lib/data/models/product.dart#L3).
+Existing references: [PDO helper](../../../Website/config/db.php#L38), [API registration](../../../Website/api/gateway.php#L5), [mobile product filters](../../../Mobile/lib/data/models/filters.dart#L1), [static product query behavior](../../../Mobile/lib/data/repositories/static_repositories.dart#L32), [mobile rating/price fields](../../../Mobile/lib/data/models/product.dart#L3).
 
 ## EVT-01
 

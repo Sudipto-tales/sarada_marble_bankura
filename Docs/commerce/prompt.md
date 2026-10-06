@@ -20,7 +20,7 @@ Read these files before editing:
 - `Website/docs/ecommerce-developer-console.md`
 - `Docs/releases.md`
 
-Inspect the current code as well as the documents. The existing user migration and migration ledger contain SQLite-specific SQL; routing supports exact paths only; controllers are explicitly loaded; `php vayu queue:work` and `php vayu migrate` do not exist yet. Implement those foundations before treating the proposed modules as working features.
+Inspect the current code as well as the documents. FND-01/02 implemented driver-aware migrations, `php vayu migrate`, method/parameter routing and fixed class-map loading. FND-03 implemented shared request/session/private-path protections and hashed expiring auth tokens; production signup remains disabled until queued verification delivery is integrated. `php vayu queue:work` and commerce modules do not exist yet. Follow tracker evidence and [runtime foundations](../../Website/docs/foundations.md) before adding dependent modules.
 
 ## Working procedure
 
@@ -53,7 +53,7 @@ Inspect the current code as well as the documents. The existing user migration a
 
 For the selected milestone, provide working changes, relevant regression checks, updated documentation, and accurate tracker evidence. Test MySQL locking and FULLTEXT behavior against MySQL; SQLite-only checks cannot close those requirements. Do not claim hosting deployment, scale capacity, provider delivery, or production readiness without evidence. Record unavailable external checks as pending verification.
 
-The first implementation slice is foundation work: `FND-01` migration compatibility and CLI, `FND-02` method-aware parameter routing/controller loading, and `FND-03` request/session protections. Hosting discovery (`HST-01`) is concurrent discovery, not a reason to leave independent foundation work unfinished.
+The next foundation slice is `FND-03` request/session protections. FND-01 migration/CLI and FND-02 routing/loading have runtime implementations. Hosting discovery (`HST-01`) is concurrent discovery, not a reason to leave independent foundation work unfinished.
 
 ---
 

@@ -4,7 +4,7 @@ Scope: DAT-01 and DAT-03. Use [value contracts](../contracts.md#values-and-bound
 
 ## DAT-01
 
-Existing references: [UsersTable migration pattern](../../../Website/database/migrations/UsersTable.php#L4), [db_query](../../../Website/config/db.php#L36), [BaseController.respond](../../../Website/core/BaseController.php#L10), [mobile Product fields](../../../Mobile/lib/data/models/product.dart#L3). Mobile fields describe future compatibility, not production pricing rules.
+Existing references: [UsersTable migration pattern](../../../Website/database/migrations/UsersTable.php#L4), [db_query](../../../Website/config/db.php#L38), [BaseController.respond](../../../Website/core/BaseController.php#L10), [mobile Product fields](../../../Mobile/lib/data/models/product.dart#L3). Mobile fields describe future compatibility, not production pricing rules.
 
 Proposed migrations create categories, brands, products, variants, images and catalog version metadata. Use the agreed ordered migration convention. Proposed `app/Services/ProductService.php` owns catalog validation/reads/writes.
 
@@ -26,7 +26,7 @@ Tests: two conflicting slugs/SKUs, stale revision, incompatible units, negative/
 
 ## DAT-03
 
-Existing references: [Auth.isAuthenticated() and session user ID](../../../Website/core/Auth.php#L21), [mobile cart behavior](../../../Mobile/lib/core/state/cart_controller.dart#L11), [address model](../../../Mobile/lib/data/models/address.dart#L1), [CartItem model](../../../Mobile/lib/data/models/cart_item.dart#L1). Preserve mobile offline behavior; backend owns real cart semantics.
+Existing references: [Auth.isAuthenticated() and session user ID](../../../Website/core/Auth.php#L67), [mobile cart behavior](../../../Mobile/lib/core/state/cart_controller.dart#L11), [address model](../../../Mobile/lib/data/models/address.dart#L1), [CartItem model](../../../Mobile/lib/data/models/cart_item.dart#L1). Preserve mobile offline behavior; backend owns real cart semantics.
 
 Proposed schema: addresses with user FK; carts with exactly one owner (`user_id` or `guest_token_hash`), status/revision/expiry; cart_items unique `(cart_id, variant_id)` plus canonical quantity. Use explicit ownership guards even when SQLite/MySQL CHECK support differs. Default address updates lock the user's address set and ensure at most one default through application logic/appropriate constraint.
 

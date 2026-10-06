@@ -1,6 +1,6 @@
 # Data flows and authority
 
-Design only; proposed modules are not implemented. Values and transaction ownership are defined in [contracts.md](contracts.md). Select the appropriate [task guide](tasks/README.md).
+The foundation request path is implemented; commerce flows below remain designs for upcoming modules. Values and transaction ownership are defined in [contracts.md](contracts.md). Select the appropriate [task guide](tasks/README.md).
 
 ## Existing request path
 
@@ -11,15 +11,15 @@ flowchart LR
     Route --> Boot[config/bootstarp.php]
     Boot --> Config[config/config.php merges view and API routes]
     Boot --> PDO[config/db.php creates PDO]
-    Boot --> Core[core files]
-    Route --> Load[Explicit Welcome/Developer loading]
-    Load --> Dispatch[RouteManager exact path dispatch]
+    Boot --> Core[Helpers and registered class loader]
+    Route --> Load[Fixed controller/service class map]
+    Load --> Dispatch[Exact then typed routes and method maps]
     Dispatch --> Controller[Bridge controller]
     Controller --> Respond[BaseController.respond]
     Respond --> Render[Helpers.render_view → load_view]
 ```
 
-Source entry points: [index](../../Website/index.php#L2), [route loader](../../Website/config/route.php#L2), [bootstrap](../../Website/config/bootstarp.php#L14), [dispatch](../../Website/core/RouteManager.php#L5), [render helper](../../Website/core/Helpers.php#L11). FND-02 adds method/parameter resolution and safe nested loading; it does not replace this pipeline with another framework.
+Source entry points: [index](../../Website/index.php#L2), [route loader](../../Website/config/route.php#L2), [bootstrap](../../Website/config/bootstarp.php#L3), [dispatch](../../Website/core/RouteManager.php#L5), [render helper](../../Website/core/Helpers.php#L11). FND-02 implemented method/parameter resolution and safe nested loading in this pipeline.
 
 ## Admin catalog mutation and public reads
 

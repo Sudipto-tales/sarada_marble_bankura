@@ -4,7 +4,7 @@ Scope: ADM-01/02/03. Use [identity](02-identity.md), [catalog](03-catalog-carts-
 
 ## ADM-01
 
-Existing references: [Developer controller guard pattern](../../../Website/app/bridge/Developer.php#L5), [Welcome rendering](../../../Website/app/bridge/Welcome.php#L6), [BaseController.respond](../../../Website/core/BaseController.php#L10), [load_view](../../../Website/config/bootstarp.php#L25), [route provider](../../../Website/app/view.php#L5).
+Existing references: [Developer controller guard pattern](../../../Website/app/bridge/Developer.php#L5), [Welcome rendering](../../../Website/app/bridge/Welcome.php#L6), [BaseController.respond](../../../Website/core/BaseController.php#L10), [load_view](../../../Website/config/bootstarp.php#L10), [route provider](../../../Website/app/view.php#L5).
 
 Proposed `app/page/admin/layout.php`, corresponding page views, unique Admin controller names and local `assets/admin/` files. Renderer accepts full `app/page/admin/...php` paths, not Laravel dot notation or extensionless paths. Layout receives escaped staff display name, allowed navigation and rendered content through the existing PHP view approach.
 
@@ -14,7 +14,7 @@ Tests: customer/Developer-only identity denied; view-only grant sees permitted n
 
 ## ADM-02
 
-Sources: [route/API maps](../../../Website/api/gateway.php#L5), [existing rendering](../../../Website/core/Helpers.php#L11), [PDO helper](../../../Website/config/db.php#L36). New controllers call ProductService; they do not duplicate price/variant SQL in form handlers.
+Sources: [route/API maps](../../../Website/api/gateway.php#L5), [existing rendering](../../../Website/core/Helpers.php#L11), [PDO helper](../../../Website/config/db.php#L38). New controllers call ProductService; they do not duplicate price/variant SQL in form handlers.
 
 Product workflow: GET authorized form → POST CSRF/grants/revision/input validation → service save → field/conflict errors or redirect to persisted product. For variants use explicit add/update/archive IDs; validate each ID belongs to the current product. Category/brand mutations use corresponding grants/audit and version policy. Preserve values on validation error without echoing unescaped strings.
 

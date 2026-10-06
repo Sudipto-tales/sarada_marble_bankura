@@ -4,7 +4,7 @@ Scope: DAT-02, DAT-04, ORD-01, ORD-02. Use [contracts](../contracts.md) for unit
 
 ## DAT-02
 
-Existing references: [shared PDO and prepared queries](../../../Website/config/db.php#L31), [migration pattern](../../../Website/database/migrations/UsersTable.php#L4), [mobile cart prototype](../../../Mobile/lib/core/state/cart_controller.dart#L11). There is no existing production InventoryService.
+Existing references: [shared PDO and prepared queries](../../../Website/config/db.php#L7), [migration pattern](../../../Website/database/migrations/UsersTable.php#L4), [mobile cart prototype](../../../Mobile/lib/core/state/cart_controller.dart#L11). There is no existing production InventoryService.
 
 Proposed tables:
 
@@ -53,7 +53,7 @@ Checks: invalid transition, duplicate order number/key, changed product/address 
 
 ## ORD-01
 
-Existing references: [db helpers use global PDO](../../../Website/config/db.php#L36), [Auth session identity](../../../Website/core/Auth.php#L21), [Mailer.send()](../../../Website/core/Mailer.php#L28). Do not invoke Mailer in the transaction. Proposed `app/Services/OrderService.php` is the sole order-placement transaction owner.
+Existing references: [db helpers use global PDO](../../../Website/config/db.php#L38), [Auth session identity](../../../Website/core/Auth.php#L67), [Mailer.send()](../../../Website/core/Mailer.php#L8). Do not invoke Mailer in the transaction. Proposed `app/Services/OrderService.php` is the sole order-placement transaction owner.
 
 ### Placement algorithm
 
