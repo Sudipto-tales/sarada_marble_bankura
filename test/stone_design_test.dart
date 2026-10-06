@@ -16,6 +16,10 @@ import 'package:maa_sarada/features/catalog/widgets/product_card.dart';
 import 'package:maa_sarada/features/shell/app_shell.dart';
 
 const _capture = bool.fromEnvironment('CAPTURE_PREVIEWS');
+const _previewDirectory = String.fromEnvironment(
+  'PREVIEW_DIRECTORY',
+  defaultValue: '../Docs/previews',
+);
 const _boundary = ValueKey('preview-boundary');
 
 Future<void> tick(WidgetTester tester) async {
@@ -37,7 +41,7 @@ Future<void> capture(WidgetTester tester, String name) async {
   await tester.runAsync(() async {
     final image = await boundary.toImage(pixelRatio: 2);
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    final file = File('../Docs/previews/mobile-stone-$name.png');
+    final file = File('$_previewDirectory/mobile-stone-$name.png');
     await file.parent.create(recursive: true);
     await file.writeAsBytes(bytes!.buffer.asUint8List());
     image.dispose();
@@ -55,7 +59,9 @@ void main() {
       final loader = FontLoader(entry.key);
       loader.addFont(
         File(
-          'C:/Windows/Fonts/${entry.value}',
+          Platform.isWindows
+              ? 'C:/Windows/Fonts/${entry.value}'
+              : '/usr/share/fonts/truetype/dejavu/${entry.key == 'serif' ? 'DejaVuSerif' : 'DejaVuSans'}.ttf',
         ).readAsBytes().then((bytes) => ByteData.sublistView(bytes)),
       );
       await loader.load();
@@ -91,7 +97,16 @@ void main() {
         );
         await tick(tester);
         expect(tester.takeException(), isNull);
-        if (width == 390 && !dark) await capture(tester, 'home');
+        if (width == 390 && !dark) {
+          await capture(tester, 'home');
+          if (_capture) {
+            await tester.tap(find.text('By space'));
+            await tick(tester);
+            await capture(tester, 'home-space');
+            await tester.tap(find.text('By material'));
+            await tick(tester);
+          }
+        }
         for (final label in ['Catalog', 'Cart', 'Account', 'Home']) {
           await tester.tap(find.text(label).last);
           await tick(tester);

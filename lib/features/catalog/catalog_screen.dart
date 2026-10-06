@@ -41,10 +41,14 @@ class _CatalogScreenState extends State<CatalogScreen>
   void initState() {
     super.initState();
     final args = widget.args;
-    _filter = ProductFilter(
-      categoryIds: args?.categoryId == null ? const {} : {args!.categoryId!},
-      query: args?.query ?? '',
-    );
+    _filter =
+        args?.filter ??
+        ProductFilter(
+          categoryIds: args?.categoryId == null
+              ? const {}
+              : {args!.categoryId!},
+          query: args?.query ?? '',
+        );
     _future = _load();
     _loadMeta();
   }

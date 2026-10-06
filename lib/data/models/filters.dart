@@ -1,16 +1,23 @@
 import 'product.dart';
 
-enum SortOption { relevance, priceLowHigh, priceHighLow, rating, newest, discount }
+enum SortOption {
+  relevance,
+  priceLowHigh,
+  priceHighLow,
+  rating,
+  newest,
+  discount,
+}
 
 extension SortOptionLabel on SortOption {
   String get label => switch (this) {
-        SortOption.relevance => 'Relevance',
-        SortOption.priceLowHigh => 'Price: low to high',
-        SortOption.priceHighLow => 'Price: high to low',
-        SortOption.rating => 'Customer rating',
-        SortOption.newest => 'Newest first',
-        SortOption.discount => 'Discount',
-      };
+    SortOption.relevance => 'Relevance',
+    SortOption.priceLowHigh => 'Price: low to high',
+    SortOption.priceHighLow => 'Price: high to low',
+    SortOption.rating => 'Customer rating',
+    SortOption.newest => 'Newest first',
+    SortOption.discount => 'Discount',
+  };
 }
 
 /// Immutable filter state shared by catalog and search.
@@ -27,6 +34,7 @@ class ProductFilter {
     this.inStockOnly = false,
     this.sort = SortOption.relevance,
     this.query = '',
+    this.application,
   });
 
   final Set<String> categoryIds;
@@ -40,6 +48,7 @@ class ProductFilter {
   final bool inStockOnly;
   final SortOption sort;
   final String query;
+  final String? application;
 
   int get activeCount =>
       categoryIds.length +
@@ -49,7 +58,8 @@ class ProductFilter {
       brands.length +
       (minPrice != null || maxPrice != null ? 1 : 0) +
       (minRating != null ? 1 : 0) +
-      (inStockOnly ? 1 : 0);
+      (inStockOnly ? 1 : 0) +
+      (application != null ? 1 : 0);
 
   bool get isEmpty => activeCount == 0;
 
@@ -67,25 +77,34 @@ class ProductFilter {
     String? query,
     bool clearPrice = false,
     bool clearRating = false,
-  }) =>
-      ProductFilter(
-        categoryIds: categoryIds ?? this.categoryIds,
-        colors: colors ?? this.colors,
-        finishes: finishes ?? this.finishes,
-        origins: origins ?? this.origins,
-        brands: brands ?? this.brands,
-        minPrice: clearPrice ? null : (minPrice ?? this.minPrice),
-        maxPrice: clearPrice ? null : (maxPrice ?? this.maxPrice),
-        minRating: clearRating ? null : (minRating ?? this.minRating),
-        inStockOnly: inStockOnly ?? this.inStockOnly,
-        sort: sort ?? this.sort,
-        query: query ?? this.query,
-      );
+    String? application,
+  }) => ProductFilter(
+    categoryIds: categoryIds ?? this.categoryIds,
+    colors: colors ?? this.colors,
+    finishes: finishes ?? this.finishes,
+    origins: origins ?? this.origins,
+    brands: brands ?? this.brands,
+    minPrice: clearPrice ? null : (minPrice ?? this.minPrice),
+    maxPrice: clearPrice ? null : (maxPrice ?? this.maxPrice),
+    minRating: clearRating ? null : (minRating ?? this.minRating),
+    inStockOnly: inStockOnly ?? this.inStockOnly,
+    sort: sort ?? this.sort,
+    query: query ?? this.query,
+    application: application ?? this.application,
+  );
 
   ProductFilter cleared() => ProductFilter(sort: sort, query: query);
 
   bool matches(Product p) {
-    if (categoryIds.isNotEmpty && !categoryIds.contains(p.categoryId)) return false;
+    if (application != null &&
+        !p.applications.any(
+          (value) => value.toLowerCase().contains(application!.toLowerCase()),
+        )) {
+      return false;
+    }
+    if (categoryIds.isNotEmpty && !categoryIds.contains(p.categoryId)) {
+      return false;
+    }
     if (colors.isNotEmpty && !colors.contains(p.color)) return false;
     if (finishes.isNotEmpty && !finishes.contains(p.finish)) return false;
     if (origins.isNotEmpty && !origins.contains(p.origin)) return false;

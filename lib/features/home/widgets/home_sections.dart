@@ -55,7 +55,9 @@ class CategoryStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 116,
+      height:
+          116 +
+          (MediaQuery.textScalerOf(context).scale(11) - 11).clamp(0, 22) * 2,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: AppDimens.screenPad,

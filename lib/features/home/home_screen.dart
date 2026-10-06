@@ -12,7 +12,7 @@ import '../../data/models/coupon.dart';
 import '../../data/models/product.dart';
 import '../../data/models/order.dart';
 import 'widgets/deals_showcase.dart';
-import 'widgets/banner_carousel.dart';
+import 'widgets/category_browser.dart';
 import '../catalog/widgets/product_card.dart';
 import 'widgets/home_header.dart';
 import 'widgets/home_sections.dart';
@@ -33,6 +33,7 @@ class HomeFeed {
     required this.deals,
     required this.buyAgain,
     required this.pastPurchaseSimilar,
+    required this.allProducts,
   });
 
   final List<PromoBanner> banners;
@@ -46,6 +47,7 @@ class HomeFeed {
   final List<Product> deals;
   final List<Product> buyAgain;
   final List<Product> pastPurchaseSimilar;
+  final List<Product> allProducts;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -98,6 +100,7 @@ class _HomeScreenState extends State<HomeScreen>
     final purchased = all.where((p) => purchasedIds.contains(p.id)).toList();
     final categories = purchased.map((p) => p.categoryId).toSet();
     return HomeFeed(
+      allProducts: all,
       banners: results[0] as List<PromoBanner>,
       categories: results[1] as List<Category>,
       featured: results[2] as List<Product>,
@@ -174,35 +177,9 @@ class _HomeContent extends StatelessWidget {
         SliverList.list(
           children: [
             DealsShowcase(banners: feed.banners),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'THE STONE ATELIER',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(letterSpacing: 2.5),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    "Find your home's\nsignature stone.",
-                    style: Theme.of(context).textTheme.displaySmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Natural textures. Beautiful possibilities.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-            BannerCarousel(banners: feed.banners),
-            const SectionGap(),
             SectionHeader(
               title: 'Shop by category',
-              subtitle: 'Marble, granite and imported stone',
+              subtitle: 'Find the right stone for your project',
               actionLabel: 'All',
               onAction: () => Navigator.pushNamed(
                 context,
@@ -210,7 +187,10 @@ class _HomeContent extends StatelessWidget {
                 arguments: const CatalogArgs(),
               ),
             ),
-            CategoryStrip(categories: feed.categories),
+            HomeCategoryBrowser(
+              categories: feed.categories,
+              products: feed.allProducts,
+            ),
             const SectionGap(),
             const ModuleShortcuts(),
             const SectionGap(),

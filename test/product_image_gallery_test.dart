@@ -30,19 +30,31 @@ Widget gallery({
 );
 
 void main() {
-  testWidgets('fills frame and cycles within 1–3 seconds', (tester) async {
+  testWidgets('fills frame and slides upward within 3–5 seconds', (
+    tester,
+  ) async {
     await tester.pumpWidget(gallery());
     expect(tester.getSize(find.byType(AppImage)), const Size(180, 150));
     expect(tester.widget<AppImage>(find.byType(AppImage)).fit, BoxFit.cover);
-    await tester.pump(const Duration(milliseconds: 999));
+    await tester.pump(const Duration(milliseconds: 2999));
     expect(find.byKey(ValueKey(photos[1])), findsNothing);
     for (final next in [photos[1], photos[2], photos[0]]) {
       var elapsed = 0;
-      while (find.byKey(ValueKey(next)).evaluate().isEmpty && elapsed < 3000) {
+      while (find.byKey(ValueKey(next)).evaluate().isEmpty && elapsed < 5000) {
         await tester.pump(const Duration(milliseconds: 10));
         elapsed += 10;
       }
       expect(find.byKey(ValueKey(next)), findsOneWidget);
+      final slide = tester.widget<SlideTransition>(
+        find
+            .ancestor(
+              of: find.byKey(ValueKey(next)),
+              matching: find.byType(SlideTransition),
+            )
+            .first,
+      );
+      expect(slide.position.value.dx, 0);
+      expect(slide.position.value.dy, greaterThan(0));
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.byType(AppImage), findsOneWidget);
     }
@@ -83,7 +95,7 @@ void main() {
     await tester.pumpWidget(gallery());
     for (
       var i = 0;
-      i < 300 && find.byKey(ValueKey(photos[1])).evaluate().isEmpty;
+      i < 500 && find.byKey(ValueKey(photos[1])).evaluate().isEmpty;
       i++
     ) {
       await tester.pump(const Duration(milliseconds: 10));
@@ -112,7 +124,7 @@ void main() {
       ),
     );
     var sawStaggeredChange = false;
-    for (var i = 0; i < 300; i++) {
+    for (var i = 0; i < 500; i++) {
       await tester.pump(const Duration(milliseconds: 10));
       final changed = find.byKey(ValueKey(photos[1])).evaluate().length;
       if (changed > 0 && changed < 6) sawStaggeredChange = true;

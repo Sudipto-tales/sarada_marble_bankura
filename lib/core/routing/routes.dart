@@ -1,3 +1,5 @@
+import '../../data/models/filters.dart';
+
 /// Route names in one place. Screens are pushed by name with typed argument
 /// objects so no screen constructs another screen's dependencies.
 class Routes {
@@ -63,11 +65,13 @@ class CatalogArgs {
     this.title,
     this.query,
     this.onlyOffers = false,
+    this.filter,
   });
   final String? categoryId;
   final String? title;
   final String? query;
   final bool onlyOffers;
+  final ProductFilter? filter;
 }
 
 class GalleryArgs {
