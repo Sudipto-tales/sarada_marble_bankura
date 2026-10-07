@@ -16,6 +16,16 @@ class ViewRouteProvider extends RouteProvider
                 ...array_fill_keys(array_map(fn($page) => 'developer/' . $page,
                     ['overview', 'apis', 'server', 'workflows', 'incidents', 'activity', 'access', 'settings']), ['Developer', 'index']),
             ] : []),
+            // Storefront routes
+            '' => ['StorefrontProduct', 'listing'],
+            'category/{slug}' => ['StorefrontProduct', 'listing'],
+            'product/{slug}' => ['StorefrontProduct', 'detail'],
+            'cart' => ['Cart', 'index'],
+            'checkout' => ['Cart', 'checkout'],
+            // Admin routes
+            'admin' => ['Admin', 'index'],
+            'admin/products' => ['Admin', 'products'],
+            'admin/product' => ['Admin', 'productForm'],
         ];
     }
 }
