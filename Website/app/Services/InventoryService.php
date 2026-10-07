@@ -119,6 +119,7 @@ final class InventoryService
             $this->query('INSERT INTO inventory_reservation_items (reservation_id,variant_id,qty_milli) VALUES (?,?,?)',[$id,$variant,$quantity]);
             $this->movement($variant,0,$quantity,'reserve','reserve:'.$id,null,$id);
         }
+        (new QueueService($this->pdo))->reservationExpiry($id);
         ProductService::advanceVersion($this->pdo); return $this->reservation($id);
     }
     public function consume(int $id,string $principal,?int $orderId=null):array { return $this->close($id,'consumed',$principal,$orderId); }

@@ -29,5 +29,8 @@ return [
     'PrivateStorage' => 'core/PrivateStorage.php',
     'Mailer' => 'core/Mailer.php',
     'Welcome' => 'app/bridge/Welcome.php',
+    'StorefrontProduct' => 'app/bridge/StorefrontProduct.php',
+    'Cart' => 'app/bridge/Cart.php',
+    'Admin' => 'app/bridge/Admin.php',
     ... (DEVELOPER_ENABLED ? ['Developer' => 'app/bridge/Developer.php'] : []),
 ];
