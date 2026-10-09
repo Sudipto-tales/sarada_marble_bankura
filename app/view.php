@@ -17,7 +17,7 @@ class ViewRouteProvider extends RouteProvider
                     ['overview', 'apis', 'server', 'workflows', 'incidents', 'activity', 'access', 'settings']), ['Developer', 'index']),
             ] : []),
             // Storefront routes
-            '' => ['StorefrontProduct', 'listing'],
+            'shop' => ['StorefrontProduct', 'listing'],
             'category/{slug}' => ['StorefrontProduct', 'listing'],
             'product/{slug}' => ['StorefrontProduct', 'detail'],
             'cart' => ['Cart', 'index'],
