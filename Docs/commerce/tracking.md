@@ -23,6 +23,10 @@ Guide: [offline boundary and repository sources](tasks/11-optional-mobile.md#mob
 
 ## Task board
 
+### Standalone storefront design (outside MVP counts)
+
+- `HTML-UI-01` — Coordinator — `in_progress` (2026-10-09): user-authorized single-file Maa Sarada HTML/CSS/JS storefront, based on existing `Html/` design. No PHP commerce or Flutter integration; preserve existing files. Deliver `Html/maa-sarada.html` with embedded assets and browser-local interactions.
+
 | ID | Task | Dependencies | Owner | Status | Evidence / next action | Guide |
 | --- | --- | --- | --- | --- | --- | --- |
 | DOC-01 | Planning pack and agent instructions | None | Coordinator | done | See DOC-01 evidence and expanded task-guide validation; 21 Markdown files | [Document maintenance and evidence](tasks/10-operations.md#doc-01) |
@@ -269,3 +273,10 @@ FND-01/02/03, IAM-01/02 and DAT-01/02/03 are implemented and locally verified. T
 ## VAYU-SETUP-01 — Local PHP/Vayu setup
 
 Owner: Coordinator. Status: done. User-authorized local setup on 2026-10-09. PHP 8.3.6 with PDO SQLite/MySQL verified; Composer dependencies installed locally; ignored Website/.env configured for http://127.0.0.1:8000 and private var/development.sqlite; all 11 migrations applied. Empty storefront route key changed to shop, preserving the existing default welcome page. Quoted whitespace values in .env.example so dotenv can parse it. Actual verification: php vayu run started on port 8000; GET / and /developer/login returned HTTP 200; RoutingTest.php passed 50 checks; DeveloperAccessTest.php passed 19 checks; app/view.php syntax check passed. Test server stopped to leave port 8000 available. Storefront commerce handlers remain unfinished; this setup does not certify them. No production migration, deployment, or external account changes.
+
+### HTML-UI-01 — standalone preview slice, completed 2026-10-10
+
+- User-authorized scope: three standalone pages in lowercase `html/`, all 17 mobile product sections, and downloaded local fonts/icons. Separate from WEB-01/02/03 integration tasks; no commerce backlog milestone is marked complete.
+- Inspected the implementation plan, tracker, existing `Html/` theme and `Mobile/lib/features/product/product_details_screen.dart` before editing. Preserved existing `Html/` files and pre-existing tracker changes.
+- Delivered `html/product.html`, `catalog.html`, `room-select.html`, shared CSS/JS, local DM Sans/Lucide assets with licenses, reused local inspiration photos, and a README documenting preview limitations and origins.
+- Verification: Python HTML parser checked all local HTML links/assets and product section coverage: PASS. Headless installed Google Chrome executed the catalog JavaScript and rendered all eight product cards: PASS. `git diff --check`: PASS. Node syntax command could not run because Node is absent; Chrome execution provides partial runtime coverage. Interactive actions and responsive visual layouts have not been fully browser-tested. No backend tests, production migrations, deployment, commit or publishing performed.
