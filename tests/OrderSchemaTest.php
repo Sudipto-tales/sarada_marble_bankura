@@ -33,6 +33,8 @@ CommerceTest::fails(fn()=>$pdo->prepare("INSERT INTO order_status_history (order
 CommerceTest::fails(fn()=>$pdo->exec("INSERT INTO inventory_movements (variant_id,on_hand_delta_milli,reserved_delta_milli,reason,order_id,business_key,created_at) VALUES ($v,0,0,'Invalid link',2147483647,'invalid:order:link',1)"),'Forward inventory movement link rejects absent order.');
 foreach([['placed','confirmed'],['confirmed','processing'],['processing','shipped'],['shipped','outForDelivery'],['outForDelivery','delivered'],['placed','cancelled'],['confirmed','cancelled'],['processing','cancelled']] as [$from,$to]) {OrderStates::validate($from,$to);$check(true,"Legal $from to $to transition accepted.");}
 foreach([['shipped','cancelled'],['delivered','returned'],['confirmed','placed'],['placed','delivered'],['cancelled','confirmed'],['unknown','confirmed']] as [$from,$to]) CommerceTest::rejects(fn()=>OrderStates::validate($from,$to),409,'Unknown/backward/unsupported transition rejected.');
+CommerceTest::rejects(fn()=>OrderStates::payment('cod'),422,'COD requires explicit store configuration.');
+$_ENV['CHECKOUT_COD_ENABLED']='true';
 $check(OrderStates::payment('cod')==='unpaid','COD does not assert payment success.');
 $_ENV['APP_ENV']='production';$_ENV['CHECKOUT_SIMULATION_ENABLED']='true';CommerceTest::rejects(fn()=>OrderStates::payment('simulation'),422,'Simulation cannot run in production.');
 $_ENV['APP_ENV']='development';$check(OrderStates::payment('simulation')==='simulated','Explicit local simulation remains a separate payment status.');

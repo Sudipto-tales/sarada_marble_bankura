@@ -10,13 +10,34 @@ final class OrderService
         return ['version'=>'inr-exclusive-v1','shipping_minor'=>CommerceValues::integer((string)env('CHECKOUT_SHIPPING_MINOR','0'),0,CommerceValues::MAX_MONEY,'shipping_minor'),
             'tax_bps'=>CommerceValues::integer((string)env('CHECKOUT_TAX_BPS','0'),0,10000,'tax_bps')];
     }
-    public function place(int $userId,int $cartId,int $cartRevision,int $addressId,string $paymentMode,string $key):array
+    /** A review is an explicit accepted quote, never authority for prices or stock. */
+    public static function quote(array $cart): array
+    {
+        $policy = self::policy(); $lines = []; $amounts = [];
+        foreach ($cart['items'] as $item) {
+            $quantity = CommerceValues::integer($item['qty_milli'], 1, CommerceValues::MAX_QUANTITY, 'quantity');
+            $price = CommerceValues::integer($item['unit_price_minor'], 0, CommerceValues::MAX_MONEY, 'price');
+            $lines[(int)$item['variant_id']] = ['qty_milli' => $quantity, 'unit_price_minor' => $price];
+            $amounts[] = CommerceValues::line($price, $quantity);
+        }
+        ksort($lines, SORT_NUMERIC);
+        $subtotal = CommerceValues::sum($amounts);
+        $tax = CommerceValues::round(CommerceValues::multiply($subtotal, $policy['tax_bps']), 10000);
+        $total = CommerceValues::sum([$subtotal, $policy['shipping_minor'], $tax]);
+        if ($total > CommerceValues::MAX_MONEY) CommerceValues::invalid('total');
+        return ['policy' => $policy, 'lines' => $lines, 'subtotal_minor' => $subtotal,
+            'shipping_minor' => $policy['shipping_minor'], 'tax_minor' => $tax, 'total_minor' => $total];
+    }
+
+    public function place(int $userId,int $cartId,int $cartRevision,int $addressId,string $paymentMode,string $key,?array $expectedQuote=null):array
     {
         CommerceAccess::requireActor($userId);$cartId=CommerceValues::id($cartId);$addressId=CommerceValues::id($addressId);
         $cartRevision=CommerceValues::integer($cartRevision,1,PHP_INT_MAX,'revision');$key=CommerceValues::key($key);
-        $paymentStatus=OrderStates::payment($paymentMode);$principal='user:'.$userId;
-        $fingerprint=hash('sha256',json_encode(['contract'=>1,'cart'=>$cartId,'revision'=>$cartRevision,'address'=>$addressId,'payment'=>$paymentMode],JSON_THROW_ON_ERROR));
-        return CommerceDatabase::transaction($this->pdo,function() use($userId,$cartId,$cartRevision,$addressId,$paymentMode,$paymentStatus,$key,$principal,$fingerprint):array {
+        $principal='user:'.$userId;
+        $inputs=['contract'=>1,'cart'=>$cartId,'revision'=>$cartRevision,'address'=>$addressId,'payment'=>$paymentMode];
+        if ($expectedQuote !== null) { $inputs['contract']=2; $inputs['accepted_quote']=$expectedQuote; }
+        $fingerprint=hash('sha256',json_encode($inputs,JSON_THROW_ON_ERROR));
+        return CommerceDatabase::transaction($this->pdo,function() use($userId,$cartId,$cartRevision,$addressId,$paymentMode,$expectedQuote,$key,$principal,$fingerprint):array {
             CommerceAccess::requireActor($userId);$lock=CommerceDatabase::lock($this->pdo);$now=CommerceDatabase::clock($this->pdo);
             $sql="INSERT INTO checkout_requests (principal_key,idempotency_key,fingerprint,state,created_at) VALUES (?,?,?,'pending',?)";
             $sql.=$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'?' ON DUPLICATE KEY UPDATE id=id':' ON CONFLICT(principal_key,idempotency_key) DO NOTHING';
@@ -24,11 +45,13 @@ final class OrderService
             $request=$this->query('SELECT * FROM checkout_requests WHERE principal_key=? AND idempotency_key=?'.$lock,[$principal,$key])->fetch();
             if(!$request||$request['fingerprint']!==$fingerprint)throw new RequestRejected(409,'checkout_key_conflict','Checkout key has different inputs.');
             if($request['state']==='completed') {
-                $owned=$this->query('SELECT id FROM orders WHERE id=? AND user_id=?',[$request['order_id'],$userId])->fetchColumn();
+                // InnoDB repeatable-read snapshots may predate a request that waited on the key.
+                $owned=$this->query('SELECT id FROM orders WHERE id=? AND user_id=?'.$lock,[$request['order_id'],$userId])->fetchColumn();
                 if(!$owned)throw new RuntimeException('Checkout result is unavailable.');
                 return json_decode($request['response_json'],true,16,JSON_THROW_ON_ERROR);
             }
             if($request['state']!=='pending')throw new RequestRejected(409,'checkout_conflict','Checkout cannot be resumed.');
+            $paymentStatus=OrderStates::payment($paymentMode);
             $cart=(new CartService($this->pdo))->lockOwned($cartId,$principal);
             if((int)$cart['revision']!==$cartRevision)throw new RequestRejected(409,'revision_conflict','Cart changed. Refresh and retry.');
             $lines=$this->query('SELECT variant_id,qty_milli FROM cart_items WHERE cart_id=? ORDER BY variant_id'.$lock,[$cartId])->fetchAll();
@@ -57,6 +80,11 @@ final class OrderService
             $rank=array_keys($fractions);usort($rank,fn($a,$b)=>$fractions[$b]<=>$fractions[$a]?:$a<=>$b);
             for($n=0;$n<$remainder;$n++)$taxParts[$rank[$n]]++;
             $total=CommerceValues::sum([$subtotal,$policy['shipping_minor'],$tax]);if($total>CommerceValues::MAX_MONEY)CommerceValues::invalid('total');
+            if ($expectedQuote !== null) {
+                $current = self::quote(['items' => array_map(static fn($vid, $row) => ['variant_id' => $vid,
+                    'qty_milli' => $row['quantity'], 'unit_price_minor' => $row['variant']['unit_price_minor']], array_keys($rows), array_values($rows))]);
+                if ($current !== $expectedQuote) throw new RequestRejected(409, 'price_conflict', 'Prices or delivery charges changed. Review your order again.');
+            }
             $number='SMB-'.gmdate('Ymd',$now).'-'.str_pad((string)$request['id'],10,'0',STR_PAD_LEFT);
             $this->query("INSERT INTO orders (order_number,user_id,cart_id,status,currency,subtotal_minor,discount_minor,shipping_minor,tax_minor,total_minor,address_snapshot,calculation_policy,tax_bps,payment_mode,payment_status,created_at,updated_at)
                 VALUES (?,?,?,'placed','INR',?,0,?,?,?,?,?,?,?,?,?,?)",[$number,$userId,$cartId,$subtotal,$policy['shipping_minor'],$tax,$total,json_encode($snapshot,JSON_THROW_ON_ERROR),$policy['version'],$policy['tax_bps'],$paymentMode,$paymentStatus,$now,$now]);
@@ -95,7 +123,48 @@ final class OrderService
         CommerceAccess::requirePermission('admin.orders.view',$actorId);$order=$this->query('SELECT * FROM orders WHERE id=?',[$id])->fetch();
         if(!$order)throw new RequestRejected(404,'not_found','Order not found.');return $this->hydrate($order);
     }
-    public function cancel(int $actorId,int $id):array
+    /** Staff transitions use a revision and stable operation key; no stock effect at shipment. */
+    public function transition(int $actorId, int $id, string $target, int $expectedRevision, string $key, string $reason = 'Order status updated'): array
     {
-        CommerceAccess::requirePermission('admin.orders.edit',$actorId);$order=$this->query('SELECT * FROM orders WHERE id=? AND user_id=?',[$id,$actorId])->fetch();if(!$order)throw new RequestRejected(404,'not_found','Order not found.');if($order['status']==='cancelled')return ['status'=>'cancelled','revised'=>1];$now=CommerceDatabase::clock($this->pdo);$fx=hash('sha256',json_encode(['order'=>$id,'actor'=>$actorId],JSON_THROW_ON_ERROR));return CommerceDatabase::transaction($this->pdo,function() use($actorId,$order,$now,$fx):array {CommerceAccess::requirePermission('admin.orders.edit',$actorId);$variantIds=$this->query('SELECT DISTINCT variant_id FROM order_items WHERE order_id=?',[$id])->fetchAll(PDO::FETCH_COLUMN);foreach($variantIds as $vid){$movement=$this->query('SELECT * FROM inventory_movements WHERE business_key=? AND variant_id=? AND order_id=? ORDER BY id LIMIT 1',[$fx,$vid,$id])->fetch();if(!$movement)continue;$delta=(int)$movement['on_hand_delta_milli'];$prevOnHand=$this->query('SELECT on_hand_milli FROM inventory WHERE variant_id=?',$vid)->fetchColumn();$prevReserved=$this->query('SELECT reserved_milli FROM inventory WHERE variant_id=?',$vid)->fetchColumn();$newOnHand=$prevOnHand+$delta;$newReserved=$prevReserved-$delta;if($newOnHand<0||$newReserved<0)throw new RequestRejected(409,'stock_inconsistent','Stock invariant violated during cancellation.');$count=$this->query('UPDATE inventory SET on_hand_milli=?,reserved_milli=?,revision=revision+1 WHERE variant_id=? AND on_hand_milli=? AND reserved_milli=?',[$newOnHand,$newReserved,$vid,$prevOnHand,$prevReserved]);if($count!==1)throw new RequestRejected(409,'stock_changed','Stock changed. Retry the cancellation.');}$this->query('INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,?,?,?,?,?,?)',[$id,$order['status'],'cancelled',$actorId,'Order cancelled',$fx,$now]);(new QueueService($this->pdo))->orderCancelled($id);$this->query('UPDATE orders SET status=? WHERE id=?',['cancelled',$id]);return ['status'=>'cancelled','revised'=>1];}});
+        CommerceAccess::requirePermission('admin.orders.edit', $actorId);
+        $id = CommerceValues::id($id); $key = CommerceValues::key($key);
+        $expectedRevision = CommerceValues::integer($expectedRevision, 1, PHP_INT_MAX, 'revision');
+        $reason = CommerceValues::text($reason, 190, 'reason');
+        return CommerceDatabase::transaction($this->pdo, function () use ($actorId, $id, $target, $expectedRevision, $key, $reason): array {
+            CommerceAccess::requirePermission('admin.orders.edit', $actorId);
+            $order = $this->query('SELECT * FROM orders WHERE id=?' . CommerceDatabase::lock($this->pdo), [$id])->fetch();
+            if (!$order) throw new RequestRejected(404, 'not_found', 'Order not found.');
+            $prior = $this->query('SELECT * FROM order_status_history WHERE operation_key=?' . CommerceDatabase::lock($this->pdo), [$key])->fetch();
+            if ($prior) {
+                if ((int)$prior['order_id'] !== $id || (int)$prior['actor_user_id'] !== $actorId || $prior['to_status'] !== $target || $prior['reason'] !== $reason
+                    || !$this->transitionReplay($actorId, $id, $target, $expectedRevision, $key, $reason)) {
+                    throw new RequestRejected(409, 'operation_key_conflict', 'Operation key has different inputs.');
+                }
+                return ['id' => $id, 'status' => $prior['to_status'], 'revision' => $expectedRevision + 1];
+            }
+            if ((int)$order['revision'] !== $expectedRevision) throw new RequestRejected(409, 'revision_conflict', 'Order changed. Refresh and retry.');
+            OrderStates::validate($order['status'], $target);
+            if ($target === 'cancelled') (new InventoryService($this->pdo))->restockOrder($id, $actorId);
+            $now = CommerceDatabase::clock($this->pdo);
+            $this->query('UPDATE orders SET status=?, revision=revision+1, updated_at=? WHERE id=? AND revision=?', [$target, $now, $id, $expectedRevision]);
+            $this->query('INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,?,?,?,?,?,?)',
+                [$id, $order['status'], $target, $actorId, $reason, $key, $now]);
+            StaffAudit::record($this->pdo, $actorId, 'order.transition', 'order', $id, $key, ['status' => $target, 'revision' => $expectedRevision + 1, 'reason' => $reason]);
+            if ($target === 'cancelled') (new QueueService($this->pdo))->orderCancelled($id);
+            return ['id' => $id, 'status' => $target, 'revision' => $expectedRevision + 1];
+        });
+    }
+
+    private function transitionReplay(int $actorId, int $id, string $target, int $revision, string $key, string $reason): bool
+    {
+        $audit = $this->query('SELECT * FROM admin_activity_log WHERE operation_key=?' . CommerceDatabase::lock($this->pdo), [$key])->fetch();
+        if (!$audit || (int)$audit['actor_user_id'] !== $actorId || $audit['action'] !== 'order.transition' || $audit['target_type'] !== 'order' || (int)$audit['target_id'] !== $id) return false;
+        $changes = json_decode($audit['changes_json'], true, 8, JSON_THROW_ON_ERROR);
+        return ($changes['revision'] ?? null) === $revision + 1 && ($changes['status'] ?? null) === $target && ($changes['reason'] ?? null) === $reason;
+    }
+
+    public function cancel(int $actorId, int $id, int $expectedRevision, string $key): array
+    {
+        return $this->transition($actorId, $id, 'cancelled', $expectedRevision, $key, 'Order cancelled');
+    }
 }

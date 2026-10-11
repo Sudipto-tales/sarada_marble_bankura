@@ -16,8 +16,17 @@ final class OrderStates
     }
     public static function payment(string $mode):string
     {
-        if($mode==='cod')return 'unpaid';
+        if($mode==='cod' && filter_var(env('CHECKOUT_COD_ENABLED', false), FILTER_VALIDATE_BOOLEAN))return 'unpaid';
         if($mode==='simulation'&&env('APP_ENV','production')!=='production'&&filter_var(env('CHECKOUT_SIMULATION_ENABLED',false),FILTER_VALIDATE_BOOLEAN))return 'simulated';
         throw new RequestRejected(422,'invalid_payment_mode','Select an available payment method.');
+    }
+
+    public static function paymentModes(): array
+    {
+        $modes = [];
+        foreach (['cod' => 'Cash on delivery (unpaid)', 'simulation' => 'Development simulation (no payment collected)'] as $mode => $label) {
+            try { self::payment($mode); $modes[$mode] = $label; } catch (RequestRejected $error) {}
+        }
+        return $modes;
     }
 }

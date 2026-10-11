@@ -1,60 +1,14 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title><?= htmlspecialchars($product['name'] ?? 'Product') ?> - Maa Sarada Marble</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/minimal-icons.min.css">
-    <style>
-        .detail-img { max-width: 100%; height: auto; border-radius: 4px; margin: 1rem 0; }
-        .detail-specs { background: #f8f9fa; padding: 1rem; border-radius: 4px; margin: 1rem 0; }
-        .price-large { font-size: 1.5rem; font-weight: bold; color: #28a745; }
-    </style>
-</head>
-<body>
-<nav class="navbar navbar-expand-md navbar-dark bg-dark mb-4">
-    <div class="container">
-        <a class="navbar-brand" href="/">Maa Sarada Marble</a>
-    </div>
-</nav>
-
-<div class="container">
-    <div class="row">
-        <div class="col-md-6">
-            <img src="/uploads/products/<?= htmlspecialchars($product['primary_image'] ?? 'default.jpg') ?>" class="detail-img" alt="<?= htmlspecialchars($product['name']) ?>">
-        </div>
-        <div class="col-md-6">
-            <h1><?= htmlspecialchars($product['name']) ?></h1>
-            <p class="price-large">INR <?= number_format($product['min_price_minor'] / 100, 2) ?></p>
-            <p class="text-muted">Category: <?= htmlspecialchars($product['category_name'] ?? '') ?></p>
-            <p class="text-muted">Brand: <?= htmlspecialchars($product['brand_name'] ?? '') ?></p>
-            
-            <div class="detail-specs">
-                <h6>Specifications</h6>
-                <ul>
-                    <li>SKU: <?= htmlspecialchars($product['sku'] ?? '-') ?></li>
-                    <li>Sell Unit: <?= htmlspecialchars($product['sell_unit'] ?? '-') ?></li>
-                    <?php if($product['coverage_sqft_milli']): ?>
-                        <li>Coverage: <?= number_format($product['coverage_sqft_milli'] / 1000, 2) ?> sqft</li>
-                    <?php endif; ?>
-                    <?php if($product['qty_increment_milli']): ?>
-                        <li>Increment: <?= number_format($product['qty_increment_milli'] / 1000, 0) ?> <?= htmlspecialchars($product['sell_unit'] ?? 'unit') ?></li>
-                    <?php endif; ?>
-                </ul>
-            </div>
-            
-            <p class="text-muted"><?= htmlspecialchars($product['description'] ?? 'No description available') ?></p>
-            
-            <a href="/category/<?= htmlspecialchars($product['category_slug'] ?? '') ?>" class="btn btn-primary">Back to Catalog</a>
-        </div>
-    </div>
-</div>
-
-<footer class="mt-4 text-center text-muted">
-    <small>Maa Sarada Marble Solutions</small>
-</footer>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<?php $title = $product['name']; require __DIR__ . '/header.php'; $csrf = RequestSecurity::csrfToken(); ?>
+<h1><?= $e($product['name']) ?></h1><p><?= $e($product['description']) ?></p>
+<div class="grid"><?php foreach ($product['images'] as $image): ?><img loading="lazy" src="<?= $u($image['path']) ?>" alt="<?= $e($image['alt_text']) ?>"><?php endforeach; ?></div>
+<h2>Choose a variant</h2><div class="grid"><?php foreach ($product['variants'] as $variant): ?>
+<form method="post" action="<?= $u('cart') ?>">
+<h3><?= $e($variant['sku']) ?></h3><p><?= $e($variant['finish']) ?> · <?= $m($variant['unit_price_minor']) ?> per <?= $e($variant['sell_unit']) ?></p>
+<?php if ($variant['coverage_sqft_milli'] !== null): ?><p>Coverage: <?= $q($variant['coverage_sqft_milli']) ?> sqft per <?= $e($variant['sell_unit']) ?></p><?php endif; ?>
+<input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="variant_id" value="<?= $e($variant['id']) ?>">
+<input type="hidden" name="cart_id" value="<?= $e($cart['id'] ?? '') ?>"><input type="hidden" name="cart_revision" value="<?= $e($cart['revision']) ?>">
+<label>Quantity (<?= $e($variant['sell_unit']) ?>)<input name="quantity" type="number" min="<?= $q($variant['qty_increment_milli']) ?>" step="<?= $q($variant['qty_increment_milli']) ?>" value="<?= $q($variant['qty_increment_milli']) ?>" required></label>
+<small>Sold in increments of <?= $q($variant['qty_increment_milli']) ?> <?= $e($variant['sell_unit']) ?>. Adding replaces this variant's cart quantity.</small>
+<?php if ($variant['available_milli'] !== null && (int)$variant['available_milli'] >= (int)$variant['qty_increment_milli']): ?><button>Add to cart</button><?php else: ?><p>Currently unavailable</p><?php endif; ?>
+</form><?php endforeach; ?></div>
+<?php require __DIR__ . '/footer.php'; ?>
