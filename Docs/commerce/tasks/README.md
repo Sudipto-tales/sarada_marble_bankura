@@ -5,6 +5,8 @@ Each task has a focused section below. Read [shared contracts](../contracts.md),
 | Task ID | Focused guide |
 | --- | --- |
 | DOC-01 | [Document maintenance and evidence](10-operations.md#doc-01) |
+| PAR-PLAN-01 | [Website parity integration plan and acceptance](../../website-parity-integration-plan.md) |
+| PAR-00 | [Storefront foundation repair and verification](12-parity-foundation.md) |
 | HST-01 | [Host capability discovery](01-foundations.md#hst-01) |
 | FND-01 | [PDO, migration ordering and CLI](01-foundations.md#fnd-01) |
 | FND-02 | [Method/parameter routing and loading](01-foundations.md#fnd-02) |

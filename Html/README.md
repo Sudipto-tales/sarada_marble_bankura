@@ -21,22 +21,22 @@ The home page follows the supplied storefront image: a dark marble hero, categor
 | `compare.html` | Up to three materials compared by price, origin, finish, dimensions and applications |
 | `cart.html` | Browser-local bag with square-foot quantities, subtotal and local enquiry draft |
 | `calculator.html` | Feet/metres/inches, surface count, wastage, slab count, polishing, installation, GST estimate and add coverage to bag |
-| `visualizer.html` | Seven app room images, stone texture selection, floor/wall overlay and saved combinations |
+| `visualizer.html` | Eight room images, two SAM-prepared presets, perspective photo editing and local saved designs |
 | `saved-designs.html` | Reopen or remove saved room/material combinations |
 
-The visualizer is an illustrative 2D overlay, with approximate placement. It does not reproduce Flutter's 3D engine. Calculator defaults mirror `Mobile/lib/features/calculator/services/calculator_service.dart`: polishing ₹28/sq.ft, installation ₹65/net sq.ft and sample GST 18%. Whole-slab purchases can change the final quote.
+The visualizer now uses a WebGL photo renderer with independent floor/wall masks, perspective adjustment, texture scale/rotation/grout/shading, erase/restore, before/after, PNG export and IndexedDB photo designs. Two presets have SAM 2 masks; six other rooms start with manual surface marking. Customers can import a local photo and import masks produced by the local SAM runner. It does not reproduce Flutter's 3D engine or run automatic AI inference inside the browser. Use the local HTTP server for preset loading and canvas export. See [SAM runner and workflow](../Services/visualizer/README.md). Calculator defaults mirror `Mobile/lib/features/calculator/services/calculator_service.dart`: polishing ₹28/sq.ft, installation ₹65/net sq.ft and sample GST 18%. Whole-slab purchases can change the final quote.
 
 This is an offline frontend design, using the app's bundled demo prices, stock and reviews. Bag, wishlist, comparison, room designs and enquiry drafts stay in browser storage. The enquiry form saves a draft locally; it does not send it. Accounts, checkout, payment and order fulfilment are not connected. Browser storage may be unavailable or cleared by browser settings, and `file://` persistence varies between browsers; use the local server for reliable page-to-page persistence.
 
 ## Data and asset provenance
 
 - `storefront-data.js`: 20 products, eight categories and 28 review excerpts mirrored from `Mobile/lib/data/static/static_products.dart`, `static_categories.dart`, `static_reviews.dart`. Source values are preserved; category card counts show the actual matching product count.
-- Brand logo, product galleries, category images, room previews, textures and fonts are copied from the existing local app assets. No newly generated stock/product images are used.
+- Brand logo, product galleries, category images, room previews, textures and fonts are copied from the existing local app assets. No newly generated stock/product images are used. The Sunlit Living preset and thumbnail are resized derivatives of the existing `assets/interior.jpg` photo; prepared masks come from SAM 2, with a recorded coffee-table correction for Luxury Living.
 - The Kajaria Eternity KasaMood cover and original 49-page PDF are copied unchanged from `Mobile/assets/catalogs/kasamood/`, as listed by `BundledBrandCatalogRepository`. Brand document ownership and licensing remain with the original publisher. No new redistribution permission is implied.
 - The shared base stylesheet preserves styling from the repository's original HTML reference. Inline SVG icons are the repository's existing original line drawings. No external template or remote dependency was added.
 - Legacy reference assets remain in place, including existing Unsplash photos (`assets/interior.jpg`, `assets/bathroom.jpg`, `assets/kitchen.jpg`) under the [Unsplash license](https://unsplash.com/license). They are retained from the earlier design; the new pages use the Flutter assets.
 
-All changes are confined to the HTML design and its documentation. PHP/Developer behavior and Flutter networking are unchanged.
+The visualizer also has a separate local Python inference runner under `Services/visualizer/`. PHP/Developer behavior and Flutter networking are unchanged; no production upload/API integration has been enabled.
 
 See [HOME-DESIGN.md](HOME-DESIGN.md) for the section-by-section reference mapping, proposed live APIs and future page designs. Homepage-specific styles are in `home.css`. The ten companion pages now use `storefront-pages.css` for the same compact navigation, dark sage banners, clay actions, dense cards and dark footer, with layouts tailored to each task.
 

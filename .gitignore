@@ -8,3 +8,11 @@ key.properties
 
 # Private PHP runtime storage outside Website/
 /var/
+
+# Local visualizer inference environments, models and private outputs
+/Services/visualizer/.venv/
+/Services/visualizer/models/
+/Services/visualizer/results/
+/Services/visualizer/**/__pycache__/
+/Services/visualizer/__pycache__/
+/Html/tests/__pycache__/

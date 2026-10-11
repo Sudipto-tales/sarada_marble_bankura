@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "source": "assets/images/rooms/luxury_living.webp",
+  "surfaces": [
+    {
+      "id": "floor",
+      "label": "floor",
+      "corners": [
+        [
+          0.28,
+          0.76
+        ],
+        [
+          0.72,
+          0.76
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "score": 0.840869128704071,
+      "mask": "floor.png"
+    },
+    {
+      "id": "wall",
+      "label": "wall",
+      "corners": [
+        [
+          0.295,
+          0.455
+        ],
+        [
+          0.705,
+          0.455
+        ],
+        [
+          0.705,
+          0.79
+        ],
+        [
+          0.278,
+          0.79
+        ]
+      ],
+      "score": 0.8741989135742188,
+      "mask": "wall.png"
+    }
+  ],
+  "model": {
+    "name": "sam2.1_hiera_tiny",
+    "checkpointSha256": "7402e0d864fa82708a20fbd15bc84245c2f26dff0eb43a4b5b93452deb34be69"
+  },
+  "metrics": {
+    "device": "cpu",
+    "torch": "2.5.1+cpu",
+    "threads": 4,
+    "loadSeconds": 1.001,
+    "encodeSeconds": 3.685,
+    "decodeSeconds": 0.266,
+    "totalSeconds": 4.952
+  },
+  "provenance": "SAM 2.1 tiny; Services/visualizer/living-room-prompts.json; masks are reviewable suggestions",
+  "corrections": {
+    "floor": {
+      "erasePolygons": [
+        [
+          [
+            0.355,
+            0.863
+          ],
+          [
+            0.638,
+            0.863
+          ],
+          [
+            0.709,
+            0.983
+          ],
+          [
+            0.71,
+            1
+          ],
+          [
+            0.29,
+            1
+          ],
+          [
+            0.29,
+            0.983
+          ]
+        ]
+      ],
+      "reason": "Exclude coffee table: raw SAM selection leaked through matching marble pattern."
+    }
+  }
+}
