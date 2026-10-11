@@ -165,6 +165,34 @@ final class InventoryService
         $this->query('UPDATE inventory_reservations SET state=? WHERE id=?',[$state,$id]);
         ProductService::advanceVersion($this->pdo); return $this->reservation($id);
     }
+    /** Caller has locked the order. Restore consumed stock once, leaving other reservations intact. */
+    public function restockOrder(int $orderId, int $actorId): void
+    {
+        $this->transactionRequired();
+        CommerceAccess::requirePermission('admin.orders.edit', $actorId);
+        $lock = CommerceDatabase::lock($this->pdo);
+        $headers = $this->query('SELECT * FROM inventory_reservations WHERE id IN (SELECT reservation_id FROM inventory_movements WHERE order_id=?) ORDER BY id' . $lock, [$orderId])->fetchAll();
+        if (count($headers) !== 1 || $headers[0]['state'] !== 'consumed') throw new RequestRejected(409, 'stock_inconsistent', 'Order stock history is unavailable.');
+        $reservationId = (int)$headers[0]['id'];
+        $items = $this->query('SELECT variant_id,qty_milli FROM order_items WHERE order_id=? ORDER BY variant_id', [$orderId])->fetchAll();
+        $rows = $this->lockedLines($this->lines($items), false);
+        $movements = $this->query('SELECT * FROM inventory_movements WHERE order_id=? AND business_key=? ORDER BY variant_id', [$orderId, 'consume:' . $reservationId])->fetchAll();
+        $consumed = array_column($movements, null, 'variant_id');
+        if (count($consumed) !== count($rows)) throw new RequestRejected(409, 'stock_inconsistent', 'Order stock history is incomplete.');
+        // Validate every line before restoring any stock; the surrounding transaction owns rollback.
+        foreach ($rows as $variant => $row) {
+            $movement = $consumed[$variant] ?? null;
+            if (!$movement || (int)$movement['on_hand_delta_milli'] !== -$row['quantity'] || (int)$movement['reserved_delta_milli'] !== -$row['quantity']
+                || (int)$row['stock']['on_hand_milli'] > CommerceValues::MAX_QUANTITY - $row['quantity']) throw new RequestRejected(409, 'stock_inconsistent', 'Order stock cannot be restored.');
+            if ($this->query('SELECT id FROM inventory_movements WHERE business_key=? AND variant_id=?', ['cancel:' . $orderId, $variant])->fetchColumn()) throw new RequestRejected(409, 'stock_inconsistent', 'Order stock was already restored.');
+        }
+        foreach ($rows as $variant => $row) {
+            $this->stock($row['stock'], (int)$row['stock']['on_hand_milli'] + $row['quantity'], (int)$row['stock']['reserved_milli']);
+            $this->movement($variant, $row['quantity'], 0, 'cancelled', 'cancel:' . $orderId, $actorId, $reservationId, $orderId);
+        }
+        ProductService::advanceVersion($this->pdo);
+    }
+
     public function adjust(int $actorId,int $variantId,int $delta,string $reason,string $key):array
     {
         CommerceAccess::requirePermission('admin.inventory.adjust',$actorId); $key=CommerceValues::key($key);
