@@ -1,13 +1,13 @@
 # Local SAM 2 photo segmentation
 
-This is the SAM-01 local inference slice, used by the SAM-02 website prototype.
+This is the SAM-01 local inference runner, used by the SAM-02 photo editor and its PHP storefront integration.
 It runs on a local photo and emits a self-contained result file; it does not
 start an HTTP server or upload photos. Production API/queue integration remains
 SAM-03/04. See [delivery plan](../../Docs/room-visualizer-sam2-plan.md).
 
 ## Setup
 
-Use Python 3.10+ with venv/pip available. In this directory:
+Use Python 3.11+ with venv/pip available for this runner (it uses `hashlib.file_digest`; upstream SAM 2 requires Python 3.10+). In this directory:
 
 ```sh
 python3 -m venv .venv
@@ -35,7 +35,7 @@ From the repository root (choose a new output filename on each run):
 
 ```sh
 Services/visualizer/.venv/bin/python Services/visualizer/segment_image.py \
-  --image Html/assets/images/rooms/luxury_living.webp \
+  --image Website/assets/storefront/assets/images/rooms/luxury_living.webp \
   --prompts Services/visualizer/living-room-prompts.json \
   --checkpoint Services/visualizer/models/sam2.1_hiera_tiny.pt \
   --model tiny --device cpu --threads 4 \
@@ -51,7 +51,7 @@ are atomically published without replacing an existing file, with mode 0600.
 
 ## Customer-photo local workflow
 
-1. Serve `Html/` over local HTTP and open `visualizer.html`.
+1. Run `php vayu run --host=127.0.0.1 --port=8000` from `Website/` and open `http://localhost:8000/visualizer`. The PHP editor has its own assets and does not depend on `Html/`.
 2. Import a room photo. Select Floor or Wall and add include/exclude points.
 3. Download the source photo and selection prompts. Adjust four perspective
    corners separately; SAM does not calculate them.
@@ -61,7 +61,7 @@ are atomically published without replacing an existing file, with mode 0600.
 
 Changing materials does not rerun inference. Saved photo designs use IndexedDB;
 browser-local designs can be lost if browser data is cleared. No photo goes to
-the PHP backend in this slice. The prototype is intended for local HTTP;
+the PHP backend in this slice. The editor requires local HTTP or HTTPS;
 `file://` can block preset fetches and canvas export.
 
 ## Verification
@@ -97,3 +97,17 @@ privacy/retention and queue integration remain pending.
 Models/code originate from Meta's Apache 2.0 SAM 2 repository; we do not vendor
 upstream code or model weights. Existing room/texture provenance is retained in
 `Html/README.md`. The renderer/editor code here is original project code.
+
+
+## PHP integration verification
+
+The PHP photo editor is at `/visualizer`, browser-local designs at `/saved-designs`, and usage help at `/visualizer/help`. It uses labelled sample textures; mapping them to real catalog variants is separate. Guest/account designs have separate browser namespaces and a 25-design limit. Images do not upload to PHP in this integration, and include/exclude clicks do not trigger automatic inference.
+
+Launch a disposable Chrome profile with DevTools on port 9222 and WebGL enabled (headless Linux can use `--enable-unsafe-swiftshader --use-angle=swiftshader`), then run:
+
+```sh
+# From repository root, with websocket-client installed in the QA environment:
+python Website/tests/visualizer_browser_test.py
+```
+
+`TEST_BASE_URL` can override the default `http://localhost:8000`. This test creates designs only in the selected disposable browser profile. It does not require model installation because masks are bundled. See the [completion report](../../Docs/website-completion-report.md) for the actual 25-check browser result, fresh CPU inference and remaining production/3D boundaries.

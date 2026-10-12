@@ -16,3 +16,4 @@ key.properties
 /Services/visualizer/**/__pycache__/
 /Services/visualizer/__pycache__/
 /Html/tests/__pycache__/
+/Website/tests/**/__pycache__/

@@ -31,7 +31,7 @@ index.php
 | [Helpers](../../Website/core/Helpers.php#L4): `view_data()`, `render_view()`, `api_request()`, `api_get()`, `api_post()`; [bootstrap rendering](../../Website/config/bootstarp.php#L10): `load_view()`, `base_url()` | `view_data` merges arrays; render calls `load_view`, which extracts data and includes path relative to `Website/`; HTTP helpers use cURL or streams | Use known template paths only; do not pass user input as a view filename; outbound integrations need explicit timeouts and sanitized failures |
 | [Welcome](../../Website/app/bridge/Welcome.php#L6): `index()`, `hello()`; [Developer](../../Website/app/bridge/Developer.php#L23): `login()`, `logout()`, `index()`, `metrics()` | Existing examples of controller rendering and Developer-specific method/session checks; `Welcome::hello()` fetches an external demo API | Preserve existing behavior; do not copy demo HTTP calls into commerce request loops |
 
-**Rendering contract:** the existing call is `$this->respond('/app/page/welcome.php', $data)`. For a new template, use a full Website-relative path such as `/app/page/admin/products/index.php`. `respond('admin/products/index', ...)` does not resolve that path with today's helpers. Proposed admin/storefront files do not exist yet.
+**Rendering contract:** the existing call is `$this->respond('/app/page/welcome.php', $data)`. For a new template, use a full Website-relative path such as `/app/page/admin/products/index.php`. `respond('admin/products/index', ...)` does not resolve that path with today's helpers. Actual storefront views live under `app/page/storefront/` and admin views under `app/page/admin/`; both use full paths.
 
 **Service contract:** HTML controllers and API handlers call the same PHP business services directly. Do not have a PHP catalog or checkout controller HTTP-call its own `/api/...` routes. That adds network overhead, duplicates authentication, and breaks transaction sharing on the PDO connection.
 
@@ -88,3 +88,13 @@ sed -n '144,209p' Website/core/Auth.php
 ```
 
 For credentials, record only presence and required remediation; never paste values. Re-read the named symbols if line numbers drift. Keep new file names, method signatures, dependency claims and actual verification results synchronized through the coordinator and tracker.
+
+
+## Implemented staff panel (2026-10-11)
+
+[Admin controller](../../Website/app/bridge/Admin.php) renders actual `app/page/admin/*.php` views. [AdminReadService](../../Website/app/Services/AdminReadService.php) owns bounded, grant-checked table projections/overview counts; `/admin/data/{slug}` is a private GET feed, not the full WEB-03 API. [AdminCatalogForm](../../Website/app/Services/AdminCatalogForm.php) converts human decimal fields and preserves field errors. ProductService remains catalog write authority; InventoryService.adjust accepts an optional expected stock revision after its existing arguments; OrderService owns transitions. [ProductImageService](../../Website/app/Services/ProductImageService.php) validates/re-encodes GD raster uploads, compensates failures, removes images after commit and provides CLI-only bounded orphan reconciliation. [Delivery/setup/evidence](../admin-panel-design.md). Settings are read-only; native/API/provider milestones remain separate.
+
+
+## Admin/storefront data synchronization (ADM-WEB-01)
+
+`ProductService::visualizerMaterials(?int $selectedId)` projects at most 50 eligible published photographed products, prioritizes a deep-linked selection and excludes disabled-variant-only images. `CatalogReadService::visualizerMaterials()` reads committed SQL directly without changing the existing listing/detail cache DTO contract. `StorefrontTools::photoPage()` creates local texture/thumbnail/product URLs and combines real materials with labelled samples. `assets/storefront/visualizer-editor.js` loads either real original product images or bundled samples and updates the product-details link. Public product views and admin product forms expose product-specific previews and stock links. `tests/AdminStorefrontSyncTest.php` verifies visibility/order/bounds; `tests/admin_http_test.py` proves actual form writes reach warmed public pages and customer order history. See [integration setup/evidence](../admin-panel-design.md#admin-to-website-integration-adm-web-01).
