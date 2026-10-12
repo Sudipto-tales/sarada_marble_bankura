@@ -1,0 +1,102 @@
+[
+  {
+    "id": "p_carrara_white",
+    "name": "Carrara White Marble",
+    "textureId": "carrara_white"
+  },
+  {
+    "id": "p_statuario",
+    "name": "Statuario Marble",
+    "textureId": "statuario"
+  },
+  {
+    "id": "p_calacatta_gold",
+    "name": "Calacatta Gold Marble",
+    "textureId": "calacatta_gold"
+  },
+  {
+    "id": "p_nero_marquina",
+    "name": "Nero Marquina Marble",
+    "textureId": "nero_marquina"
+  },
+  {
+    "id": "p_imperial_green",
+    "name": "Imperial Green Marble",
+    "textureId": "imperial_green"
+  },
+  {
+    "id": "p_makrana_white",
+    "name": "Makrana White Marble",
+    "textureId": "makrana_white"
+  },
+  {
+    "id": "p_rajasthan_pink",
+    "name": "Rajasthan Pink Marble",
+    "textureId": "rajasthan_pink"
+  },
+  {
+    "id": "p_ambaji_white",
+    "name": "Ambaji White Marble",
+    "textureId": "ambaji_white"
+  },
+  {
+    "id": "p_botticino_beige",
+    "name": "Botticino Beige Marble",
+    "textureId": "botticino_beige"
+  },
+  {
+    "id": "p_crema_marfil",
+    "name": "Crema Marfil Marble",
+    "textureId": "crema_marfil"
+  },
+  {
+    "id": "p_travertine_classic",
+    "name": "Classic Travertine",
+    "textureId": "travertine_classic"
+  },
+  {
+    "id": "p_emperador_dark",
+    "name": "Emperador Dark Marble",
+    "textureId": "emperador_dark"
+  },
+  {
+    "id": "p_onyx_honey",
+    "name": "Honey Onyx",
+    "textureId": "onyx_honey"
+  },
+  {
+    "id": "p_grey_william",
+    "name": "Grey William Marble",
+    "textureId": "grey_william"
+  },
+  {
+    "id": "p_katni_beige",
+    "name": "Katni Beige Marble",
+    "textureId": "katni_beige"
+  },
+  {
+    "id": "p_udaipur_green",
+    "name": "Udaipur Green Marble",
+    "textureId": "udaipur_green"
+  },
+  {
+    "id": "p_black_galaxy",
+    "name": "Black Galaxy Granite",
+    "textureId": "black_galaxy"
+  },
+  {
+    "id": "p_kashmir_white_granite",
+    "name": "Kashmir White Granite",
+    "textureId": "kashmir_white_granite"
+  },
+  {
+    "id": "p_sahara_beige",
+    "name": "Sahara Beige Marble",
+    "textureId": "sahara_beige"
+  },
+  {
+    "id": "p_bianco_dolomite",
+    "name": "Bianco Dolomite Marble",
+    "textureId": "bianco_dolomite"
+  }
+]

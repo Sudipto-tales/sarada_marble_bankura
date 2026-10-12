@@ -14,7 +14,7 @@ if (PHP_SAPI === 'cli-server') {
     if ($file && $assets && is_file($file)
         && str_starts_with($file, $assets . DIRECTORY_SEPARATOR)
         && in_array(strtolower(pathinfo($file, PATHINFO_EXTENSION)),
-            ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'map'], true)) {
+            ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'map', 'pdf', 'json'], true)) {
         return false;
     }
     $_SERVER['SCRIPT_NAME'] = '/index.php';
@@ -32,6 +32,7 @@ if (in_array($command, ['help', '--help', '-h'], true)) {
     echo "Vayu development server\n\nUsage: php vayu run [--host=127.0.0.1] [--port=8000]\n\nStop with Ctrl+C.\n";
     echo "Apply pending migrations: php vayu migrate\nCreate a console account: php vayu developer:create you@example.com\n";
     echo "Create commerce staff: php vayu commerce:create you@example.com [admin|catalog_manager|operations|viewer]\n";
+    echo "Inspect old orphan images: php vayu catalog:images:clean [--delete]\n";
     echo "Bounded worker: php vayu queue:work --queues=emails --max=20 --max-seconds=30\nRetry one failed job: php vayu queue:retry --failed-id=123\n";
     exit(0);
 }
@@ -52,20 +53,39 @@ if ($command === 'migrate') {
         exit(1);
     }
 }
+if ($command === 'catalog:images:clean') {
+    if (count($argv)>3 || (isset($argv[2]) && $argv[2]!=='--delete')) {
+        fwrite(STDERR, "Usage: php vayu catalog:images:clean [--delete]\n"); exit(1);
+    }
+    try {
+        require __DIR__ . '/config/cli.php';
+        require_once __DIR__ . '/config/bootstarp.php';
+        $result=(new ProductImageService($pdo))->reconcile(($argv[2]??'')==='--delete');
+        echo json_encode($result,JSON_THROW_ON_ERROR)."\n";exit(0);
+    } catch(Throwable $error) {fwrite(STDERR,"Image maintenance failed. Check private storage and database availability.\n");exit(1);}
+}
 if ($command === 'commerce:create') {
     try {
         require __DIR__ . '/config/cli.php';
         require_once __DIR__ . '/core/CommerceAccess.php';
-        if (count($argv) < 3 || count($argv) > 4) throw new InvalidArgumentException();
+        if (count($argv) < 3 || count($argv) > 4)
+            throw new CommerceProvisioningRejected('Usage: php vayu commerce:create EMAIL [admin|catalog_manager|operations|viewer]');
         $tty = function_exists('stream_isatty') && stream_isatty(STDIN);
         if ($tty) { echo 'Password (12 to 72 bytes): '; shell_exec('stty -echo'); }
-        try { $password = rtrim(fgets(STDIN, 1024) ?: '', "\r\n"); }
+        try {
+            $line = fgets(STDIN, 1024);
+            if ($line === false) throw new CommerceProvisioningRejected('No password received on stdin. Run the command in a terminal and enter your password at the prompt.');
+            $password = rtrim($line, "\r\n");
+        }
         finally { if ($tty) { shell_exec('stty echo'); echo "\n"; } }
         $id = CommerceAccess::provision($argv[2], $password, $argv[3] ?? 'admin');
         echo "Commerce staff account created (ID {$id}).\n";
         exit(0);
+    } catch (CommerceProvisioningRejected $e) {
+        fwrite(STDERR, 'Staff account creation failed. ' . $e->getMessage() . "\n");
+        exit(1);
     } catch (Throwable $e) {
-        fwrite(STDERR, "Staff account creation failed. Apply migrations and supply a unique email, permitted role and password of 12 to 72 bytes through stdin.\n");
+        fwrite(STDERR, "Staff account creation failed. Check database availability and run php vayu migrate before retrying.\n");
         exit(1);
     }
 }

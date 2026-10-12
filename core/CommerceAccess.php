@@ -2,6 +2,9 @@
 
 require_once __DIR__ . '/Auth.php';
 
+/** Safe operator-facing failures; never include SQL, credentials or raw input. */
+final class CommerceProvisioningRejected extends RuntimeException {}
+
 final class CommerceAccess
 {
     /** Identity and grants are reloaded for every protected operation, never session roles. */
@@ -63,18 +66,25 @@ final class CommerceAccess
     {
         global $pdo;
         $email = strtolower(trim($email)); $name = trim($name);
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 190 || strlen($password) < 12 || strlen($password) > 72
-            || $name === '' || strlen($name) > 190 || !preg_match('//u', $name) || preg_match('/[\x00-\x1f\x7f]/', $name)
-            || !in_array($role, ['admin', 'catalog_manager', 'operations', 'viewer'], true)) {
-            throw new InvalidArgumentException('Use a valid email, staff role, name and password of 12 to 72 bytes.');
-        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 190)
+            throw new CommerceProvisioningRejected('Supply a valid email address of at most 190 bytes.');
+        if (strlen($password) < 12 || strlen($password) > 72 || str_contains($password, "\0"))
+            throw new CommerceProvisioningRejected('Password must contain 12 to 72 bytes and no null bytes. Retry and enter a longer password if needed; input is hidden.');
+        if ($name === '' || strlen($name) > 190 || !preg_match('//u', $name) || preg_match('/[\x00-\x1f\x7f]/', $name))
+            throw new CommerceProvisioningRejected('Supply a valid staff name of at most 190 bytes.');
+        if (!in_array($role, ['admin', 'catalog_manager', 'operations', 'viewer'], true))
+            throw new CommerceProvisioningRejected('Role must be admin, catalog_manager, operations or viewer.');
         if ($pdo->inTransaction()) throw new RuntimeException('Provisioning requires its own transaction.');
         $hash = password_hash($password, PASSWORD_DEFAULT);
         try {
             $pdo->beginTransaction();
             $query = $pdo->prepare('SELECT id FROM roles WHERE name = ?'); $query->execute([$role]);
             $roleId = $query->fetchColumn();
-            if (!$roleId) throw new RuntimeException('Apply commerce migrations before provisioning.');
+            if (!$roleId) throw new CommerceProvisioningRejected('Staff role is missing. Run php vayu migrate, then retry.');
+            $existing = $pdo->prepare('SELECT id FROM users_tbl WHERE email = ?');
+            $existing->execute([$email]);
+            if ($existing->fetchColumn())
+                throw new CommerceProvisioningRejected('That email already exists. Use a unique email; existing accounts are not automatically promoted.');
             $pdo->prepare("INSERT INTO users_tbl (firstname, lastname, name, email, password, role, email_verify, status)
                 VALUES (?, '', ?, ?, ?, 'user', 1, 1)")->execute([$name, $name, $email, $hash]);
             $id = (int) $pdo->lastInsertId();
@@ -83,7 +93,8 @@ final class CommerceAccess
             return $id;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            throw new RuntimeException('Staff account could not be created. Check the email, role, password and migration state.');
+            if ($e instanceof CommerceProvisioningRejected) throw $e;
+            throw new RuntimeException('Staff account could not be created. Check database availability and run php vayu migrate before retrying.');
         }
     }
 }

@@ -7,7 +7,7 @@ class ViewRouteProvider extends RouteProvider
     public static function routes(): array
     {
         return [
-            'default' => ['Welcome', 'index'],
+            'default' => ['GET' => ['StorefrontProduct', 'home']],
             'hello' => ['Welcome', 'hello'],
             ... (DEVELOPER_ENABLED ? [
                 'developer' => ['Developer', 'index'],
@@ -17,6 +17,14 @@ class ViewRouteProvider extends RouteProvider
                     ['overview', 'apis', 'server', 'workflows', 'incidents', 'activity', 'access', 'settings']), ['Developer', 'index']),
             ] : []),
             // Storefront routes
+            'calculator' => ['GET' => ['StorefrontTools', 'calculator']],
+            'compare' => ['GET' => ['StorefrontTools', 'comparison'], 'POST' => ['StorefrontTools', 'compareChange']],
+            'wishlist' => ['GET' => ['StorefrontTools', 'wishlist'], 'POST' => ['StorefrontTools', 'saveWishlist']],
+            'visualizer/help' => ['GET' => ['StorefrontTools', 'help']],
+            'visualizer' => ['GET' => ['StorefrontTools', 'visualizer']],
+            'saved-designs' => ['GET' => ['StorefrontTools', 'designs']],
+            'catalogues' => ['GET' => ['StorefrontProduct', 'catalogues']],
+            'catalogue/{slug}' => ['GET' => ['StorefrontProduct', 'catalogue']],
             'shop' => ['GET' => ['StorefrontProduct', 'listing']],
             'category/{slug}' => ['GET' => ['StorefrontProduct', 'listing']],
             'product/{slug}' => ['GET' => ['StorefrontProduct', 'detail']],
@@ -24,12 +32,26 @@ class ViewRouteProvider extends RouteProvider
             'checkout' => ['GET' => ['Cart', 'checkout'], 'POST' => ['Cart', 'placeOrder']],
             'order/{id}' => ['GET' => ['Cart', 'order']],
             'account' => ['GET' => ['CustomerAccount', 'index'], 'POST' => ['CustomerAccount', 'login']],
+            'account/register' => ['GET' => ['CustomerAccount', 'registration'], 'POST' => ['CustomerAccount', 'register']],
+            'auth/verify_email' => ['GET' => ['CustomerAccount', 'verify']],
+            'account/addresses/archive' => ['POST' => ['CustomerAccount', 'archiveAddress']],
+            'orders' => ['GET' => ['CustomerAccount', 'orders']],
             'account/logout' => ['POST' => ['CustomerAccount', 'logout']],
             'account/addresses' => ['POST' => ['CustomerAccount', 'address']],
             // Admin routes
-            'admin' => ['Admin', 'index'],
-            'admin/products' => ['Admin', 'products'],
-            'admin/product' => ['Admin', 'productForm'],
+            'admin/login' => ['GET' => ['Admin', 'login'], 'POST' => ['Admin', 'login']],
+            'admin/logout' => ['POST' => ['Admin', 'logout']],
+            'admin/data/{slug}' => ['GET' => ['Admin', 'data']],
+            'admin/taxonomy/{slug}' => ['POST' => ['Admin', 'saveTaxonomy']],
+            'admin/{slug}' => ['GET' => ['Admin', 'table']],
+            'admin/stock' => ['GET' => ['Admin', 'stockForm'], 'POST' => ['Admin', 'adjustStock']],
+            'admin/order' => ['GET' => ['Admin', 'orderForm'], 'POST' => ['Admin', 'transitionOrder']],
+            'admin/product/archive' => ['POST' => ['Admin', 'archiveProduct']],
+            'admin/product/image' => ['POST' => ['Admin', 'image']],
+            'admin/settings' => ['GET' => ['Admin', 'settings']],
+            'admin' => ['GET' => ['Admin', 'index']],
+            'admin/products' => ['GET' => ['Admin', 'products']],
+            'admin/product' => ['GET' => ['Admin', 'productForm'], 'POST' => ['Admin', 'saveProduct']],
         ];
     }
 }

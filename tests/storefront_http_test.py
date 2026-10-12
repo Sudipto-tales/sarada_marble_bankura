@@ -115,6 +115,12 @@ if (($argv[1] ?? '') === 'inspect') {
  echo json_encode(['orders'=>(int)$pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn(), 'stock'=>$pdo->query('SELECT on_hand_milli,reserved_milli FROM inventory ORDER BY variant_id')->fetchAll(),
  'requests'=>(int)$pdo->query('SELECT COUNT(*) FROM checkout_requests')->fetchColumn(), 'jobs'=>(int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type IN ('order_confirmation','purchase_event')")->fetchColumn()]); exit;
 }
+if (($argv[1] ?? '') === 'extra') {
+ $catalog=new ProductService($pdo);$adminId=(int)$pdo->query("SELECT id FROM users_tbl WHERE email='http-admin@example.test'")->fetchColumn();
+ $category=(int)$pdo->query("SELECT id FROM categories WHERE slug='http-stones'")->fetchColumn();$ids=[];
+ foreach (range(1,4) as $n) { $row=$catalog->save($adminId,['slug'=>'extra-'.$n,'name'=>'Extra '.$n,'category_id'=>$category,'status'=>'active','variants'=>[['sku'=>'EXTRA-'.$n,'sell_unit'=>'sqft','qty_increment_milli'=>1000,'unit_price_minor'=>100]]],0,'http:extra:'.$n);$ids[]=$row['id']; }
+ echo json_encode($ids);exit;
+}
 require %s;
 (new MigrationRunner($pdo,%s,static function($line){}))->run();
 $adminId=CommerceAccess::provision('http-admin@example.test','Disposable-HTTP-Admin-Password');
@@ -160,6 +166,23 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             else:
                 raise AssertionError('HTTP server did not become ready.')
             guest, other = Client(port), Client(port)
+            status, headers, body = guest.request('/')
+            check(status == 200 and 'Beautiful spaces.' in body and 'Marble &lt;script&gt;' in body
+                  and '<script>alert(1)</script>' not in body, 'Home renders the design and escaped live database products without JavaScript.')
+            check('/assets/storefront/home.css' in body and 'storefront-data.js' not in body
+                  and '.html' not in body and '../Html' not in body, 'PHP home uses local production assets and PHP destinations only.')
+            check(guest.request('/', 'POST')[0] == 405, 'Home rejects unsupported mutations.')
+            check(guest.request('/catalogues')[0] == 200 and 'KasaMood' in guest.request('/catalogues')[2], 'Catalogue library renders server-side.')
+            check(guest.request('/catalogue/kasamood')[0] == 200 and 'application/pdf' in guest.request('/catalogue/kasamood')[2], 'Original catalogue reader renders without JavaScript.')
+            check(guest.request('/catalogue/missing')[0] == 404, 'Unknown catalogue returns 404.')
+            connection = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
+            try:
+                connection.request('GET', '/assets/storefront/assets/catalogs/kasamood/KasaMood.pdf')
+                pdf = connection.getresponse()
+                check(pdf.status == 200 and pdf.getheader('Content-Type').startswith('application/pdf')
+                      and pdf.read().startswith(b'%PDF-'), 'Vayu serves the actual local PDF with the correct content type.')
+            finally:
+                connection.close()
             status, headers, body = guest.request('/shop')
             check(status == 200 and 'Marble &lt;script&gt;' in body and '<script>alert(1)</script>' not in body, 'Catalog renders escaped database products.')
             check(guest.request('/category/http-stones')[0] == 200, 'Category route passes its slug to listing.')
@@ -238,6 +261,74 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             state = run_fixture('inspect')
             check(state['orders'] == 1 and state['requests'] == 1 and state['jobs'] == 2 and int(state['stock'][0]['on_hand_milli']) == 8500
                   and int(state['stock'][0]['reserved_milli']) == 0, 'HTTP retry leaves one order/key, one set of intents and one stock deduction.')
+            # Remaining prototype pages use the same live services/guards.
+            for path, title in [('/calculator','Every square foot'),('/compare','The details make'),('/wishlist','The ones you love'),('/visualizer','visualizer-config'),('/saved-designs','Ideas to come back'),('/visualizer/help','See your ideas')]:
+                status, headers, tool = guest.request(path)
+                check(status == 200 and title in tool and headers['Cache-Control'] == 'private, no-store', 'Working PHP tool route: '+path)
+            check('SARADA' not in guest.request('/shop')[2] and 'visualizer-editor.js' not in guest.request('/shop')[2], 'Heavy photo scripts are not loaded by catalog pages.')
+            check(guest.request('/shop?finish=missing')[0] == 200 and 'No products found' in guest.request('/shop?finish=missing')[2], 'Finish filter renders an honest empty state.')
+            check(guest.request('/shop?in_stock=2')[0] == 422, 'Invalid stock filter is rejected.')
+            check(guest.request('/orders')[0] == 401, 'Order history requires a verified account.')
+            check(guest.request('/account/register')[0] == 200 and 'currently unavailable' in guest.request('/account/register')[2], 'Signup explains its disabled verification transport.')
+            check(guest.request('/auth/verify_email?token=forged')[0] == 422, 'Forged verification link is rejected.')
+            detail = guest.request('/product/http-marble')[2]
+            token = form(detail, 'variant_id')['csrf']
+            check(guest.request('/wishlist','POST',{'csrf':'bad','product_id':seed['variants'][0]})[0] == 403, 'Wishlist mutations require CSRF.')
+            check(guest.request('/compare','POST',{'csrf':'bad','product_id':'1'})[0] == 403, 'Comparison mutations require CSRF.')
+            # Fixture has one product; derive its database ID from its own guarded form.
+            product_id = next(f['inputs']['product_id'] for f in Forms(detail).forms if f['action']=='/wishlist')
+            pick = {'csrf':token,'product_id':product_id}
+            check(guest.request('/wishlist','POST',pick)[0] == 303 and 'Marble &lt;script&gt;' in guest.request('/wishlist')[2], 'Guest saves a real escaped material.')
+            check(other.request('/wishlist')[2].count('class="stone-card"') == 0, 'Signed-in customer cannot see guest saved items.')
+            check(guest.request('/compare','POST',pick)[0] == 303 and 'Variants &amp; selling units' in guest.request('/compare')[2], 'Comparison uses real material variants and units.')
+            check(guest.request('/compare','POST',dict(pick,action='remove'))[0] == 303 and 'A little perspective helps' in guest.request('/compare')[2], 'Comparison remove returns useful empty state.')
+            calculate = '/calculator?' + urlencode({'variant_id':seed['variants'][0],'surfaces[0][name]':'Floor','surfaces[0][length]':'1','surfaces[0][width]':'2','surfaces[0][unit]':'ft','surfaces[0][cutout]':'0','waste_bps':'1000'})
+            calculator = guest.request(calculate)
+            check(calculator[0] == 200 and '2.2 sqft' in calculator[2], 'Calculator renders rational coverage and wastage.')
+            handoff = form(calculator[2], 'variant_id')
+            check(handoff['quantity']=='2.5' and guest.request('/cart','POST',handoff)[0] == 303 and '2.5' in guest.request('/cart')[2], 'Calculator rounds to real variant increments and hands off to the owned cart.')
+            check(guest.request('/calculator?surfaces[0][length]=-1')[0] == 422, 'Calculator rejects invalid measurements.')
+            login = form(guest.request('/account')[2], 'email')
+            login.update(email='http-a@example.test',password='Disposable-HTTP-Customer-Password')
+            check(guest.request('/account','POST',login)[0] == 303, 'Customer signs back in through actual Auth.')
+            token = form(guest.request('/account')[2], 'csrf')['csrf']
+            owned_pick={'csrf':token,'product_id':product_id,'user_id':str(seed['users'][1])}
+            check(guest.request('/wishlist','POST',owned_pick)[0] == 303 and guest.request('/wishlist','POST',owned_pick)[0] == 303 and guest.request('/wishlist')[2].count('class="stone-card"') == 1, 'Signed-in repeated saves create one owned selection and ignore forged owner.')
+            check(other.request('/wishlist')[2].count('class="stone-card"') == 0, 'Account wishlist isolation is preserved.')
+            other_token=form(other.request('/account')[2], 'csrf')['csrf']
+            check(other.request('/wishlist','POST',{'csrf':other_token,'product_id':product_id,'action':'remove','user_id':str(seed['users'][0])})[0] == 303 and guest.request('/wishlist')[2].count('class="stone-card"') == 1, 'Another customer remove cannot delete the first account selection.')
+            check(guest.request('/orders')[0] == 200 and order_url in guest.request('/orders')[2], 'History lists the real owned order.')
+            check(order_url not in other.request('/orders')[2], 'History hides another customer order.')
+            account = guest.request('/account')[2]
+            edit = next(f['inputs'] for f in Forms(account).forms if f['action']=='/account/addresses' and 'id' in f['inputs'])
+            forged=dict(edit,id=str(seed['other_address']))
+            check(guest.request('/account/addresses','POST',forged)[0] == 404, 'Address edit checks server ownership.')
+            check(guest.request('/account/addresses/archive','POST',forged)[0] == 404, 'Address archive checks server ownership.')
+            check(guest.request('/account/addresses','POST',dict(edit,line1='Updated Road'))[0] == 303, 'Owned address edit accepts current revision.')
+            check(guest.request('/account/addresses','POST',edit)[0] == 409, 'Stale address revision cannot overwrite edits.')
+            check(guest.request('/account/addresses/archive','POST',edit)[0] == 409, 'Stale address archive cannot remove updated data.')
+            fresh = next(f['inputs'] for f in Forms(guest.request('/account')[2]).forms if f['action']=='/account/addresses' and 'id' in f['inputs'])
+            check(guest.request('/account/addresses/archive','POST',fresh)[0] == 303 and 'Updated Road' not in guest.request('/account')[2], 'Owned address archive removes it from active addresses.')
+            check('Station Road' in guest.request(order_url)[2] and 'Updated Road' not in guest.request(order_url)[2], 'Existing order retains its immutable delivery snapshot after address edits/archive.')
+            check('Order timeline' in guest.request(order_url)[2], 'Order detail renders recorded transition history.')
+            extra_ids = run_fixture('extra')
+            for selection_id in [product_id] + extra_ids[:3]:
+                check(guest.request('/compare','POST',{'csrf':token,'product_id':str(selection_id)})[0] == 303, 'Comparison accepts each of four real materials.')
+            check(guest.request('/compare','POST',{'csrf':token,'product_id':str(extra_ids[3])})[0] == 422 and '4 of 4' in guest.request('/compare')[2], 'Comparison bounds the shortlist at four without dropping prior selections.')
+            third = Client(port)
+            third_login=form(third.request('/account')[2], 'email')
+            third_login.update(email='http-a@example.test',password='Disposable-HTTP-Customer-Password')
+            check(third.request('/account','POST',third_login)[0] == 303 and third.request('/wishlist')[2].count('class="stone-card"') == 1, 'Account wishlist persists across independent browser sessions.')
+            check('A little perspective helps' in third.request('/compare')[2], 'Comparison remains private to each browser session.')
+            check(guest.request('/shop?min_price=1.001')[0] == 422 and guest.request('/shop?min_price=2&max_price=1')[0] == 422, 'Readable price filters reject malformed or inverted ranges.')
+            check(guest.request('/admin/products')[0] == 403 and guest.request('/admin/product?id='+product_id)[0] == 403, 'Customer cannot access staff catalog or product details.')
+            staff=Client(port)
+            staff_login=form(staff.request('/account')[2], 'email')
+            staff_login.update(email='http-admin@example.test',password='Disposable-HTTP-Admin-Password')
+            check(staff.request('/account','POST',staff_login)[0] == 303, 'Provisioned commerce staff uses the commerce account session.')
+            check(staff.request('/admin/products')[0] == 200 and 'Catalog overview' in staff.request('/admin/products')[2], 'Staff catalog calls the real service without legacy namespace errors.')
+            check(staff.request('/admin/product?id='+product_id)[0] == 200 and 'HTTP-SQFT' in staff.request('/admin/product?id='+product_id)[2], 'Staff detail hydrates the requested persisted product.')
+            check(staff.request('/admin/products','POST',{'csrf':token})[0] == 405, 'Read-only staff route rejects undocumented writes.')
             check('PHP Warning' not in log_path.read_text() and 'PHP Fatal' not in log_path.read_text(), 'Shopping requests complete without PHP warnings/fatal errors.')
     finally:
         if process is not None:

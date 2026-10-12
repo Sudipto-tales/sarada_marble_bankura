@@ -27,7 +27,7 @@ final class Cache
     public static function key(int $version,array $parameters):string
     {
         if($version<1)throw new InvalidArgumentException('Invalid cache version.');
-        $allowed=['resource','contract','page','per_page','sort','category','brand','q','min_price_minor','max_price_minor','slug','currency','locale','generation'];
+        $allowed=['resource','contract','page','per_page','sort','category','brand','q','finish','in_stock','min_price_minor','max_price_minor','slug','currency','locale','generation'];
         if(array_diff(array_keys($parameters),$allowed))throw new InvalidArgumentException('Private or unknown cache key field.');
         foreach($parameters as $value)if(!is_int($value)&&!is_string($value))throw new InvalidArgumentException('Invalid cache key value.');
         ksort($parameters);return hash('sha256',json_encode(['namespace'=>'catalog','version'=>$version,'parameters'=>$parameters],JSON_THROW_ON_ERROR));
