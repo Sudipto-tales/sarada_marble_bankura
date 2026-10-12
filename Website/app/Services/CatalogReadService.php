@@ -11,7 +11,12 @@ final class CatalogReadService
         foreach(['category','brand'] as $field)if(isset($input[$field])&&$input[$field]!=='')$filters[$field]=CommerceValues::slug($input[$field]);
         if(isset($input['q'])&&$input['q']!=='')$filters['q']=CommerceValues::text($input['q'],80,'q');
         foreach(['min_price_minor','max_price_minor'] as $field)if(isset($input[$field])&&$input[$field]!=='')$filters[$field]=CommerceValues::integer($input[$field],0,CommerceValues::MAX_MONEY,$field);
+        foreach (['min_price'=>'min_price_minor','max_price'=>'max_price_minor'] as $human=>$minor) {
+            if (isset($input[$human]) && $input[$human] !== '') $filters[$minor] = CommerceValues::decimal($input[$human], 2, CommerceValues::MAX_MONEY, $human);
+        }
         if(isset($filters['min_price_minor'],$filters['max_price_minor'])&&$filters['min_price_minor']>$filters['max_price_minor'])CommerceValues::invalid('price_range');
+        if (isset($input['finish']) && $input['finish'] !== '') $filters['finish'] = CommerceValues::text($input['finish'], 80, 'finish');
+        if (isset($input['in_stock']) && $input['in_stock'] !== '') $filters['in_stock'] = CommerceValues::flag($input['in_stock'], 'in_stock');
         ksort($filters);return $filters;
     }
     private function read(array $parameters,callable $loader):array
@@ -32,5 +37,11 @@ final class CatalogReadService
     public function detail(string $slug):array
     {
         $slug=CommerceValues::slug($slug);return $this->read(['resource'=>'detail','slug'=>$slug],fn()=>$this->products->detail($slug));
+    }
+    public function visualizerMaterials(?int $selectedId = null): array
+    {
+        if ($selectedId !== null) $selectedId = CommerceValues::id($selectedId);
+        // This small picker reads committed SQL directly; catalog cache DTOs remain unchanged.
+        return $this->products->visualizerMaterials($selectedId);
     }
 }

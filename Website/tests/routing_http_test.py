@@ -31,6 +31,9 @@ def server(temp, enabled=True, fixture=None):
         port = sock.getsockname()[1]
     env = dict(os.environ, DB_TYPE="sqlite", DB_DATABASE=str(temp / "http.sqlite"),
                DEVELOPER_ENABLED="true" if enabled else "false")
+    if fixture is None:
+        subprocess.run([PHP, "vayu", "migrate"], cwd=ROOT, env=env,
+                       check=True, capture_output=True, text=True)
     args = [PHP, "vayu", "run", f"--port={port}"] if fixture is None else [
         PHP, "-S", f"127.0.0.1:{port}", str(fixture)]
     with (temp / f"server-{port}.log").open("w+") as log:
@@ -70,7 +73,7 @@ with tempfile.TemporaryDirectory(prefix="vayu-http-test-") as directory:
     temp = Path(directory)
     with server(temp) as port:
         status, headers, body = request(port, "/")
-        check(status == 200 and "<!DOCTYPE" in body.upper(), "Welcome renders through actual bootstrap.")
+        check(status == 200 and "Beautiful spaces." in body, "Storefront home renders through actual bootstrap.")
         status, headers, body = request(port, "/developer")
         check(status == 303 and "/developer/login" in headers["Location"], "Anonymous Developer redirects.")
         status, headers, body = request(port, "/developer/login")

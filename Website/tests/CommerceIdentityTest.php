@@ -48,4 +48,24 @@ $id = (int)$pdo->query("SELECT id FROM users_tbl WHERE email = 'cli-staff@exampl
 $check(CommerceAccess::can('admin.orders.edit', $id) && !CommerceAccess::can('admin.settings.edit', $id), 'CLI-selected role receives only exact grants.');
 [$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'short@example.test'], "short\n");
 $check($code !== 0 && !str_contains($err, 'SQLSTATE'), 'Invalid CLI provisioning fails with safe nonzero output.');
+foreach ([11, 73] as $length) {
+    $secret = str_repeat('x', $length);
+    [$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', "invalid-$length@example.test"], $secret . "\n");
+    $check($code !== 0 && str_contains($err, '12 to 72 bytes') && !str_contains($out . $err, $secret), 'Invalid password length has a specific safe diagnostic.');
+}
+foreach ([12, 72] as $length) {
+    [$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', "boundary-$length@example.test"], str_repeat('y', $length) . "\n");
+    $check($code === 0 && $err === '', 'Both valid password byte boundaries provision successfully.');
+}
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'admin@example.test'], "Disposable-Duplicate-Password\n");
+$check($code !== 0 && str_contains($err, 'email already exists') && !str_contains($err, 'SQLSTATE'), 'Duplicate email gives an actionable safe diagnostic.');
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'empty@example.test']);
+$check($code !== 0 && str_contains($err, 'No password received'), 'EOF is diagnosed separately from password length.');
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'role@example.test', 'developer'], "Disposable-Role-Password\n");
+$check($code !== 0 && str_contains($err, 'Role must be'), 'Unsupported role gives an actionable diagnostic.');
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create']);
+$check($code !== 0 && str_contains($err, 'Usage:'), 'Missing arguments show usage before reading stdin.');
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'missing@example.test'], "Disposable-Missing-Password\n",
+    ['DB_TYPE' => 'sqlite', 'DB_DATABASE' => CommerceTest::$temp . '/unmigrated.sqlite']);
+$check($code !== 0 && str_contains($err, 'php vayu migrate') && !str_contains($err, 'SQLSTATE'), 'Unmigrated database fails safely with migration instructions.');
 CommerceTest::finish('Commerce identity');

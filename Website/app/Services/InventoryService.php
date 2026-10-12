@@ -193,12 +193,12 @@ final class InventoryService
         ProductService::advanceVersion($this->pdo);
     }
 
-    public function adjust(int $actorId,int $variantId,int $delta,string $reason,string $key):array
+    public function adjust(int $actorId,int $variantId,int $delta,string $reason,string $key,?int $expectedRevision=null):array
     {
         CommerceAccess::requirePermission('admin.inventory.adjust',$actorId); $key=CommerceValues::key($key);
         $delta=CommerceValues::integer($delta,-CommerceValues::MAX_QUANTITY,CommerceValues::MAX_QUANTITY,'delta_milli');
         if($delta===0) CommerceValues::invalid('delta_milli'); $reason=CommerceValues::text($reason,190,'reason');
-        return CommerceDatabase::transaction($this->pdo,function() use($actorId,$variantId,$delta,$reason,$key):array {
+        return CommerceDatabase::transaction($this->pdo,function() use($actorId,$variantId,$delta,$reason,$key,$expectedRevision):array {
             CommerceAccess::requirePermission('admin.inventory.adjust',$actorId);
             $row=$this->lockedLines([$variantId=>1],false)[$variantId]; $stock=$row['stock'];
             $prior=$this->query('SELECT * FROM inventory_movements WHERE business_key=? AND variant_id=?'.CommerceDatabase::lock($this->pdo),[$key,$variantId])->fetch();
@@ -206,6 +206,8 @@ final class InventoryService
                 if((int)$prior['on_hand_delta_milli']!==$delta||(int)$prior['reserved_delta_milli']!==0||$prior['reason']!==$reason||(int)$prior['actor_user_id']!==$actorId) throw new RequestRejected(409,'operation_key_conflict','Adjustment key has different inputs.');
                 return $stock;
             }
+            if($expectedRevision!==null && (int)$stock['revision']!==$expectedRevision) throw new RequestRejected(409,'revision_conflict','Stock changed. Reload before adjusting.');
+            CommerceValues::quantity(abs($delta),$row['variant']);
             $this->stock($stock,(int)$stock['on_hand_milli']+$delta,(int)$stock['reserved_milli']);
             $this->movement($variantId,$delta,0,$reason,$key,$actorId);
             ProductService::advanceVersion($this->pdo);

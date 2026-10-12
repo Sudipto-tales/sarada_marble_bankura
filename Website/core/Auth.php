@@ -220,7 +220,7 @@ final class Auth
         }
     }
 
-    private static function registrationAvailable(): bool
+    public static function registrationAvailable(): bool
     {
         if(!filter_var(env('AUTH_REGISTRATION_ENABLED',false),FILTER_VALIDATE_BOOLEAN))return false;
         if(env('AUTH_VERIFICATION_TRANSPORT','disabled')==='queue') {

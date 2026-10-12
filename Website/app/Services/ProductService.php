@@ -229,7 +229,34 @@ final class ProductService
         unset($product); return $products;
     }
 
+    /** Bounded public selection, hydrated in bulk for wishlist/comparison. */
+    public function selection(array $ids): array
+    {
+        if (count($ids) > 100) CommerceValues::invalid('products');
+        $ids = array_values(array_unique(array_map([CommerceValues::class, 'id'], $ids)));
+        if (!$ids) return [];
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $rows = $this->query("SELECT p.*,c.name AS category_name,c.slug AS category_slug,b.name AS brand_name,b.slug AS brand_slug
+            FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+            WHERE p.id IN ($marks) AND p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1)
+            AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) ORDER BY p.id", $ids)->fetchAll();
+        return $this->hydrate($rows);
+    }
     public function listing(array $filters = []): array { return $this->listProducts($filters,null); }
+    /** Bounded public texture picker, using only published products and eligible gallery photos. */
+    public function visualizerMaterials(?int $selectedId = null): array
+    {
+        if ($selectedId !== null) $selectedId = CommerceValues::id($selectedId);
+        $image = "SELECT pi.path FROM product_images pi WHERE pi.product_id=p.id
+            AND (pi.variant_id IS NULL OR EXISTS(SELECT 1 FROM product_variants vi WHERE vi.id=pi.variant_id AND vi.enabled=1))
+            ORDER BY pi.position,pi.id LIMIT 1";
+        return $this->query("SELECT p.id,p.name,p.slug,($image) AS image_path
+            FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+            WHERE p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1)
+            AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)
+            AND ($image) IS NOT NULL
+            ORDER BY CASE WHEN p.id=? THEN 0 ELSE 1 END,p.featured DESC,p.id DESC LIMIT 50", [$selectedId ?? 0])->fetchAll();
+    }
     public function administration(int $actorId, array $filters = []): array
     {
         CommerceAccess::requirePermission('admin.products.view',$actorId); return $this->listProducts($filters,$actorId);
@@ -247,6 +274,13 @@ final class ProductService
         foreach (['min_price_minor'=>'>=','max_price_minor'=>'<='] as $name=>$compare) if (isset($filters[$name])&&$filters[$name]!=='') {
             $clauses[]="(SELECT MIN(pv.unit_price_minor) FROM product_variants pv WHERE pv.product_id=p.id AND pv.enabled=1) $compare ?";
             $values[]=CommerceValues::integer($filters[$name],0,CommerceValues::MAX_MONEY,$name);
+        }
+        if (isset($filters['finish']) && $filters['finish'] !== '') {
+            $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vf WHERE vf.product_id=p.id AND vf.enabled=1 AND vf.finish=?)';
+            $values[] = CommerceValues::text($filters['finish'], 80, 'finish');
+        }
+        if (isset($filters['in_stock']) && CommerceValues::flag($filters['in_stock'], 'in_stock') === 1) {
+            $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vs JOIN inventory i ON i.variant_id=vs.id WHERE vs.product_id=p.id AND vs.enabled=1 AND i.on_hand_milli-i.reserved_milli>=vs.qty_increment_milli)';
         }
         $sorts=['featured'=>'p.featured DESC,p.id DESC','newest'=>'p.id DESC','price_low'=>'(SELECT MIN(unit_price_minor) FROM product_variants WHERE product_id=p.id AND enabled=1) ASC,p.id ASC',
             'price_high'=>'(SELECT MIN(unit_price_minor) FROM product_variants WHERE product_id=p.id AND enabled=1) DESC,p.id ASC'];
