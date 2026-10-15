@@ -24,7 +24,7 @@ Private runtime storage is created at `$HOME/.sarada-runtime/<domain>`, outside 
 
 ## Server prerequisites
 
-Enable SSH and authorize the matching public key. Hostinger documents SSH availability for Premium Web and higher plans. Configure DNS/HTTPS and create your database/user before deploying. Confirm CLI PHP 8.3+ on a 64-bit runtime, PDO MySQL, mbstring, fileinfo, OpenSSL, Composer, rsync, tar, flock, mysqldump, curl, and realpath. Product uploads additionally need GD in the web PHP runtime. Web and CLI PHP configuration can differ.
+Enable SSH and authorize the matching public key. Hostinger documents SSH availability for Premium Web and higher plans. Configure DNS/HTTPS and create your database/user before deploying. Confirm CLI PHP 8.3+ on a 64-bit runtime, PDO MySQL, mbstring, fileinfo, OpenSSL, Composer, rsync, tar, flock, mysqldump, curl, and realpath. Deployment keeps a compatible default PHP or selects an installed Hostinger PHP 8.3/8.4 binary for this process only; Composer and migrations share that PATH. This does not change hPanel/web PHP settings. Product uploads additionally need GD in the web PHP runtime. Web and CLI PHP configuration can differ.
 
 Disconnect Hostinger's built-in Git auto-deployment for this website. Actions is the single deployment owner. The remote script stops if public_html still contains `.git`; move that metadata outside the document root after disconnecting the old integration. Do not run two deployment systems against one folder.
 
@@ -90,3 +90,13 @@ For a failure after the maintenance gate: private backups are under `$HOME/.sara
 ## Recorded first run
 
 Commit `831c54f` was pushed to main. [Run 38795355452](https://github.com/Sudipto-tales/sarada_marble_bankura/actions/runs/38795355452) passed validation, including MariaDB 10.11.19 foundation (31 checks), MySQL demo-seeder (14 checks), all 18 SQLite PHP scripts, 99 storefront HTTP checks, and 7 deployment tests. The production job stopped before SSH because `HOSTINGER_KNOWN_HOSTS` is absent. No server files or production database were changed. Confirm the SSH server fingerprint through Hostinger, configure the verified known-hosts entry, then manually run the workflow on latest main. Actual hosting capabilities and deployment completion remain unverified.
+
+## Retry 2026-10-16
+
+User-requested latest-main [run 38799297547](https://github.com/Sudipto-tales/sarada_marble_bankura/actions/runs/38799297547), commit `40563439544544ed830d4ebc83c697d5d1ea92e4`, passed validation but failed before SSH with `Missing SSH private key`. The named production secret exists, but the validator did not receive private-key-format contents. Replace it with the complete dedicated private key through GitHub, not a public key or file path. The user-supplied public known-hosts entry was saved as a production variable. It addresses `46.202.161.3`, whereas configured HOSTINGER_HOST is `46.202.161.33`; reconcile these against Hostinger's actual SSH endpoint and verified host identity. No production changes or migrations occurred during this run.
+
+Attempt 2 of the same run was retried after the operator updated the private-key secret. The configured `.33` endpoint presented exactly the previously supplied ED25519 key; its known-hosts hostname was corrected to `.33` without replacing the trusted key or weakening checking. Deployment again stopped before SSH with `Missing SSH private key`: the secret's name/timestamp exist but its supplied contents still fail the private-key marker validation. No production changes occurred.
+
+Attempt 3 resolved the private-key marker failure and reached Hostinger SSH with strict host verification. Authentication failed for `u402700136@46.202.161.33` with `Permission denied (publickey,password)`. Ensure the matching deployment public key is authorized for that SSH account and that the configured SSH username matches hPanel. Remote bootstrap/publication/migrations did not execute.
+
+Attempt 4 authenticated successfully but stopped at the default PHP 8.2.34 CLI check, before maintenance/backups/migrations/publication. Read-only account checks verified PHP 8.3.35 at `/opt/alt/php83/usr/bin/php` with all required extensions. The deployment runtime selector was added and locally verified with eight deployment tests, including shared Composer/migration runtime and failure when no compatible binary is available.

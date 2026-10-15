@@ -22,6 +22,9 @@ if [[ -f "$state/run-number" ]] && (( run_number < $(cat "$state/run-number") ))
     echo 'Refusing an older workflow run over a newer deployment.' >&2
     exit 1
 fi
+source "$(dirname "$0")/php-runtime.sh"
+select_deploy_php "$(command -v php || true)" /opt/alt/php83/usr/bin/php /opt/alt/php84/usr/bin/php /usr/bin/php8.3
+php -r 'echo "Deployment CLI: PHP ",PHP_VERSION,"\n";'
 for tool in php composer rsync tar mysqldump curl; do
     command -v "$tool" >/dev/null || { echo "Required server command unavailable: $tool" >&2; exit 1; }
 done

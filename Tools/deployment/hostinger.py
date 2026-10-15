@@ -86,7 +86,7 @@ def archive(destination, values, commit, run_number):
             'site/.env': dotenv(values),
             'site/deployment.json': json.dumps({'commit': commit, 'run_number': run_number}).encode(),
         }
-        for filename in ('remote.sh', 'database-backup.php'):
+        for filename in ('remote.sh', 'php-runtime.sh', 'database-backup.php'):
             files[filename] = (Path(__file__).parent / filename).read_bytes()
         for name, content in files.items():
             info = tarfile.TarInfo(name)

@@ -59,12 +59,36 @@ class DeploymentConfigurationTest(unittest.TestCase):
             with tarfile.open(path) as payload:
                 names = payload.getnames()
                 self.assertIn('site/index.php', names)
+                self.assertIn('php-runtime.sh', names)
                 self.assertIn('site/.htaccess', names)
                 self.assertIn('site/database/migrations/0013_product_detail_features.php', names)
                 self.assertEqual(names.count('site/.env'), 1)
                 self.assertFalse(any(name.startswith(('site/vendor/', 'site/tests/', 'site/docs/')) for name in names))
                 self.assertFalse(any(name.endswith(('.sqlite', '.db', '.log', '.sql')) for name in names))
                 self.assertEqual(payload.extractfile('site/.env').read(), hostinger.dotenv(values))
+
+    def test_php_fallback_is_shared_with_composer_and_migrations(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            old = root / 'old'
+            compatible = root / 'compatible'
+            for directory, code in ((old, 1), (compatible, 0)):
+                directory.mkdir()
+                (directory / 'php').write_text(f'#!/bin/sh\nexit {code}\n')
+                (directory / 'php').chmod(0o700)
+            helper = Path(hostinger.__file__).parent / 'php-runtime.sh'
+            script = 'source "$1"; select_deploy_php "$2" "$3"; command -v php; /usr/bin/env php -r "exit(0);"'
+            result = subprocess.run(['bash', '-e', '-c', script, 'runtime-test', str(helper),
+                                     str(old / 'php'), str(compatible / 'php')],
+                                    env=os.environ | {'PATH': str(old) + ':' + os.environ['PATH']},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), str(compatible / 'php'))
+            failure = subprocess.run(['bash', '-e', '-c', script, 'runtime-test', str(helper),
+                                      str(old / 'php'), str(root / 'missing/php')],
+                                     capture_output=True, text=True)
+            self.assertNotEqual(failure.returncode, 0)
+            self.assertIn('no compatible deployment runtime found', failure.stderr)
 
     def test_server_failures_keep_maintenance_and_do_not_publish(self):
         for failure in ('migration', 'backup', 'maintenance'):
