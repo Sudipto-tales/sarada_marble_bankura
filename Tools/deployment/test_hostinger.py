@@ -117,7 +117,7 @@ exit 0
                     'composer': '#!/bin/bash\nexit 0\n',
                     'rsync': '#!/bin/bash\ntouch "$HOME/publish-attempted"\n',
                     'mysqldump': '#!/bin/bash\n[[ "$FAILURE" != backup ]] || exit 1\necho snapshot\n',
-                    'curl': '#!/bin/bash\nif [[ "$FAILURE" == maintenance ]]; then echo 200; else echo 503; fi\n',
+                    'curl': '#!/bin/bash\n[[ $(stat -c %a "$HOME/domains/example.com/public_html/.htaccess") == 644 ]] || { echo 403; exit 0; }\nif [[ "$FAILURE" == maintenance ]]; then echo 200; else echo 503; fi\n',
                 }
                 for name, script in scripts.items():
                     (tools / name).write_text(script)

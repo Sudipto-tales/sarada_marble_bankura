@@ -64,6 +64,8 @@ RewriteEngine On
 RewriteRule ^ - [R=503,L]
 ErrorDocument 503 "Deployment in progress. Please retry shortly."
 HTACCESS
+# Apache/LiteSpeed must read the maintenance rules despite the private staging umask.
+chmod 644 "$web/.htaccess.deploy"
 mv "$web/.htaccess.deploy" "$web/.htaccess"
 gate=1
 status=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 "https://$domain/?deploy-maintenance=$run_number")
