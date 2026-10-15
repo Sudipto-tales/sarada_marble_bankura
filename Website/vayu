@@ -31,10 +31,38 @@ $command = $argv[1] ?? 'help';
 if (in_array($command, ['help', '--help', '-h'], true)) {
     echo "Vayu development server\n\nUsage: php vayu run [--host=127.0.0.1] [--port=8000]\n\nStop with Ctrl+C.\n";
     echo "Apply pending migrations: php vayu migrate\nCreate a console account: php vayu developer:create you@example.com\n";
+    echo "Daily UTC health snapshot: php vayu developer:report [--date=YYYY-MM-DD]\n";
     echo "Create commerce staff: php vayu commerce:create you@example.com [admin|catalog_manager|operations|viewer]\n";
     echo "Inspect old orphan images: php vayu catalog:images:clean [--delete]\n";
+    echo "Seed development demo catalog: php vayu demo:seed --actor-id=ID\n";
     echo "Bounded worker: php vayu queue:work --queues=emails --max=20 --max-seconds=30\nRetry one failed job: php vayu queue:retry --failed-id=123\n";
     exit(0);
+}
+if ($command === 'demo:seed') {
+    try {
+        if (count($argv) !== 3 || !preg_match('/\A--actor-id=([1-9][0-9]*)\z/', $argv[2], $match)) {
+            throw new RuntimeException('Usage: php vayu demo:seed --actor-id=ID');
+        }
+        require __DIR__ . '/config/bootstarp.php';
+        require __DIR__ . '/database/seeders/DemoCatalogSeeder.php';
+        $result = (new DemoCatalogSeeder($pdo))->run(CommerceValues::id($match[1]));
+        echo json_encode($result, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n";
+        exit(0);
+    } catch (Throwable $error) {
+        fwrite(STDERR, "Demo seeding failed. Use: php vayu demo:seed --actor-id=ID. Requires development/test environment, applied migrations, bundled textures and active staff with catalog-edit/inventory-adjust grants. Existing records are preserved; rerun after correcting the prerequisite.\n");
+        exit(1);
+    }
+}
+if ($command === 'developer:report') {
+    try {
+        if (count($argv)>3 || (isset($argv[2]) && !preg_match('/\A--date=(\d{4}-\d{2}-\d{2})\z/',$argv[2],$match))) throw new InvalidArgumentException();
+        require __DIR__.'/config/bootstarp.php';
+        $day=$match[1] ?? gmdate('Y-m-d',time()-86400);
+        echo json_encode((new DeveloperKnowledge($pdo))->daily($day),JSON_THROW_ON_ERROR|JSON_PRETTY_PRINT)."\n";
+        exit(0);
+    } catch (Throwable $error) {
+        fwrite(STDERR,"Daily report failed. Use a completed UTC date (--date=YYYY-MM-DD), apply migrations and check database availability.\n");exit(1);
+    }
 }
 if ($command === 'migrate') {
     if (count($argv) !== 2) {

@@ -1,11 +1,15 @@
 <?php
 
+require_once __DIR__.'/DeveloperTrace.php';
+
 /** Prepared statements and bounded whole-transaction retry on the caller's PDO. */
 final class CommerceDatabase
 {
     public static function query(PDO $pdo, string $sql, array $parameters = []): PDOStatement
     {
-        $query = $pdo->prepare($sql); $query->execute($parameters); return $query;
+        return DeveloperTrace::span(__METHOD__,static function () use ($pdo,$sql,$parameters): PDOStatement {
+            $query = $pdo->prepare($sql); $query->execute($parameters); return $query;
+        });
     }
     public static function lock(PDO $pdo): string { return $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : ''; }
     public static function clock(PDO $pdo): int

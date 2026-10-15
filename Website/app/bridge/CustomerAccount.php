@@ -27,6 +27,11 @@ class CustomerAccount extends StorefrontController
                 CartService::clearGuestCookie();
                 $_SESSION['cart_merge_excluded'] = count($merge['excluded']);
             }
+            if (isset($_SESSION['pending_buy_now'])) {
+                $pending=$_SESSION['pending_buy_now'];unset($_SESSION['pending_buy_now']);
+                $cart=(new CartService($this->pdo))->buyNow($actor['id'],$pending['variant_id'],$pending['quantity'],$pending['key']);
+                $this->redirect('checkout?purchase_cart='.$cart['id']);return;
+            }
             $this->redirect('cart');
         });
     }
@@ -34,7 +39,7 @@ class CustomerAccount extends StorefrontController
     {
         $this->handle(function (): void {
             RequestSecurity::requireMutation(); Auth::logout();
-            unset($_SESSION['checkout_keys'], $_SESSION['cart_merge_excluded']);
+            unset($_SESSION['checkout_keys'], $_SESSION['cart_merge_excluded'], $_SESSION['pending_buy_now']);
             $this->redirect('account');
         });
     }

@@ -241,3 +241,11 @@ Follow [../releases.md](../releases.md) for release work. Do not run sync script
 ## Later infrastructure stages
 
 Stage 2 is driven by measured shared-hosting limits: migrate to a VPS/managed platform, then introduce dependable Redis, supervised workers and an external search service where justified. Stage 3 may add event streaming, analytical stores and separate ranking services when scale and operational staffing justify them. The proposed 10k/50k user ranges are planning examples, not hosting capacity estimates; active concurrency, catalog size, workload and job volume determine capacity.
+
+## Additive Developer knowledge lab — DEV-KB-01
+
+User-authorized standalone slice outside MVP counts. Build a protected extra Developer page with searchable module/API/function knowledge, animated recorded execution, safe read-only API testing, durable bounded spans, and UTC daily API/module health reports. Dependencies: existing Developer access, method-aware route registry, catalog APIs and migrations. Acceptance and sources: [task guide](../../Website/docs/developer-knowledge.md).
+
+## Authorized deployment slice
+
+`DEPLOY-01` covers the user-authorized GitHub Actions deployment, individual Environment settings, private backups, upload preservation and automatic pending migrations. Guide: [Hostinger deployment](../hostinger-deployment.md). It does not mark HST-01/OPS-01/OPS-02 or pending commerce features accepted.

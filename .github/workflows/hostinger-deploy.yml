@@ -1,0 +1,108 @@
+name: Deploy website to Hostinger
+on:
+  push:
+    branches: [main]
+    paths: ['Website/**', 'Tools/deployment/**', '.github/workflows/hostinger-deploy.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: hostinger-production
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: disposable-ci-only
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install validation tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y php8.3-cli php8.3-sqlite3 php8.3-mysql php8.3-mbstring php8.3-gd composer
+          composer install --working-dir=Website --no-interaction --prefer-dist
+      - name: Check PHP syntax and deployment configuration handling
+        run: |
+          find Website -path Website/vendor -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l > /tmp/php-lint.log
+          bash -n Tools/deployment/remote.sh
+          python3 -m unittest discover -s Tools/deployment -p 'test_*.py' -v
+      - name: Verify isolated application and migration checks
+        working-directory: Website
+        env:
+          TEST_MYSQL_HOST: 127.0.0.1
+          TEST_MYSQL_PORT: '3306'
+          TEST_MYSQL_USER: root
+          TEST_MYSQL_PASSWORD: disposable-ci-only
+        run: |
+          set -euo pipefail
+          for test in tests/*Test.php; do php "$test"; done
+          php tests/FoundationTest.php --mysql
+          php tests/DemoSeederTest.php --mysql
+          python3 tests/storefront_http_test.py
+  deploy:
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Deploy, back up database, and apply pending migrations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOSTINGER_HOST: ${{ vars.HOSTINGER_HOST }}
+          HOSTINGER_PORT: ${{ vars.HOSTINGER_PORT }}
+          HOSTINGER_USER: ${{ vars.HOSTINGER_USER }}
+          HOSTINGER_KNOWN_HOSTS: ${{ vars.HOSTINGER_KNOWN_HOSTS }}
+          HOSTINGER_SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          APP_NAME: ${{ vars.APP_NAME }}
+          APP_ENV: ${{ vars.APP_ENV }}
+          APP_DEBUG: ${{ vars.APP_DEBUG }}
+          APP_URL: ${{ vars.APP_URL }}
+          DEVELOPER_ENABLED: ${{ vars.DEVELOPER_ENABLED }}
+          DB_TYPE: ${{ vars.DB_TYPE }}
+          DB_HOST: ${{ vars.DB_HOST }}
+          DB_PORT: ${{ vars.DB_PORT }}
+          DB_DATABASE: ${{ vars.DB_DATABASE }}
+          DB_USERNAME: ${{ vars.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SESSION_SECURE_COOKIE: ${{ vars.SESSION_SECURE_COOKIE }}
+          TRUSTED_PROXIES: ${{ vars.TRUSTED_PROXIES }}
+          AUTH_REGISTRATION_ENABLED: ${{ vars.AUTH_REGISTRATION_ENABLED }}
+          AUTH_VERIFICATION_TRANSPORT: ${{ vars.AUTH_VERIFICATION_TRANSPORT }}
+          MAIL_TRANSPORT: ${{ vars.MAIL_TRANSPORT }}
+          MAIL_HOST: ${{ vars.MAIL_HOST }}
+          MAIL_PORT: ${{ vars.MAIL_PORT }}
+          MAIL_ENCRYPTION: ${{ vars.MAIL_ENCRYPTION }}
+          MAIL_USERNAME: ${{ vars.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_FROM_ADDRESS: ${{ vars.MAIL_FROM_ADDRESS }}
+          MAIL_FROM_NAME: ${{ vars.MAIL_FROM_NAME }}
+          MAIL_TIMEOUT_SECONDS: ${{ vars.MAIL_TIMEOUT_SECONDS }}
+          QUEUE_PAYLOAD_LIMIT: ${{ vars.QUEUE_PAYLOAD_LIMIT }}
+          CACHE_DRIVER: ${{ vars.CACHE_DRIVER }}
+          CHECKOUT_SIMULATION_ENABLED: ${{ vars.CHECKOUT_SIMULATION_ENABLED }}
+          CHECKOUT_COD_ENABLED: ${{ vars.CHECKOUT_COD_ENABLED }}
+          CHECKOUT_SHIPPING_MINOR: ${{ vars.CHECKOUT_SHIPPING_MINOR }}
+          CHECKOUT_TAX_BPS: ${{ vars.CHECKOUT_TAX_BPS }}
+        run: |
+          set -euo pipefail
+          current=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          if [ "$current" != "$GITHUB_SHA" ]; then
+            echo 'Skipping an outdated commit; deploy the latest main workflow instead.'
+            exit 0
+          fi
+          python3 Tools/deployment/hostinger.py

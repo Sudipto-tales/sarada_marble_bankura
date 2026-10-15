@@ -132,7 +132,7 @@ foreach(['a','b'] as $name) {
 $products=new ProductService($pdo);
 $category=$products->saveCategory($adminId,['slug'=>'http-stones','name'=>'HTTP Stones'],'category:http:stones');
 $product=$products->save($adminId,['slug'=>'http-marble','name'=>'Marble <script>alert(1)</script>','description'=>'HTTP product','category_id'=>$category,'status'=>'active','variants'=>[
- ['sku'=>'HTTP-SQFT','sell_unit'=>'sqft','qty_increment_milli'=>500,'unit_price_minor'=>101],
+ ['sku'=>'HTTP-SQFT','sell_unit'=>'sqft','qty_increment_milli'=>500,'unit_price_minor'=>101,'thickness_mm_milli'=>18500,'length_mm_milli'=>2400000,'width_mm_milli'=>1200000],
  ['sku'=>'HTTP-BOX','sell_unit'=>'box','qty_increment_milli'=>1000,'coverage_sqft_milli'=>16000,'unit_price_minor'=>12500]]],0,'product:http:marble');
 foreach($product['variant_ids'] as $n=>$variant) (new InventoryService($pdo))->adjust($adminId,$variant,10000,'HTTP fixture','stock:http:'.$n);
 $other=(new AddressService($pdo))->save($users[1],['recipient'=>'Other Customer','phone'=>'9999988888','line1'=>'Other Private Road','city'=>'Bankura','state'=>'West Bengal','postal_code'=>'722101']);
@@ -200,6 +200,10 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             status, headers, body = guest.request('/cart')
             check(status == 200 and 'Your cart is empty' in body and headers['Cache-Control'] == 'private, no-store', 'Empty cart renders without warnings and stays private.')
             status, headers, body = guest.request('/product/http-marble')
+            check(status == 200 and all(section in body for section in ['id="about-stone"', 'id="specifications"', 'id="delivery"', 'id="reviews"']), 'Product detail renders its information sections without JavaScript.')
+            check('18.5 mm' in body and '2400 mm' in body and '1200 mm' in body and '16 sqft' in body, 'Specifications expose actual dimensions and variant coverage with correct units.')
+            check('data-mobile-purchase' in body and 'product-detail.js' in body and 'product-detail.css' in body
+                  and "Customer reviews aren't available" in body and '25% off' not in body, 'Product purchase enhancements load without fabricated reviews or discounts.')
             add = form(body, 'variant_id')
             add['quantity'] = '1.5'
             invalid = dict(add, csrf='invalid')

@@ -23,9 +23,8 @@ This resolves the conflicting mobile examples in the proposed workflow.
 
 For an initial push without deployment use `--no-deploy`, and include `[skip ci]`
 in your main commit message to skip any main-branch CI too. This option cannot be
-combined with `--release` or `--deploy`. Hostinger must remain connected only to
-the `deploy` branch; external integrations targeting other branches are outside
-the script's control.
+combined with `--release` or `--deploy`. The new direct-main Actions deployment is independent of generated branch selection;
+see the Hostinger section below. Do not keep a second hPanel deployment active.
 
 `versions.json` starts both products at 1.0.0. Website version metadata lives in
 `Website/version.json`; mobile version and monotonically increasing build number
@@ -69,12 +68,17 @@ Do not initialize/push unrelated history over an existing remote.
 
 ## Hostinger
 
-Connect Hostinger's Git deployment to the repository's `deploy` branch and enable
-its automatic deployment/webhook. The branch contains Website contents at root.
-Configure server `.env`, PHP/database settings and `composer install` as required
-by the existing site. The script pushes the branch; deployment completion is
-reported by Hostinger, not verified by sync. No Hostinger account or webhook is
-configured in this workspace.
+Production now uses [GitHub Actions deployment](hostinger-deployment.md) on root `main`.
+Pushes affecting `Website/`, deployment tools, or its workflow run validation and deploy
+using the GitHub `production` Environment. The workflow generates `.env`, takes private
+backups, preserves uploaded product images, and runs `php vayu migrate` before publication.
+Disable Hostinger's built-in Git auto-deployment for this same destination. Generated
+`deploy` remains a sync output, but is not the automatic production deployment source.
+
+`--no-deploy` only controls the sync script's generated branch/tag effects; it does not
+suppress a direct-main deployment unless the main push skips Actions. A main push with
+website changes now has production effects. Observe the Actions run; a successful push
+or product release does not establish that deployment completed.
 
 ## Android signing
 

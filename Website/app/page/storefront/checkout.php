@@ -1,7 +1,7 @@
 <?php $title = 'Checkout'; require __DIR__ . '/header.php'; ?>
 <div class="page-intro"><div><span class="eyebrow">YOUR NEXT SPACE</span><h1>Checkout</h1><p>Confirm delivery, review the server total and place your order.</p></div></div><div class="php-checkout">
 <?php if (!$addresses): ?><p>Add a delivery address in <a href="<?= $u('account') ?>">your account</a> to continue.</p><?php elseif (!$modes): ?><p>Ordering is currently unavailable. Please contact the store.</p><?php else: ?>
-<form class="panel" method="get" action="<?= $u('checkout') ?>"><h2>Delivery and payment</h2>
+<form class="panel" method="get" action="<?= $u('checkout') ?>"><h2>Delivery and payment</h2><?php if($purchaseCart!==null): ?><input type="hidden" name="purchase_cart" value="<?= $e($purchaseCart) ?>"><p class="notice">Buy now: only this selected material will be ordered. Your shopping bag is kept separately.</p><?php endif; ?>
 <label>Delivery address<select name="address_id" required><?php foreach ($addresses as $address): ?><option value="<?= $e($address['id']) ?>" <?= ($selection['address_id'] ?? null) === (int)$address['id'] ? 'selected' : '' ?>><?= $e($address['recipient'] . ', ' . $address['line1'] . ', ' . $address['city'] . ' ' . $address['postal_code']) ?></option><?php endforeach; ?></select></label>
 <label>Payment method<select name="payment_mode" required><?php foreach ($modes as $mode=>$label): ?><option value="<?= $e($mode) ?>" <?= ($selection['payment_mode'] ?? '') === $mode ? 'selected' : '' ?>><?= $e($label) ?></option><?php endforeach; ?></select></label><button>Review order</button></form>
 <?php if ($selection): ?><form class="panel php-order-review" method="post" action="<?= $u('checkout') ?>"><h2>Order review</h2>

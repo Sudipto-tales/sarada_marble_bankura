@@ -4,12 +4,15 @@ Each task has a focused section below. Read [shared contracts](../contracts.md),
 
 | Task ID | Focused guide |
 | --- | --- |
+| DEV-KB-01 | [Developer knowledge, tracing and daily reports](../../../Website/docs/developer-knowledge.md) |
 | DOC-01 | [Document maintenance and evidence](10-operations.md#doc-01) |
+| PAR-HTML-01 | [HTML design restoration, slices and acceptance](../../../Website/docs/html-design-restoration.md) |
 | PAR-PLAN-01 | [Website parity integration plan and acceptance](../../website-parity-integration-plan.md) |
 | PAR-00 | [Storefront foundation repair and verification](12-parity-foundation.md) |
 | PAR-UI-03 | [Card readability, original-photo inputs, processing feedback and API audit](../../website-completion-report.md#card-and-original-photo-follow-up-par-ui-03) |
 | PAR-UI-02 | [Remaining design completion, verification and visualizer setup](../../website-completion-report.md) |
 | PAR-01 | [Storefront design transfer](../../website-parity-integration-plan.md#4-delivery-sequence) and [implemented routes/assets](../../../Website/docs/storefront-design.md) |
+| DEPLOY-01 | [GitHub Actions / Hostinger deployment](../../hostinger-deployment.md) |
 | HST-01 | [Host capability discovery](01-foundations.md#hst-01) |
 | FND-01 | [PDO, migration ordering and CLI](01-foundations.md#fnd-01) |
 | FND-02 | [Method/parameter routing and loading](01-foundations.md#fnd-02) |

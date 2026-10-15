@@ -4,9 +4,11 @@ class Cart extends StorefrontController
 {
     public function index(): void
     {
-        $this->handle(fn() => $this->respond('app/page/storefront/cart.php', [
-            'cart' => (new CartService($this->pdo))->get(CartService::principal(true)),
-        ]));
+        $this->handle(function (): void {
+            $cart = (new CartService($this->pdo))->get(CartService::principal(true));
+            $cartProducts = array_column((new ProductService($this->pdo))->selection(array_values(array_unique(array_column($cart['items'], 'product_id')))), null, 'id');
+            $this->respond('app/page/storefront/cart.php', compact('cart', 'cartProducts'));
+        });
     }
     public function change(): void
     {
@@ -18,6 +20,34 @@ class Cart extends StorefrontController
             (new CartService($this->pdo))->change(CartService::principal(true), CommerceValues::id($_POST['variant_id'] ?? null), $quantity,
                 CommerceValues::integer($_POST['cart_revision'] ?? null, 0, PHP_INT_MAX, 'revision'),
                 ($_POST['cart_id'] ?? '') === '' ? null : CommerceValues::id($_POST['cart_id']), $action === 'remove');
+            $this->redirect('cart');
+        });
+    }
+    public function buyNow(): void
+    {
+        $this->handle(function():void {
+            RequestSecurity::requireMutation();
+            $input=['variant_id'=>CommerceValues::id($_POST['variant_id']??null),'quantity'=>CommerceValues::decimal($_POST['quantity']??'',3,CommerceValues::MAX_QUANTITY,'quantity'),'key'=>CommerceValues::key($_POST['purchase_key']??null)];
+            $actor=CommerceAccess::actor();
+            if(!$actor){$_SESSION['pending_buy_now']=$input;$this->redirect('account');return;}
+            $cart=(new CartService($this->pdo))->buyNow($actor['id'],$input['variant_id'],$input['quantity'],$input['key']);
+            $this->redirect('checkout?purchase_cart='.$cart['id']);
+        });
+    }
+    public function addPair(): void
+    {
+        $this->handle(function():void {
+            RequestSecurity::requireMutation();$source=CommerceValues::id($_POST['product_id']??null);
+            $products=new ProductService($this->pdo);$a=$products->selection([$source])[0]??null;
+            $details=(new ProductDetailService($this->pdo))->get($source);$b=$details['companion_product_id']?($products->selection([$details['companion_product_id']])[0]??null):null;
+            if(!$a||!$b)throw new RequestRejected(409,'pair_unavailable','This pairing is no longer available.');
+            $raw=$_POST['lines']??null;if(!is_array($raw)||count($raw)!==2)CommerceValues::invalid('lines');$lines=[];
+            foreach(array_values($raw) as $i=>$line){
+                if(!is_array($line))CommerceValues::invalid('lines');$id=CommerceValues::id($line['variant_id']??null);
+                if(!in_array($id,array_map('intval',array_column(($i===0?$a:$b)['variants'],'id')),true))CommerceValues::invalid('variant_id');
+                $lines[]=['variant_id'=>$id,'qty_milli'=>CommerceValues::decimal($line['quantity']??'',3,CommerceValues::MAX_QUANTITY,'quantity')];
+            }
+            (new CartService($this->pdo))->changeMany(CartService::principal(true),$lines,CommerceValues::integer($_POST['cart_revision']??null,0,PHP_INT_MAX,'revision'),($_POST['cart_id']??'')===''?null:CommerceValues::id($_POST['cart_id']));
             $this->redirect('cart');
         });
     }
@@ -33,7 +63,9 @@ class Cart extends StorefrontController
         $this->handle(function (): void {
             $actor = CommerceAccess::actor();
             if (!$actor) { $this->redirect('account'); return; }
-            $cart = (new CartService($this->pdo))->get('user:' . $actor['id']);
+            $purchaseCart = isset($_GET['purchase_cart']) ? CommerceValues::id($_GET['purchase_cart']) : null;
+            $cartService = new CartService($this->pdo);
+            $cart = $purchaseCart === null ? $cartService->get('user:' . $actor['id']) : $cartService->purchaseCart($actor['id'], $purchaseCart);
             if (!$cart['items']) { $this->redirect('cart'); return; }
             $addresses = (new AddressService($this->pdo))->listing($actor['id']);
             $modes = OrderStates::paymentModes();
@@ -52,7 +84,7 @@ class Cart extends StorefrontController
                 }
                 $key = $_SESSION['checkout_keys'][$fingerprint]['key'];
             }
-            $this->respond('app/page/storefront/checkout.php', compact('cart', 'addresses', 'modes', 'selection', 'key', 'quote'));
+            $this->respond('app/page/storefront/checkout.php', compact('cart', 'addresses', 'modes', 'selection', 'key', 'quote', 'purchaseCart'));
         });
     }
     public function placeOrder(): void

@@ -92,6 +92,7 @@ class Admin extends StorefrontController
         $product=$id?(new ProductService($this->pdo))->adminDetail($actor['id'],CommerceValues::id($id)):null;
         if(!$product)CommerceAccess::requirePermission('admin.products.edit');
         $values=$this->values??($product?AdminCatalogForm::display($product):['status'=>'draft','variants'=>[['sku'=>'','sell_unit'=>'sqft','price'=>'','increment'=>'1','enabled'=>1]]]);
+        if (!isset($values['details'])) $values['details']=$product?(new ProductDetailService($this->pdo))->get((int)$product['id']):ProductDetailService::validate([]);
         $taxonomies=(new ProductService($this->pdo))->taxonomies($actor['id']);
         $this->render('product',compact('product','values','taxonomies'));
     }
@@ -181,4 +182,18 @@ class Admin extends StorefrontController
     {
         $this->handle(function():void{CommerceAccess::requirePermission('admin.settings.view');$this->render('settings',['policy'=>OrderService::policy(),'payments'=>OrderStates::paymentModes(),'signup'=>Auth::registrationAvailable()]);});
     }
+    public function reviews(): void
+    {
+        $this->handle(function():void {
+            $actor=$this->actor();CommerceAccess::requirePermission('admin.products.view');$service=new ReviewService($this->pdo);
+            if(($_SERVER['REQUEST_METHOD']??'GET')==='POST') {
+                RequestSecurity::requireMutation();
+                $service->moderate($actor['id'],CommerceValues::id($_POST['id']??null),CommerceValues::text($_POST['status']??'',16,'status'),CommerceValues::integer($_POST['revision']??null,1,PHP_INT_MAX,'revision'),CommerceValues::key($_POST['operation_key']??null));
+                $this->redirect('admin/product-reviews');return;
+            }
+            $page=CommerceValues::integer($_GET['page']??1,1,1000,'page');$reviews=$service->pending($actor['id'],$page);
+            $this->render('reviews',compact('reviews','page'));
+        });
+    }
+
 }

@@ -33,13 +33,20 @@ final class CartService
     {
         setcookie('commerce_guest','',RequestSecurity::cookieOptions(time()-3600)); unset($_COOKIE['commerce_guest']);
     }
+    /** Read navigation counts without creating a cart or reserving inventory. */
+    public function itemCount(string $principal): int
+    {
+        self::validatePrincipal($principal);
+        return (int)$this->query("SELECT COUNT(*) FROM cart_items ci JOIN carts c ON c.id=ci.cart_id
+            WHERE c.owner_key=? AND c.status='active' AND c.expires_at>?", [$principal,CommerceDatabase::clock($this->pdo)])->fetchColumn();
+    }
     public function lockOwned(int $id,string $principal):array
     {
         if(!$this->pdo->inTransaction()) throw new LogicException('Cart lock requires the caller transaction.');
         self::validatePrincipal($principal);
         $row=$this->query('SELECT * FROM carts WHERE id=? AND owner_key=?'.CommerceDatabase::lock($this->pdo),[$id,$principal])->fetch();
         if(!$row) throw new RequestRejected(404,'not_found','Cart not found.');
-        if($row['status']!=='active'||(int)$row['expires_at']<=CommerceDatabase::clock($this->pdo)) throw new RequestRejected(409,'cart_closed','Cart has expired or is closed.');
+        if(!in_array($row['status'],['active','purchase'],true)||(int)$row['expires_at']<=CommerceDatabase::clock($this->pdo)) throw new RequestRejected(409,'cart_closed','Cart has expired or is closed.');
         return $row;
     }
     private function ensure(string $principal):array
@@ -57,7 +64,7 @@ final class CartService
     public function get(string $principal,?int $id=null):array
     {
         self::validatePrincipal($principal);
-        $sql="SELECT * FROM carts WHERE owner_key=? AND status='active' AND expires_at>?"; $args=[$principal,CommerceDatabase::clock($this->pdo)];
+        $sql="SELECT * FROM carts WHERE owner_key=? AND status IN (".($id===null?"'active'":"'active','purchase'").") AND expires_at>?"; $args=[$principal,CommerceDatabase::clock($this->pdo)];
         if($id!==null) {$sql.=' AND id=?';$args[]=CommerceValues::id($id);}
         $row=$this->query($sql,$args)->fetch();
         if(!$row) {
@@ -110,6 +117,69 @@ final class CartService
             }
             $this->query('UPDATE carts SET revision=revision+1 WHERE id=?',[$cart['id']]);return (int)$cart['id'];
         });return $this->get($principal,$id);
+    }
+    /** Atomic pair/cart writes: validate every line and current stock before the first item changes. */
+    public function changeMany(string $principal,array $lines,int $expectedRevision,?int $cartId=null):array
+    {
+        self::validatePrincipal($principal);$expectedRevision=CommerceValues::integer($expectedRevision,0,PHP_INT_MAX,'revision');
+        if(count($lines)!==2)CommerceValues::invalid('lines');
+        $quantities=[];
+        foreach($lines as $line){if(!is_array($line))CommerceValues::invalid('lines');$id=CommerceValues::id($line['variant_id']??null);if(isset($quantities[$id]))CommerceValues::invalid('lines');$quantities[$id]=$line['qty_milli']??null;}
+        $id=CommerceDatabase::transaction($this->pdo,function()use($principal,$quantities,$expectedRevision,$cartId):int{
+            $cart=$cartId===null?$this->ensure($principal):$this->lockOwned($cartId,$principal);
+            $this->assertRevision($cart,$cartId,$expectedRevision);$this->noHold((int)$cart['id']);
+            $this->writeLines((int)$cart['id'],$quantities);
+            $this->query('UPDATE carts SET revision=revision+1 WHERE id=?',[$cart['id']]);return (int)$cart['id'];
+        });return $this->get($principal,$id);
+    }
+    private function assertRevision(array $cart,?int $cartId,int $expected):void
+    {
+        $actual=(int)$cart['revision'];
+        if($actual!==$expected&&!($cartId===null&&$expected===0&&$actual===1&&!$this->query('SELECT id FROM cart_items WHERE cart_id=? LIMIT 1',[$cart['id']])->fetchColumn()))throw new RequestRejected(409,'revision_conflict','Cart changed. Refresh and retry.');
+    }
+    private function writeLines(int $cartId,array $quantities):void
+    {
+        ksort($quantities,SORT_NUMERIC);
+        $variants=$this->variants(array_keys($quantities));$validated=[];$added=0;
+        foreach($quantities as $id=>$quantity){
+            $variant=$variants[$id]??null;if(!$variant||!$this->sellable($variant))throw new RequestRejected(409,'variant_unavailable','A selected item is unavailable.');
+            $qty=CommerceValues::quantity($quantity,$variant);
+            $stock=$this->query('SELECT * FROM inventory WHERE variant_id=?'.CommerceDatabase::lock($this->pdo),[$id])->fetch();
+            if(!$stock||$qty>(int)$stock['on_hand_milli']-(int)$stock['reserved_milli'])throw new RequestRejected(409,'stock_conflict','A selected quantity is no longer available.');
+            if(!$this->query('SELECT id FROM cart_items WHERE cart_id=? AND variant_id=?',[$cartId,$id])->fetchColumn())$added++;
+            $validated[$id]=$qty;
+        }
+        if((int)$this->query('SELECT COUNT(*) FROM cart_items WHERE cart_id=?',[$cartId])->fetchColumn()+$added>50)throw new RequestRejected(422,'cart_limit','A cart supports up to 50 items.');
+        foreach($validated as $id=>$quantity){
+            $sql='INSERT INTO cart_items (cart_id,variant_id,qty_milli) VALUES (?,?,?)';
+            $sql.=$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'?' ON DUPLICATE KEY UPDATE qty_milli=VALUES(qty_milli)':' ON CONFLICT(cart_id,variant_id) DO UPDATE SET qty_milli=excluded.qty_milli';
+            $this->query($sql,[$cartId,$id,$quantity]);
+        }
+    }
+    /** A purchase-only cart uses the same user owner, but never occupies their active shopping bag. */
+    public function buyNow(int $userId,int $variantId,int $quantity,string $key):array
+    {
+        CommerceAccess::requireActor($userId);$variantId=CommerceValues::id($variantId);$key=CommerceValues::key($key);
+        $fingerprint=hash('sha256',json_encode([$variantId,$quantity],JSON_THROW_ON_ERROR));
+        $id=CommerceDatabase::transaction($this->pdo,function()use($userId,$variantId,$quantity,$key,$fingerprint):int{
+            CommerceAccess::requireActor($userId);$lock=CommerceDatabase::lock($this->pdo);
+            $sql='INSERT INTO purchase_scopes (user_id,scope_key,fingerprint) VALUES (?,?,?)';
+            $sql.=$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'?' ON DUPLICATE KEY UPDATE id=id':' ON CONFLICT(user_id,scope_key) DO NOTHING';
+            $this->query($sql,[$userId,$key,$fingerprint]);
+            $scope=$this->query('SELECT * FROM purchase_scopes WHERE user_id=? AND scope_key=?'.$lock,[$userId,$key])->fetch();
+            if($scope['fingerprint']!==$fingerprint)throw new RequestRejected(409,'operation_key_conflict','Buy now selection changed. Reload before retrying.');
+            if($scope['cart_id'])return (int)$scope['cart_id'];
+            $now=CommerceDatabase::clock($this->pdo);
+            $this->query("INSERT INTO carts (user_id,owner_key,status,expires_at,created_at) VALUES (?,?,'purchase',?,?)",[$userId,'user:'.$userId,$now+3600,$now]);
+            $cartId=(int)$this->pdo->lastInsertId();$this->writeLines($cartId,[$variantId=>$quantity]);
+            $this->query('UPDATE purchase_scopes SET cart_id=? WHERE id=?',[$cartId,$scope['id']]);return $cartId;
+        });return $this->get('user:'.$userId,$id);
+    }
+    public function purchaseCart(int $userId,int $id):array
+    {
+        CommerceAccess::requireActor($userId);
+        if(!$this->query("SELECT id FROM carts WHERE id=? AND user_id=? AND status='purchase'",[$id,$userId])->fetchColumn())throw new RequestRejected(404,'not_found','Buy now selection not found.');
+        return $this->get('user:'.$userId,$id);
     }
     public function merge(string $guest,int $userId):array
     {
