@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import os
 import tarfile
+import shutil
 
 import hostinger
 
@@ -89,6 +90,50 @@ class DeploymentConfigurationTest(unittest.TestCase):
                                      capture_output=True, text=True)
             self.assertNotEqual(failure.returncode, 0)
             self.assertIn('no compatible deployment runtime found', failure.stderr)
+
+    @unittest.skipUnless(shutil.which('rsync'), 'Successful publication check requires rsync')
+    def test_publication_permissions_preserve_private_config_and_uploads(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            web = home / 'domains/example.com/public_html'
+            (web / 'assets/products').mkdir(parents=True)
+            (web / 'assets/products/existing.webp').write_text('customer-upload')
+            work = home / '.sarada-deploy/incoming.test'
+            site = work / 'site'
+            (site / 'assets/products').mkdir(parents=True)
+            (site / 'assets/storefront').mkdir()
+            for relative, content in {'.env':'DB_TYPE=mysql\n', '.htaccess':'new-rules',
+                                      'index.php':'new-site', 'deployment.json':'{}',
+                                      'assets/storefront/style.css':'body{}',
+                                      'assets/products/existing.webp':'bundled-image',
+                                      'assets/products/new.webp':'new-image'}.items():
+                path = site / relative
+                path.write_text(content)
+                path.chmod(0o600)
+            tools = home / 'bin'
+            tools.mkdir()
+            for name, script in {
+                'php': '#!/bin/bash\nif [[ "$1" == *database-backup.php ]]; then echo fixture_db; fi\nexit 0\n',
+                'composer':'#!/bin/bash\nexit 0\n',
+                'mysqldump':'#!/bin/bash\necho snapshot\n',
+                'curl':'#!/bin/bash\necho 503\n',
+            }.items():
+                (tools / name).write_text(script)
+                (tools / name).chmod(0o700)
+            result = subprocess.run(['bash', str(Path(hostinger.__file__).parent / 'remote.sh'),
+                                     'example.com', 'a' * 40, '1', str(work)],
+                                    env=os.environ | {'HOME':str(home), 'PATH':str(tools)+':'+os.environ['PATH']},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for relative in ('index.php', '.htaccess', 'deployment.json',
+                             'assets/storefront/style.css', 'assets/products/new.webp'):
+                self.assertEqual((web / relative).stat().st_mode & 0o777, 0o644, relative)
+            self.assertEqual((web / 'assets/storefront').stat().st_mode & 0o777, 0o755)
+            self.assertEqual((web / '.env').stat().st_mode & 0o777, 0o600)
+            self.assertEqual((web / 'assets/products/existing.webp').read_text(), 'customer-upload')
+            backup = next((home / '.sarada-deploy/example.com/backups').iterdir())
+            self.assertEqual((backup / 'database.sql').stat().st_mode & 0o777, 0o600)
+            self.assertFalse((site / '.env').exists())
 
     def test_server_failures_keep_maintenance_and_do_not_publish(self):
         for failure in ('migration', 'backup', 'maintenance'):

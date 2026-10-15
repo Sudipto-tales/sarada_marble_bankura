@@ -78,11 +78,11 @@ php vayu migrate
 # Preserve runtime product images, then copy only new bundled images without replacing uploads.
 mkdir -p "$web/assets/products"
 if [[ -d assets/products ]]; then
-    rsync -r --ignore-existing --chmod=D755,F644 assets/products/ "$web/assets/products/"
+    rsync -rp --ignore-existing --chmod=D755,F644 assets/products/ "$web/assets/products/"
 fi
 # No --delete: unrelated hosting files/uploads are not removed. PHP/internal file access
 # remains gated until the committed .htaccess is installed as the final publication step.
-rsync -r --chmod=D755,F644 --exclude=/.env --exclude=/.htaccess --exclude=/assets/products/ ./ "$web/"
+rsync -rp --chmod=D755,F644 --exclude=/.env --exclude=/.htaccess --exclude=/assets/products/ ./ "$web/"
 install -m 600 .env "$web/.env.next"
 mv "$web/.env.next" "$web/.env"
 cp .htaccess "$web/.htaccess.next"
