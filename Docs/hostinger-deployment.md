@@ -1,6 +1,6 @@
 # Hostinger automatic deployment
 
-Implemented 2026-10-16 under DEPLOY-01. Application sources remain on root `main`; `.github/workflows/hostinger-deploy.yml` deploys only committed `Website/` sources. Generated branches are not edited. Deployment/account evidence is recorded in `Docs/commerce/tracking.md`; implementation is not proof that the production run succeeded.
+Implemented 2026-10-16 under DEPLOY-01. Application sources remain on root `main`; `.github/workflows/hostinger-deploy.yml` deploys only committed `Website/` sources. Generated branches are not edited. Deployment/account evidence is recorded in `Docs/commerce/tracking.md`; implementation alone is not proof that the production run succeeded; the successful real deployment is recorded below.
 
 ## GitHub setup
 
@@ -104,3 +104,9 @@ Attempt 4 authenticated successfully but stopped at the default PHP 8.2.34 CLI c
 The PHP repair run `38802051189` passed validation and remote dependency/database checks. It stopped before the database snapshot/migrations because the maintenance `.htaccess` inherited mode 0600 and HTTPS returned 403. Changing that exact generated gate to 0644 returned 503; previous routing was then restored before retry. Deployment now explicitly makes public maintenance rules readable (0644), while staging, credentials and backups remain private. Failure tests enforce this distinction.
 
 Run `38802493751` applied all 14 migrations, verified schemas and published `060574c`. Its final marker check failed because rsync without `--perms` filtered public file permissions through the private umask. Public permissions were repaired from the exact stage without overwriting dotenv or customer uploads. Live public and private-protection checks then passed, including the matching release marker. Both rsync calls now preserve the explicitly supplied public modes; nine deployment tests pass, including an actual successful rsync publication with private/public modes and upload preservation. The private database/code backups are retained.
+
+## Successful production deployment — 2026-10-16
+
+[Run 38803609212](https://github.com/Sudipto-tales/sarada_marble_bankura/actions/runs/38803609212) completed both validation and deployment successfully. Deployed commit: `b0646af9a9a7f341009865416e31dbebf11aa8f8`. Live site: https://maasaradamarbleandsanitation.com/. CI passed nine deployment tests, all PHP application checks, Developer access (19), storefront HTTP (99) and disposable MariaDB checks. Hostinger used PHP 8.3.35 for deployment. All fourteen schema migrations were applied by the preceding run and verified during the successful deployment. Home/shop/admin-login returned 200, private paths were denied, and the public release marker reported the deployed commit.
+
+Code and database backups are retained privately under `~/.sarada-deploy/maasaradamarbleandsanitation.com/backups/20261015T203956Z-5/`. No demo fixtures or usable admin passwords were seeded. This confirms website deployment, not broader commerce/provider/cron acceptance or a rehearsed backup restore. GitHub Actions deploys committed `Website/` sources directly from root `main`; the generated `deploy` branch is not used by this workflow.
