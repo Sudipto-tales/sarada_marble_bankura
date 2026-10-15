@@ -86,3 +86,7 @@ For a failure after the maintenance gate: private backups are under `$HOME/.sara
 - [Hostinger SSH](https://support.hostinger.com/en/articles/1583645-how-to-enable-ssh-access)
 - [Hostinger database host/port](https://support.hostinger.com/en/articles/1583223-what-mysql-port-is-used-at-hostinger)
 - [GitHub deployment environments](https://docs.github.com/en/actions/concepts/workflows-and-actions/deployment-environments)
+
+## Recorded first run
+
+Commit `831c54f` was pushed to main. [Run 38795355452](https://github.com/Sudipto-tales/sarada_marble_bankura/actions/runs/38795355452) passed validation, including MariaDB 10.11.19 foundation (31 checks), MySQL demo-seeder (14 checks), all 18 SQLite PHP scripts, 99 storefront HTTP checks, and 7 deployment tests. The production job stopped before SSH because `HOSTINGER_KNOWN_HOSTS` is absent. No server files or production database were changed. Confirm the SSH server fingerprint through Hostinger, configure the verified known-hosts entry, then manually run the workflow on latest main. Actual hosting capabilities and deployment completion remain unverified.
