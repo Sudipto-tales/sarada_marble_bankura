@@ -47,6 +47,16 @@ Each task has a focused section below. Read [shared contracts](../contracts.md),
 | OPT-04 | [Provider/payment state boundary](11-optional-mobile.md#opt-04) |
 | MOB-01 | [API adapters and offline isolation](11-optional-mobile.md#mob-01) |
 
+### Production commerce prompt (customer-authorised, in order)
+
+| Task ID | Focused guide |
+| --- | --- |
+| AUTH-OTP-01 (P1) | Done — customer auth + OTP, trusted devices, PIN. See its [tracker row](../tracking.md); code in `Website/core/CustomerOtp.php` + `app/bridge/CustomerAccount.php`. |
+| PAY-01 (P2) | [Razorpay online payments (test + live)](13-razorpay-payments.md) |
+| TAX-CPN-01 (P3) | [Tax rules, coupons and admin wire-up](14-tax-coupons-admin.md) |
+| FULFIL-01 (P4) | [Order notifications, invoice, errors and seed data](15-order-fulfilment-polish.md) |
+| UX-DESIGN-01 (P5) | [Storefront UI polish, account hub, account deletion and payment clarity](16-storefront-ux-design.md) |
+
 ## Small-model execution prompt
 
 ```text
