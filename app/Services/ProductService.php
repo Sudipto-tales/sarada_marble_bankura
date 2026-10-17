@@ -3,7 +3,7 @@
 final class ProductService
 {
     public function __construct(private PDO $pdo) {}
-    private function query(string $sql, array $values = []): PDOStatement { return CommerceDatabase::query($this->pdo,$sql,$values); }
+    private function query(string $sql, array $values = []): PDOStatement { return DeveloperTrace::span(__METHOD__,fn()=>CommerceDatabase::query($this->pdo,$sql,$values)); }
 
     public static function advanceVersion(PDO $pdo): void
     {
@@ -33,6 +33,10 @@ final class ProductService
             foreach (['coverage_sqft_milli','thickness_mm_milli','length_mm_milli','width_mm_milli'] as $field) {
                 $variant[$field] = isset($row[$field]) && $row[$field] !== '' ? CommerceValues::integer($row[$field],1,1000000000,$field) : null;
             }
+            if (array_key_exists('original_price_minor', $row)) {
+                $variant['original_price_minor'] = $row['original_price_minor'] === null || $row['original_price_minor'] === '' ? null : CommerceValues::integer($row['original_price_minor'], 0, CommerceValues::MAX_MONEY, 'original_price_minor');
+                if ($variant['original_price_minor'] !== null && $variant['original_price_minor'] < $variant['unit_price_minor']) CommerceValues::invalid('original_price_minor');
+            }
             $validated[] = $variant;
         }
         return $validated;
@@ -52,9 +56,10 @@ final class ProductService
             'status'=>$status,'featured'=>CommerceValues::flag($input['featured'] ?? 0,'featured')];
         if (!is_array($input['variants'] ?? null)) CommerceValues::invalid('variants');
         $variants = $this->variants($input['variants']);
+        $details = isset($input['details']) ? ProductDetailService::validate($input['details']) : null;
         if ($status === 'active' && !array_filter($variants,static fn(array $row):bool => (bool)$row['enabled'])) CommerceValues::invalid('variants');
         try {
-            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$data,$variants,$expectedRevision,$operationKey):array {
+            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$data,$variants,$details,$expectedRevision,$operationKey):array {
                 CommerceAccess::requirePermission('admin.products.edit',$actorId);
                 $lock = CommerceDatabase::lock($this->pdo);
                 $existing = $id ? $this->query('SELECT * FROM products WHERE id = ?' . $lock,[$id])->fetch() : null;
@@ -102,9 +107,15 @@ final class ProductService
                         $variantId = (int)$this->pdo->lastInsertId();
                         InventoryService::initialize($this->pdo,$variantId);
                     }
+                    if (array_key_exists('original_price_minor', $variant)) {
+                        $this->query('DELETE FROM variant_reference_prices WHERE variant_id=?', [$variantId]);
+                        if ($variant['original_price_minor'] !== null) $this->query('INSERT INTO variant_reference_prices (variant_id,original_price_minor) VALUES (?,?)', [$variantId,$variant['original_price_minor']]);
+                    }
+                    $this->query('DELETE FROM variant_reference_prices WHERE variant_id=? AND original_price_minor<?', [$variantId,$variant['unit_price_minor']]);
                     $kept[] = $variantId;
                 }
                 foreach ($known as $variantId=>$old) if (!in_array((int)$variantId,$kept,true)) $this->query('UPDATE product_variants SET enabled=0, revision=revision+1 WHERE id=?',[$variantId]);
+                if ($details !== null) (new ProductDetailService($this->pdo))->saveInside($id, $details);
                 self::advanceVersion($this->pdo);
                 $revision = ($existing ? (int)$existing['revision'] : 0)+1;
                 StaffAudit::record($this->pdo,$actorId,'product.save','product',$id,$operationKey,
@@ -139,11 +150,21 @@ final class ProductService
         $slug=CommerceValues::slug($input['slug']??null); $name=CommerceValues::text($input['name']??null,190,'name');
         $enabled=CommerceValues::flag($input['enabled']??1,'enabled');
         $parent=isset($input['parent_id'])&&$input['parent_id']!==''?CommerceValues::id($input['parent_id']):null;
+        $hasTax=array_key_exists('tax_bps',$input);$tax=$hasTax&&$input['tax_bps']!==null&&$input['tax_bps']!==''?CommerceValues::integer($input['tax_bps'],0,10000,'tax_bps'):null;
         try {
-            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$parent,$key):int {
+            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$parent,$hasTax,$tax,$key):int {
                 CommerceAccess::requirePermission('admin.products.edit',$actorId);
                 if (!$this->query('SELECT id FROM catalog_hierarchy_lock WHERE id=1'.CommerceDatabase::lock($this->pdo))->fetchColumn()) {
                     throw new RuntimeException('Category tree lock is unavailable.');
+                }
+                if($hasTax){
+                    $prior=$this->query('SELECT target_id FROM admin_activity_log WHERE operation_key=?'.CommerceDatabase::lock($this->pdo),[$key])->fetch();
+                    if($prior){
+                        $target=(int)$prior['target_id'];
+                        if($id!==null&&$id!==$target)throw new RequestRejected(409,'audit_key_conflict','Operation key has different inputs.');
+                        StaffAudit::record($this->pdo,$actorId,'category.save','category',$target,$key,['name'=>$name,'slug'=>$slug,'enabled'=>$enabled,'tax_bps'=>$tax]);
+                        return $target; // A repeated GST edit must not restore a superseded tax rate.
+                    }
                 }
                 if ($id && !$this->query('SELECT id FROM categories WHERE id=?',[$id])->fetchColumn()) throw new RequestRejected(404,'not_found','Category not found.');
                 $cursor=$parent; $visited=[];
@@ -156,8 +177,10 @@ final class ProductService
                 }
                 if ($id) $this->query('UPDATE categories SET slug=?,name=?,enabled=?,parent_id=? WHERE id=?',[$slug,$name,$enabled,$parent,$id]);
                 else { $this->query('INSERT INTO categories (slug,name,enabled,parent_id) VALUES (?,?,?,?)',[$slug,$name,$enabled,$parent]); $id=(int)$this->pdo->lastInsertId(); }
+                if($hasTax)$this->query('UPDATE categories SET tax_bps=? WHERE id=?',[$tax,$id]);
                 self::advanceVersion($this->pdo);
-                StaffAudit::record($this->pdo,$actorId,'category.save','category',$id,$key,['name'=>$name,'slug'=>$slug,'enabled'=>$enabled]);
+                $changes=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasTax)$changes['tax_bps']=$tax;
+                StaffAudit::record($this->pdo,$actorId,'category.save','category',$id,$key,$changes);
                 return $id;
             });
         } catch (Throwable $e) { if (CommerceDatabase::uniqueConflict($e)) throw new RequestRejected(409,'catalog_conflict','Category slug already exists.'); throw $e; }
@@ -212,10 +235,14 @@ final class ProductService
 
     private function hydrate(array $products, bool $staff = false): array
     {
+        return DeveloperTrace::span(__METHOD__,fn()=>$this->hydrateObserved($products,$staff));
+    }
+    private function hydrateObserved(array $products, bool $staff = false): array
+    {
         if (!$products) return [];
         $ids=array_column($products,'id'); $marks=implode(',',array_fill(0,count($ids),'?'));
-        $variants=$this->query("SELECT v.*,i.on_hand_milli,i.reserved_milli,(i.on_hand_milli-i.reserved_milli) AS available_milli
-            FROM product_variants v LEFT JOIN inventory i ON i.variant_id=v.id WHERE v.product_id IN ($marks)".($staff?'':' AND v.enabled=1').' ORDER BY v.product_id,v.id',$ids)->fetchAll();
+        $variants=$this->query("SELECT v.*,r.original_price_minor,i.on_hand_milli,i.reserved_milli,(i.on_hand_milli-i.reserved_milli) AS available_milli
+            FROM product_variants v LEFT JOIN variant_reference_prices r ON r.variant_id=v.id LEFT JOIN inventory i ON i.variant_id=v.id WHERE v.product_id IN ($marks)".($staff?'':' AND v.enabled=1').' ORDER BY v.product_id,v.id',$ids)->fetchAll();
         $images=$this->query("SELECT * FROM product_images WHERE product_id IN ($marks) ORDER BY product_id,position,id",$ids)->fetchAll();
         $variantGroups=[]; $imageGroups=[];
         foreach ($variants as $variant) $variantGroups[$variant['product_id']][]=$variant;
@@ -242,7 +269,7 @@ final class ProductService
             AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) ORDER BY p.id", $ids)->fetchAll();
         return $this->hydrate($rows);
     }
-    public function listing(array $filters = []): array { return $this->listProducts($filters,null); }
+    public function listing(array $filters = []): array { return DeveloperTrace::span(__METHOD__,fn()=>$this->listProducts($filters,null)); }
     /** Bounded public texture picker, using only published products and eligible gallery photos. */
     public function visualizerMaterials(?int $selectedId = null): array
     {
@@ -262,6 +289,10 @@ final class ProductService
         CommerceAccess::requirePermission('admin.products.view',$actorId); return $this->listProducts($filters,$actorId);
     }
     private function listProducts(array $filters, ?int $staffId): array
+    {
+        return DeveloperTrace::span(__METHOD__,fn()=>$this->listProductsObserved($filters,$staffId));
+    }
+    private function listProductsObserved(array $filters, ?int $staffId): array
     {
         $page=CommerceValues::integer($filters['page']??1,1,1000,'page'); $perPage=CommerceValues::integer($filters['per_page']??12,1,50,'per_page');
         $clauses=[]; $values=[];
@@ -293,6 +324,10 @@ final class ProductService
         return ['items'=>$this->hydrate($rows,$staffId!==null),'page'=>$page,'per_page'=>$perPage,'total'=>$total,'pages'=>(int)ceil($total/$perPage)];
     }
     public function detail(string $slug): array
+    {
+        return DeveloperTrace::span(__METHOD__,fn()=>$this->detailObserved($slug));
+    }
+    private function detailObserved(string $slug): array
     {
         $slug=CommerceValues::slug($slug);
         $row=$this->query("SELECT p.*,c.name AS category_name,c.slug AS category_slug,b.name AS brand_name,b.slug AS brand_slug

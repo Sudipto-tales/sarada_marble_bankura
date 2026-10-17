@@ -92,6 +92,7 @@ class Admin extends StorefrontController
         $product=$id?(new ProductService($this->pdo))->adminDetail($actor['id'],CommerceValues::id($id)):null;
         if(!$product)CommerceAccess::requirePermission('admin.products.edit');
         $values=$this->values??($product?AdminCatalogForm::display($product):['status'=>'draft','variants'=>[['sku'=>'','sell_unit'=>'sqft','price'=>'','increment'=>'1','enabled'=>1]]]);
+        if (!isset($values['details'])) $values['details']=$product?(new ProductDetailService($this->pdo))->get((int)$product['id']):ProductDetailService::validate([]);
         $taxonomies=(new ProductService($this->pdo))->taxonomies($actor['id']);
         $this->render('product',compact('product','values','taxonomies'));
     }
@@ -122,6 +123,7 @@ class Admin extends StorefrontController
             if(!in_array($module,['categories','brands'],true))throw new RequestRejected(404,'not_found','Record not found.');
             $this->submitted(function()use($actor,$module){
                 $input=$_POST;if(($input['id']??'')==='')unset($input['id']);$input['enabled']=$input['enabled']??0;
+                if($module==='categories'&&array_key_exists('tax_rate',$input))$input['tax_bps']=$input['tax_rate']===''?null:CommerceValues::decimal($input['tax_rate'],2,10000,'tax_rate');
                 $service=new ProductService($this->pdo);$method=$module==='categories'?'saveCategory':'saveBrand';
                 $service->$method($actor['id'],$input,CommerceValues::key($_POST['operation_key']??null));return 'admin/'.$module;
             },fn()=> $this->tablePage($module));
@@ -177,8 +179,115 @@ class Admin extends StorefrontController
             },function():void{$this->values=null;$this->productPage();});
         });
     }
+    public function customerForm(): void { $this->handle(fn()=> $this->customerPage()); }
+    private function customerPage(): void
+    {
+        $actor=$this->actor();CommerceAccess::requirePermission('admin.customers.view');
+        $customer=null;$devices=[];
+        if(isset($_GET['id'])){
+            $id=CommerceValues::id($_GET['id']);
+            // Staff identities are managed elsewhere; this screen is customer-only.
+            $customer=CommerceDatabase::query($this->pdo,"SELECT id,name,email,status,email_verify FROM users_tbl WHERE id=?
+                AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN role_permissions rp ON rp.role_id=ur.role_id
+                JOIN permissions p ON p.id=rp.permission_id WHERE ur.user_id=users_tbl.id AND p.permission_key LIKE 'admin.%')",[$id])->fetch();
+            if(!$customer)throw new RequestRejected(404,'not_found','Customer not found.');
+            $devices=CustomerOtp::deviceListing((int)$customer['id']);
+        }
+        $this->render('customer',compact('customer','devices'));
+    }
+    public function revokeDevices(): void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.customers.view');RequestSecurity::requireMutation();
+            $id=CommerceValues::id($_POST['id']??null);$key=CommerceValues::key($_POST['operation_key']??null);
+            CommerceDatabase::transaction($this->pdo,function()use($actor,$id,$key):void{
+                CustomerOtp::revokeAll($id);
+                StaffAudit::record($this->pdo,$actor['id'],'customer.devices.revoke','user',$id,$key,[]);
+            });
+            $_SESSION['admin_notice']='Trusted devices revoked. The customer verifies again on next sign-in.';
+            $this->redirect('admin/customer?id='.$id);
+        });
+    }
     public function settings(): void
     {
-        $this->handle(function():void{CommerceAccess::requirePermission('admin.settings.view');$this->render('settings',['policy'=>OrderService::policy(),'payments'=>OrderStates::paymentModes(),'signup'=>Auth::registrationAvailable()]);});
+        $this->handle(fn()=> $this->settingsPage());
     }
+    private function settingsPage():void
+    {
+        CommerceAccess::requirePermission('admin.settings.view');
+        $this->render('settings',['policy'=>OrderService::policy(),'payments'=>OrderStates::paymentModes(),'signup'=>Auth::registrationAvailable(),
+            'settings'=>(new SettingsService($this->pdo))->effective(),'values'=>$this->values]);
+    }
+    public function saveSettings():void
+    {
+        $this->handle(function():void {
+            $actor=CommerceAccess::requirePermission('admin.settings.edit');
+            $this->submitted(function()use($actor):string {
+                (new SettingsService($this->pdo))->save($actor['id'],$_POST,CommerceValues::key($_POST['operation_key']??null));return 'admin/settings';
+            },fn()=> $this->settingsPage());
+        });
+    }
+    public function couponForm():void {$this->handle(fn()=> $this->couponPage());}
+    private function couponPage():void
+    {
+        $actor=CommerceAccess::requirePermission('admin.pricing.edit');$id=$this->values['id']??$_GET['id']??null;
+        $coupon=$id?(new CouponService($this->pdo))->detail($actor['id'],CommerceValues::id($id)):null;
+        $values=$this->values;
+        if($values===null&&$coupon){
+            $values=$coupon;$values['value']=AdminReadService::decimal($coupon['value'],2);
+            $values['min_order']=AdminReadService::decimal($coupon['min_order_minor'],2);
+            $values['max_discount']=$coupon['max_discount_minor']===null?'':AdminReadService::decimal($coupon['max_discount_minor'],2);
+            foreach(['starts_at','ends_at'] as $field)$values[$field]=$coupon[$field]===null?'':gmdate('Y-m-d\TH:i',(int)$coupon[$field]);
+        }
+        $this->render('coupon',compact('coupon','values'));
+    }
+    public function saveCoupon():void
+    {
+        $this->handle(function():void {
+            $actor=CommerceAccess::requirePermission('admin.pricing.edit');
+            $this->submitted(function()use($actor):string {
+                $input=$_POST;$kind=CommerceValues::text($input['kind']??'',8,'kind');
+                $input['value']=CommerceValues::decimal($input['value']??'',2,$kind==='percent'?10000:2147483647,'value');
+                $input['min_order_minor']=CommerceValues::decimal($input['min_order']??'0',2,CommerceValues::MAX_MONEY,'min_order');
+                $input['max_discount_minor']=($input['max_discount']??'')===''?null:CommerceValues::decimal($input['max_discount'],2,CommerceValues::MAX_MONEY,'max_discount');
+                foreach(['starts_at','ends_at'] as $field){
+                    if(($input[$field]??'')===''){$input[$field]=null;continue;}
+                    $value=CommerceValues::text($input[$field],16,$field);$date=DateTimeImmutable::createFromFormat('!Y-m-d\TH:i',$value,new DateTimeZone('UTC'));
+                    if(!$date||$date->format('Y-m-d\TH:i')!==$value)CommerceValues::invalid($field);$input[$field]=$date->getTimestamp();
+                }
+                $input['enabled']=$input['enabled']??0;
+                $id=(new CouponService($this->pdo))->save($actor['id'],$input,CommerceValues::key($_POST['operation_key']??null));return 'admin/coupon?id='.$id;
+            },fn()=> $this->couponPage());
+        });
+    }
+    public function archiveCoupon():void
+    {
+        $this->handle(function():void {
+            $actor=CommerceAccess::requirePermission('admin.pricing.edit');RequestSecurity::requireMutation();
+            (new CouponService($this->pdo))->archive($actor['id'],CommerceValues::id($_POST['id']??null),CommerceValues::key($_POST['operation_key']??null));
+            $this->redirect('admin/coupons');
+        });
+    }
+    public function reports():void
+    {
+        $this->handle(function():void {
+            $actor=CommerceAccess::requirePermission('admin.analytics.view');
+            $from=CommerceValues::text($_GET['from']??gmdate('Y-m-d',time()-29*86400),10,'from');$to=CommerceValues::text($_GET['to']??gmdate('Y-m-d'),10,'to');
+            $report=(new AdminReadService($this->pdo))->reports($actor['id'],$from,$to);$this->render('reports',compact('report'));
+        });
+    }
+    public function reviews(): void
+    {
+        $this->handle(function():void {
+            $actor=$this->actor();CommerceAccess::requirePermission('admin.products.view');$service=new ReviewService($this->pdo);
+            if(($_SERVER['REQUEST_METHOD']??'GET')==='POST') {
+                RequestSecurity::requireMutation();
+                $service->moderate($actor['id'],CommerceValues::id($_POST['id']??null),CommerceValues::text($_POST['status']??'',16,'status'),CommerceValues::integer($_POST['revision']??null,1,PHP_INT_MAX,'revision'),CommerceValues::key($_POST['operation_key']??null));
+                $this->redirect('admin/product-reviews');return;
+            }
+            $page=CommerceValues::integer($_GET['page']??1,1,1000,'page');$reviews=$service->pending($actor['id'],$page);
+            $this->render('reviews',compact('reviews','page'));
+        });
+    }
+
 }

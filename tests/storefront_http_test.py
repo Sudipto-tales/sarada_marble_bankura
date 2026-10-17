@@ -113,7 +113,8 @@ if (($argv[1] ?? '') === 'price') {
 }
 if (($argv[1] ?? '') === 'inspect') {
  echo json_encode(['orders'=>(int)$pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn(), 'stock'=>$pdo->query('SELECT on_hand_milli,reserved_milli FROM inventory ORDER BY variant_id')->fetchAll(),
- 'requests'=>(int)$pdo->query('SELECT COUNT(*) FROM checkout_requests')->fetchColumn(), 'jobs'=>(int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type IN ('order_confirmation','purchase_event')")->fetchColumn()]); exit;
+ 'requests'=>(int)$pdo->query('SELECT COUNT(*) FROM checkout_requests')->fetchColumn(), 'jobs'=>(int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type IN ('order_confirmation','purchase_event')")->fetchColumn(),
+ 'order_rows'=>$pdo->query('SELECT id,subtotal_minor,discount_minor,shipping_minor,tax_minor,total_minor FROM orders ORDER BY id')->fetchAll()]); exit;
 }
 if (($argv[1] ?? '') === 'extra') {
  $catalog=new ProductService($pdo);$adminId=(int)$pdo->query("SELECT id FROM users_tbl WHERE email='http-admin@example.test'")->fetchColumn();
@@ -132,7 +133,7 @@ foreach(['a','b'] as $name) {
 $products=new ProductService($pdo);
 $category=$products->saveCategory($adminId,['slug'=>'http-stones','name'=>'HTTP Stones'],'category:http:stones');
 $product=$products->save($adminId,['slug'=>'http-marble','name'=>'Marble <script>alert(1)</script>','description'=>'HTTP product','category_id'=>$category,'status'=>'active','variants'=>[
- ['sku'=>'HTTP-SQFT','sell_unit'=>'sqft','qty_increment_milli'=>500,'unit_price_minor'=>101],
+ ['sku'=>'HTTP-SQFT','sell_unit'=>'sqft','qty_increment_milli'=>500,'unit_price_minor'=>101,'thickness_mm_milli'=>18500,'length_mm_milli'=>2400000,'width_mm_milli'=>1200000],
  ['sku'=>'HTTP-BOX','sell_unit'=>'box','qty_increment_milli'=>1000,'coverage_sqft_milli'=>16000,'unit_price_minor'=>12500]]],0,'product:http:marble');
 foreach($product['variant_ids'] as $n=>$variant) (new InventoryService($pdo))->adjust($adminId,$variant,10000,'HTTP fixture','stock:http:'.$n);
 $other=(new AddressService($pdo))->save($users[1],['recipient'=>'Other Customer','phone'=>'9999988888','line1'=>'Other Private Road','city'=>'Bankura','state'=>'West Bengal','postal_code'=>'722101']);
@@ -200,6 +201,10 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             status, headers, body = guest.request('/cart')
             check(status == 200 and 'Your cart is empty' in body and headers['Cache-Control'] == 'private, no-store', 'Empty cart renders without warnings and stays private.')
             status, headers, body = guest.request('/product/http-marble')
+            check(status == 200 and all(section in body for section in ['id="about-stone"', 'id="specifications"', 'id="delivery"', 'id="reviews"']), 'Product detail renders its information sections without JavaScript.')
+            check('18.5 mm' in body and '2400 mm' in body and '1200 mm' in body and '16 sqft' in body, 'Specifications expose actual dimensions and variant coverage with correct units.')
+            check('data-mobile-purchase' in body and 'product-detail.js' in body and 'product-detail.css' in body
+                  and 'No published reviews yet' in body and 'verified-purchase review' not in body and '25% off' not in body, 'Product purchase enhancements load without fabricated reviews or discounts.')
             add = form(body, 'variant_id')
             add['quantity'] = '1.5'
             invalid = dict(add, csrf='invalid')
@@ -212,7 +217,17 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check('Your cart is empty' in other.request('/cart')[2], 'Second guest sees an independent cart.')
             other_csrf = form(other.request('/account')[2], 'email')['csrf']
             check(other.request('/cart', 'POST', dict(owned_cart, csrf=other_csrf))[0] == 404, 'Stolen cart ID cannot cross guest ownership.')
-            check(guest.request('/cart', 'POST', add)[0] == 409, 'Stale cart revision returns conflict.')
+            check(add.get('action') == 'add' and 'cart_revision' not in add, 'Product page add form uses additive add-to-bag action.')
+            accumulate = dict(add, csrf=other_csrf, quantity='1', return_to='//evil.example/x')
+            status, headers, _ = other.request('/cart', 'POST', accumulate)
+            check(status == 303 and headers.get('Location') == '/cart', 'Unsafe add-to-bag return paths fall back to the cart.')
+            status, headers, _ = other.request('/cart', 'POST', dict(accumulate, return_to='product/http-marble'))
+            check(status == 303 and headers.get('Location') == '/product/http-marble', 'Add to bag can return to the browsing page.')
+            other_body = other.request('/product/http-marble')[2]
+            check('now in your bag' in other_body and 'INR 2.02' in other.request('/cart')[2], 'Repeated add to bag accumulates quantity and shows a notice.')
+            check(other.request('/cart', 'POST', dict(accumulate, quantity='10000'))[0] == 409, 'Add to bag cannot exceed available stock.')
+            check(guest.request('/cart', 'POST', owned_cart)[0] == 303, 'Cart page update uses the current revision.')
+            check(guest.request('/cart', 'POST', owned_cart)[0] == 409, 'Stale cart revision returns conflict.')
             check(guest.request('/cart/change/1/remove')[0] == 404, 'Legacy GET remove URL cannot mutate cart.')
             check(guest.request('/checkout')[0] == 303, 'Guest checkout redirects to verified account sign-in.')
             login = form(guest.request('/account')[2], 'email')
@@ -248,12 +263,23 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check(guest.request('/checkout', 'POST', place)[1].get('Location') == order_url, 'Lost-response HTTP retry returns the same order.')
             status, headers, body = guest.request(order_url)
             check(status == 200 and 'Station Road' in body and 'unpaid' in body and 'INR 4.17' in body, 'Confirmation renders accepted server prices and ignores browser totals.')
+            invoice_url = order_url + '/invoice'
+            status, headers, invoice = guest.request(invoice_url)
+            check(status == 200 and 'Print / Save PDF' in invoice and '@media print' in invoice, 'Owner can open a print-friendly HTML invoice.')
+            check('Station Road' in invoice and '&lt;script&gt;' in invoice and '<script>alert(1)</script>' not in invoice, 'Invoice escapes stored material names and uses the address snapshot.')
+            invoice_row = run_fixture('inspect')['order_rows'][0]
+            for field in ['subtotal_minor','discount_minor','shipping_minor','tax_minor','total_minor']:
+                amount = int(invoice_row[field])
+                check(f'data-total="{field}">INR {amount//100}.{amount%100:02d}' in invoice, 'Invoice ' + field + ' matches the persisted order without recomputing it.')
             check('Your cart is empty' in guest.request('/cart')[2], 'Successful checkout closes cart without controller-side clearing.')
             other_login = form(other.request('/account')[2], 'email')
             other_login.update(email='http-b@example.test', password='Disposable-HTTP-Customer-Password')
             check(other.request('/account', 'POST', other_login)[0] == 303, 'Independent customer sign-in succeeds.')
             status, headers, body = other.request(order_url)
             check(status == 404 and 'Station Road' not in body, 'Another customer cannot read private order snapshot.')
+            check(other.request(invoice_url)[0] == 404 and 'Station Road' not in other.request(invoice_url)[2], 'Invoice enforces customer ownership.')
+            check(Client(port).request(invoice_url)[0] == 401, 'Invoice requires an authenticated commerce identity.')
+            check(guest.request(invoice_url,'POST',{'csrf':place['csrf']})[0] == 405, 'Invoice route is read-only.')
             check(guest.request('/checkout', 'PUT')[0] == 405 and guest.request('/account/logout')[0] == 405, 'Method maps reject unsupported checkout/logout methods.')
             logout = form(guest.request('/account')[2], 'csrf')
             check(guest.request('/account/logout', 'POST', dict(logout, csrf='bad'))[0] == 403, 'Logout requires CSRF.')
@@ -329,6 +355,75 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check(staff.request('/admin/products')[0] == 200 and 'Catalog overview' in staff.request('/admin/products')[2], 'Staff catalog calls the real service without legacy namespace errors.')
             check(staff.request('/admin/product?id='+product_id)[0] == 200 and 'HTTP-SQFT' in staff.request('/admin/product?id='+product_id)[2], 'Staff detail hydrates the requested persisted product.')
             check(staff.request('/admin/products','POST',{'csrf':token})[0] == 405, 'Read-only staff route rejects undocumented writes.')
+            settings_form = form(staff.request('/admin/settings')[2], 'shipping')
+            settings_form.update(shipping='1.25', tax_bps='500', cod_enabled='1', razorpay_enabled='0')
+            check(staff.request('/admin/settings', 'POST', dict(settings_form, csrf='bad'))[0] == 403, 'Settings changes require CSRF.')
+            check(guest.request('/admin/settings', 'POST', settings_form)[0] == 403, 'Customer cannot change checkout settings.')
+            check(staff.request('/admin/settings', 'POST', dict(settings_form, tax_bps='10001'))[0] == 422, 'Settings form reports invalid tax rate.')
+            check(staff.request('/admin/settings', 'POST', settings_form)[0] == 303, 'Staff settings form persists typed checkout settings.')
+            check('value="1.25"' in staff.request('/admin/settings')[2], 'Settings form displays the stored delivery charge.')
+            coupon_form = form(staff.request('/admin/coupon')[2], 'code')
+            coupon_form.update(code='HTTP10', kind='fixed', value='0.10', min_order='0', max_discount='', usage_limit='1', per_user_limit='1', enabled='1')
+            check(staff.request('/admin/coupon','POST',dict(coupon_form,csrf='bad'))[0] == 403, 'Coupon mutations require CSRF.')
+            status, headers, body = staff.request('/admin/coupon','POST',coupon_form)
+            check(status == 303 and headers['Location'].startswith('/admin/coupon?id='), 'Staff coupon form creates a persisted coupon.')
+            coupon_url = headers['Location']
+            check(staff.request(coupon_url)[0] == 200 and 'HTTP10' in staff.request('/admin/coupons')[2], 'Coupon edit and list pages load real records.')
+            check(guest.request('/admin/coupons')[0] == 403 and guest.request('/admin/reports')[0] == 403, 'Coupon administration and reports enforce grants.')
+            new_address = form(guest.request('/account')[2], 'recipient')
+            new_address.update(recipient='Coupon Buyer',phone='9999988888',line1='Coupon Road',city='Bankura',state='West Bengal',postal_code='722101')
+            check(guest.request('/account/addresses','POST',new_address)[0] == 303, 'Coupon checkout uses an owned delivery address.')
+            add_form = form(guest.request('/product/http-marble')[2], 'variant_id')
+            add_form.update(variant_id=str(seed['variants'][0]),quantity='1')
+            check(guest.request('/cart','POST',add_form)[0] == 303, 'Coupon checkout uses the real owned cart.')
+            checkout = guest.request('/checkout')[2]
+            coupon_address = re.search(r'<select name="address_id" required><option value="([0-9]+)"', checkout)[1]
+            coupon_review_url = '/checkout?' + urlencode({'address_id':coupon_address,'payment_mode':'cod'})
+            coupon_apply = form(guest.request(coupon_review_url)[2], 'coupon_code')
+            coupon_apply['coupon_code'] = 'http10'
+            check(guest.request('/checkout/coupon','POST',dict(coupon_apply,csrf='bad'))[0] == 403, 'Applying a coupon requires CSRF.')
+            check(guest.request('/checkout/coupon','POST',coupon_apply)[0] == 303, 'Valid coupon is stored in the private reviewed checkout session.')
+            coupon_place = form(guest.request(coupon_review_url)[2], 'checkout_key')
+            check(guest.request('/checkout/coupon','POST',dict(coupon_apply,coupon_code=''))[0] == 303, 'Coupon can be removed.')
+            check(guest.request('/checkout','POST',coupon_place)[0] == 409, 'Removing the coupon invalidates a stale reviewed submission.')
+            check(guest.request('/checkout/coupon','POST',coupon_apply)[0] == 303, 'Coupon can be applied again before order placement.')
+            coupon_place = form(guest.request(coupon_review_url)[2], 'checkout_key')
+            status, headers, body = guest.request('/checkout','POST',coupon_place)
+            check(status == 303 and headers['Location'].startswith('/order/'), 'Coupon checkout places a discounted order through the existing engine.')
+            coupon_order = headers['Location']
+            order_html = guest.request(coupon_order)[2]
+            coupon_row = next(row for row in run_fixture('inspect')['order_rows'] if str(row['id']) == coupon_order.rsplit('/',1)[1])
+            taxable = int(coupon_row['subtotal_minor']) - 10
+            expected_tax = (taxable * 500 + 5000) // 10000
+            expected_total = taxable + 125 + expected_tax
+            check(int(coupon_row['discount_minor']) == 10 and int(coupon_row['tax_minor']) == expected_tax and int(coupon_row['total_minor']) == expected_total
+                  and f'INR {expected_total//100}.{expected_total%100:02d}' in order_html and 'INR 0.10' in order_html, 'Order renders authoritative discount, delivery and post-discount tax.')
+            check(guest.request('/checkout','POST',coupon_place)[1].get('Location') == coupon_order, 'Discounted HTTP retry returns the same order despite exhausted usage limit.')
+            check(staff.request('/admin/reports')[0] == 200 and 'Paid order revenue' in staff.request('/admin/reports')[2], 'Sales reports render bounded real aggregates.')
+            check(staff.request('/admin/reports?from=2020-01-01&to=2026-10-16')[0] == 422, 'Reports reject an excessive date range.')
+            archive = next(item['inputs'] for item in Forms(staff.request(coupon_url)[2]).forms if item['action']=='/admin/coupon/archive')
+            check(staff.request('/admin/coupon/archive','POST',archive)[0] == 303, 'Coupon archive preserves prior redemptions and orders.')
+            status, headers, discounted_invoice = guest.request(coupon_order + '/invoice')
+            check(status == 200 and 'Coupon Road' in discounted_invoice, 'Discounted order invoice retains its owned delivery snapshot.')
+            for field in ['subtotal_minor','discount_minor','shipping_minor','tax_minor','total_minor']:
+                amount = int(coupon_row[field])
+                check(f'data-total="{field}">INR {amount//100}.{amount%100:02d}' in discounted_invoice, 'Discounted invoice ' + field + ' matches the persisted order.')
+            signin = Client(port).request('/account')[2]
+            check('/account/forgot' in signin and Client(port).request('/account/forgot')[0] == 200, 'Existing password reset entry remains reachable from sign-in.')
+            category_page = staff.request('/admin/categories')[2]
+            category_id = re.search(r'/admin/categories\?edit=([0-9]+)', category_page)[1]
+            category_url = '/admin/categories?edit=' + category_id
+            category_tax = form(staff.request(category_url)[2], 'tax_rate')
+            category_tax.update(tax_rate='3.00', enabled='1', parent_id='')
+            check(staff.request('/admin/taxonomy/categories','POST',dict(category_tax,csrf='bad'))[0] == 403, 'Category GST changes require CSRF.')
+            check(staff.request('/admin/taxonomy/categories','POST',dict(category_tax,tax_rate='100.01'))[0] == 422, 'Category GST form rejects a rate above 100 percent.')
+            check(staff.request('/admin/taxonomy/categories','POST',category_tax)[0] == 303, 'Category GST override saves through the audited catalog service.')
+            newer_tax = form(staff.request(category_url)[2], 'tax_rate')
+            newer_tax['tax_rate'] = '4.00'
+            check(staff.request('/admin/taxonomy/categories','POST',newer_tax)[0] == 303, 'A newer category GST edit persists.')
+            check(staff.request('/admin/taxonomy/categories','POST',category_tax)[0] == 303
+                  and 'value="4.00"' in staff.request(category_url)[2], 'Replaying an old GST form cannot overwrite the newer category rate.')
+            check('<td>5.00%</td>' in guest.request(coupon_order + '/invoice')[2], 'Invoice retains the snapshotted rate after category GST edits.')
             check('PHP Warning' not in log_path.read_text() and 'PHP Fatal' not in log_path.read_text(), 'Shopping requests complete without PHP warnings/fatal errors.')
     finally:
         if process is not None:

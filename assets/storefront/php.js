@@ -44,3 +44,67 @@
     });
   });
 })();
+
+/* Browser-local project notes: no request is sent to the store. */
+(() => {
+  'use strict';
+  const toast = document.querySelector('#toast');
+  let timer;
+  const notify = message => { if (!toast) return; toast.textContent=message; toast.classList.add('show'); clearTimeout(timer); timer=setTimeout(()=>toast.classList.remove('show'),4000); };
+  document.querySelectorAll('[data-showroom-info]').forEach(button => {
+    button.hidden=false;
+    button.addEventListener('click',()=>notify('Visit our Bankura showroom to confirm availability, samples, delivery and current pricing.'));
+  });
+  const dialog=document.querySelector('#request-dialog'), form=document.querySelector('#request-form');
+  if (!dialog || !form) return;
+  const key='sarada-project-draft';
+  document.querySelectorAll('[data-open-enquiry]').forEach(button=>{
+    button.hidden=false;
+    button.addEventListener('click',()=>{
+      try { const draft=JSON.parse(localStorage.getItem(key)||'null'); if(draft){ form.elements.name.value=draft.name||''; form.elements.notes.value=draft.notes||''; } } catch (_) { /* The form still works for this visit. */ }
+      dialog.showModal();
+    });
+  });
+  dialog.querySelector('[data-close-request]').addEventListener('click',()=>dialog.close());
+  form.addEventListener('submit',event=>{
+    event.preventDefault();
+    const status=document.querySelector('#request-status');
+    try { localStorage.setItem(key,JSON.stringify({name:form.elements.name.value,notes:form.elements.notes.value})); status.textContent='Draft saved on this browser. Nothing has been sent to the store.'; }
+    catch (_) { status.textContent='Browser storage is unavailable. Copy your notes before closing this page.'; }
+  });
+})();
+
+/* Wishlist save: fill the heart in place; falls back to a full POST without JS. */
+(() => {
+  'use strict';
+  const badge = document.querySelector('.header-actions a[aria-label="Saved materials"] b');
+  document.querySelectorAll('form[data-wishlist]').forEach(form => {
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = form.querySelector('button'), action = form.elements.action;
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        const res = await fetch(form.action, { method:'POST', body:new FormData(form) });
+        if (!res.ok) throw 0;
+        const saved = action.value === 'add';
+        action.value = saved ? 'remove' : 'add';
+        button.classList.toggle('saved', saved);
+        button.setAttribute('aria-pressed', String(saved));
+        if (badge) badge.textContent = String(Math.max(0, (parseInt(badge.textContent,10)||0) + (saved ? 1 : -1)));
+        button.disabled = false;
+      } catch (_) { form.submit(); }
+    });
+  });
+})();
+
+/* The original mobile filter disclosure, retaining real GET filtering. */
+(() => {
+  const form=document.querySelector('#store-filters');
+  const button=document.querySelector('.filter-mobile-toggle');
+  if (!form || !button) return;
+  const mobile=matchMedia('(max-width:650px)');
+  function setOpen(open) { form.hidden=!open; button.setAttribute('aria-expanded',String(open)); button.textContent=open?'Hide filters −':'Show filters +'; }
+  function resize() { button.hidden=!mobile.matches; setOpen(!mobile.matches); }
+  button.addEventListener('click',()=>setOpen(form.hidden)); mobile.addEventListener('change',resize); resize();
+})();

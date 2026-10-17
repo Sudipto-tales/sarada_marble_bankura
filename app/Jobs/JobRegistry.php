@@ -7,6 +7,7 @@ final class JobRegistry
         'auth_verification'=>['emails',['verification_id']],
         'order_confirmation'=>['emails',['order_id']],
         'order_cancelled'=>['emails',['order_id']],
+        'order_status'=>['emails',['order_id']],
         'reservation_expiry'=>['maintenance',['reservation_id']],
         'low_stock_alert'=>['emails',['alert_id']],
         'purchase_event'=>['purchase_events',['order_id']],
@@ -40,7 +41,7 @@ final class JobRegistry
     public static function execute(PDO $pdo,array $job):void
     {
         self::decode($job);
-        if(in_array($job['type'],['auth_verification','order_confirmation','order_cancelled'],true)) {NotificationJob::run($pdo,$job);return;}
+        if(in_array($job['type'],['auth_verification','order_confirmation','order_cancelled','order_status'],true)) {NotificationJob::run($pdo,$job);return;}
         throw new JobExecutionException('unknown_handler',true);
     }
 }

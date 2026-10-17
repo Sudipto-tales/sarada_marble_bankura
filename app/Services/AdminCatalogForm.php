@@ -10,6 +10,7 @@ final class AdminCatalogForm
         foreach(['name'=>190,'slug'=>120,'description'=>10000,'tags'=>1000] as $field=>$max){
             $data[$field]=$read($field,fn()=> $field==='slug'?CommerceValues::slug($post[$field]??null):CommerceValues::text($post[$field]??'', $max,$field,in_array($field,['description','tags'],true)));
         }
+        if(isset($post['details']))$data['details']=$read('details',fn()=>is_array($post['details'])?ProductDetailService::validate($post['details']):CommerceValues::invalid('details'));
         if(!empty($post['id']))$data['id']=$read('id',fn()=>CommerceValues::id($post['id']));
         $data['category_id']=$read('category_id',fn()=>CommerceValues::id($post['category_id']??null,'category_id'));
         $data['brand_id']=($post['brand_id']??'')===''?null:$read('brand_id',fn()=>CommerceValues::id($post['brand_id'],'brand_id'));
@@ -25,10 +26,10 @@ final class AdminCatalogForm
             if(!empty($row['id']))$variant['id']=$read("variants.$i.id",fn()=>CommerceValues::id($row['id'],'variant_id'));
             $variant['sell_unit']=$row['sell_unit']??'';if(!in_array($variant['sell_unit'],['sqft','slab','box'],true))$errors["variants.$i.sell_unit"]='Select a selling unit.';
             $variant['enabled']=$read("variants.$i.enabled",fn()=>CommerceValues::flag($row['enabled']??0,'enabled'));
-            foreach(['price'=>['unit_price_minor',2,CommerceValues::MAX_MONEY], 'increment'=>['qty_increment_milli',3,1000000], 'coverage'=>['coverage_sqft_milli',3,1000000000], 'thickness'=>['thickness_mm_milli',3,1000000000], 'length'=>['length_mm_milli',3,1000000000], 'width'=>['width_mm_milli',3,1000000000]] as $field=>[$target,$places,$max]){
+            foreach(['original_price'=>['original_price_minor',2,CommerceValues::MAX_MONEY], 'price'=>['unit_price_minor',2,CommerceValues::MAX_MONEY], 'increment'=>['qty_increment_milli',3,1000000], 'coverage'=>['coverage_sqft_milli',3,1000000000], 'thickness'=>['thickness_mm_milli',3,1000000000], 'length'=>['length_mm_milli',3,1000000000], 'width'=>['width_mm_milli',3,1000000000]] as $field=>[$target,$places,$max]){
                 if(!in_array($field,['price','increment'],true)&&($row[$field]??'')===''){$variant[$target]=null;continue;}
                 $variant[$target]=$read("variants.$i.$field",fn()=>CommerceValues::decimal($row[$field]??null,$places,$max,$field));
-                if($field!=='price'&&$variant[$target]===0)$errors["variants.$i.$field"]='Enter a value greater than zero.';
+                if(!in_array($field,['price','original_price'],true)&&$variant[$target]===0)$errors["variants.$i.$field"]='Enter a value greater than zero.';
             }
             if(in_array($variant['sell_unit'],['box','slab'],true)){
                 if($variant['qty_increment_milli']!==null&&$variant['qty_increment_milli']%1000!==0)$errors["variants.$i.increment"]='Boxes and slabs require a whole-unit increment.';
@@ -41,7 +42,7 @@ final class AdminCatalogForm
     public static function display(array $product): array
     {
         foreach($product['variants'] as &$variant){
-            foreach(['price'=>['unit_price_minor',2],'increment'=>['qty_increment_milli',3],'coverage'=>['coverage_sqft_milli',3],'thickness'=>['thickness_mm_milli',3],'length'=>['length_mm_milli',3],'width'=>['width_mm_milli',3]] as $field=>[$source,$places])$variant[$field]=$variant[$source]===null?'':AdminReadService::decimal($variant[$source],$places);
+            foreach(['original_price'=>['original_price_minor',2],'price'=>['unit_price_minor',2],'increment'=>['qty_increment_milli',3],'coverage'=>['coverage_sqft_milli',3],'thickness'=>['thickness_mm_milli',3],'length'=>['length_mm_milli',3],'width'=>['width_mm_milli',3]] as $field=>[$source,$places])$variant[$field]=($variant[$source]??null)===null?'':AdminReadService::decimal($variant[$source],$places);
         }unset($variant);return $product;
     }
 }

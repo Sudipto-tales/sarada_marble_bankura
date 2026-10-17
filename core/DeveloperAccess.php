@@ -10,6 +10,7 @@ final class DeveloperAccess
         'apis' => ['API registry', 'Endpoints, contracts and request history', 'monitor.apis.read'],
         'server' => ['Server load', 'Runtime samples and infrastructure capacity', 'monitor.server.read'],
         'workflows' => ['Module flows', 'Commerce dependencies and correlated execution', 'monitor.workflows.read'],
+        'knowledge' => ['Knowledge lab', 'Module knowledge, API execution and daily health', 'monitor.workflows.read'],
         'incidents' => ['Incidents', 'Failures, investigations and recovery', 'monitor.incidents.read'],
         'activity' => ['Live activity', 'Request events and operational changes', 'monitor.events.read'],
         'access' => ['Roles & permissions', 'Console capabilities and access policy', 'monitor.access.read'],

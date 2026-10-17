@@ -90,6 +90,11 @@ $confirmed=$orders->transition($admin,$heldOrder['id'],'confirmed',1,'transition
 $check($orders->transition($admin,$heldOrder['id'],'confirmed',1,'transition:confirmed:key')===$confirmed&&$state()===$before,'Non-stock status transition is idempotent.');
 $orders->transition($admin,$heldOrder['id'],'processing',2,'transition:processing:key');$orders->transition($admin,$heldOrder['id'],'shipped',3,'transition:shipped:key');
 CommerceTest::rejects(fn()=>$orders->cancel($admin,$heldOrder['id'],4,'cancel:shipped:denied'),409,'Shipped orders cannot be cancelled.');
+$orders->transition($admin,$heldOrder['id'],'outForDelivery',4,'transition:out:key');$orders->transition($admin,$heldOrder['id'],'delivered',5,'transition:delivered:key');
+$reviewProduct=(int)$pdo->query('SELECT product_id FROM order_items WHERE order_id='.(int)$heldOrder['id'].' LIMIT 1')->fetchColumn();
+$pdo->prepare("INSERT INTO product_reviews (product_id,user_id,rating,title,body,created_at,updated_at) VALUES (?,?,5,'Verified','Delivered material review.',1,1)")->execute([$reviewProduct,$a]);
+(new ReviewService($pdo))->moderate($admin,(int)$pdo->lastInsertId(),'approved',1,'review:moderate:key');
+$check((new ReviewService($pdo))->publicPage($reviewProduct)['total']===1&&(int)$pdo->query("SELECT COUNT(*) FROM admin_activity_log WHERE action='review.moderate'")->fetchColumn()===1,'Staff review approval publishes with an audit record.');
 $fixture=CommerceTest::$temp.'/checkout-race.php';
 file_put_contents($fixture,'<?php require '.var_export(dirname(__DIR__).'/config/bootstarp.php',true).';'.<<<'CHILD'
 $in=json_decode(stream_get_contents(STDIN),true,16,JSON_THROW_ON_ERROR);file_put_contents(getenv('TEST_READY'),'ready');$deadline=microtime(true)+8;

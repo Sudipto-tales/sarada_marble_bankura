@@ -5,7 +5,7 @@ $input=['slug'=>'cache-marble','name'=>'Cache Marble','category_id'=>$cat,'statu
 $p=$products->save($admin,$input,0,'product:cache:create');$variant=$p['variant_ids'][0];
 $first=$reads->detail('cache-marble');$same=$reads->detail('cache-marble');$check($first===$same&&$cache->stats['hit']===1,'Warm detail is a structured cache hit.');
 $oldVersion=(int)$pdo->query("SELECT version FROM catalog_versions WHERE namespace='catalog'")->fetchColumn();
-$parameters=['resource'=>'detail','slug'=>'cache-marble','contract'=>'public-v1','currency'=>'INR','locale'=>'en-IN'];$key=Cache::key($oldVersion,$parameters);$path=CommerceTest::$temp.'/private/cache/'.$key.'.json';
+$parameters=['resource'=>'detail','slug'=>'cache-marble','contract'=>'public-v2-pdp','currency'=>'INR','locale'=>'en-IN'];$key=Cache::key($oldVersion,$parameters);$path=CommerceTest::$temp.'/private/cache/'.$key.'.json';
 $check(is_file($path)&&(fileperms($path)&0777)===0600&&(fileperms(dirname($path))&0777)===0700,'File cache remains private with restrictive permissions.');
 $input['id']=$p['id'];$input['variants'][0]['id']=$variant;$input['variants'][0]['unit_price_minor']=20000;$products->save($admin,$input,1,'product:cache:price');
 $check((int)$reads->detail('cache-marble')['variants'][0]['unit_price_minor']===20000,'Committed price change immediately selects a new namespace.');

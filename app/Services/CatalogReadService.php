@@ -21,22 +21,31 @@ final class CatalogReadService
     }
     private function read(array $parameters,callable $loader):array
     {
+        return DeveloperTrace::span(__METHOD__, fn()=>$this->readObserved($parameters,$loader));
+    }
+    private function readObserved(array $parameters,callable $loader):array
+    {
         // Never publish from a transaction snapshot or write a file while holding SQL locks.
         if($this->pdo->inTransaction())return $loader();
         try {$version=(int)CommerceDatabase::query($this->pdo,"SELECT version FROM catalog_versions WHERE namespace='catalog'")->fetchColumn();}
         catch(PDOException $e){return $loader();}
         if($version<1)return $loader();
-        $parameters+=['contract'=>'public-v1','currency'=>'INR','locale'=>'en-IN'];
-        $cached=$this->cache->get($version,$parameters);if($cached!==null)return $cached;
-        $result=$loader();$this->cache->put($version,$parameters,$result);return $result;
+        $parameters+=['contract'=>'public-v2-pdp','currency'=>'INR','locale'=>'en-IN'];
+        $cached=DeveloperTrace::span('Cache::get',fn()=>$this->cache->get($version,$parameters));if($cached!==null)return $cached;
+        $result=$loader();DeveloperTrace::span('Cache::put',fn()=>$this->cache->put($version,$parameters,$result));return $result;
     }
     public function listing(array $input=[]):array
     {
-        $filters=self::filters($input);return $this->read(['resource'=>'listing',...$filters],fn()=>$this->products->listing($filters));
+        return DeveloperTrace::span(__METHOD__,function () use ($input): array {
+            $filters=DeveloperTrace::span('CatalogReadService::filters',fn()=>self::filters($input));
+            return $this->read(['resource'=>'listing',...$filters],fn()=>$this->products->listing($filters));
+        });
     }
     public function detail(string $slug):array
     {
-        $slug=CommerceValues::slug($slug);return $this->read(['resource'=>'detail','slug'=>$slug],fn()=>$this->products->detail($slug));
+        return DeveloperTrace::span(__METHOD__, function () use ($slug): array {
+            $slug=CommerceValues::slug($slug);return $this->read(['resource'=>'detail','slug'=>$slug],fn()=>$this->products->detail($slug));
+        });
     }
     public function visualizerMaterials(?int $selectedId = null): array
     {

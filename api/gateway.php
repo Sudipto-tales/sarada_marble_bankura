@@ -8,7 +8,12 @@ class ApiGatewayProvider extends RouteProvider
     {
         return [
             ... (DEVELOPER_ENABLED ? ['api/developer/metrics' => ['Developer', 'metrics']] : []),
+            ... (DEVELOPER_ENABLED ? [
+                'api/developer/knowledge' => ['GET'=>['Developer','knowledge']],
+                'api/developer/report' => ['GET'=>['Developer','report']],
+            ] : []),
             // Storefront API routes
+            'api/webhooks/razorpay' => ['POST' => ['Payment', 'webhook']],
             'api/v1/products' => ['GET' => ['StorefrontProductController', 'listing']],
             'api/v1/products/{slug}' => ['GET' => ['StorefrontProductController', 'detail']],
         ];

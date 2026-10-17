@@ -101,20 +101,54 @@ final class Auth
 
     public static function login(string $email, string $password, bool $remember = false): array
     {
+        $result = self::verifyPassword($email, $password);
+        if ($result['throttled']) return ['status' => false, 'message' => 'Too many attempts. Try again in 15 minutes.', 'code' => 'throttled'];
+        if (!$result['user']) return self::FAILURE;
+        self::establishSession((int) $result['user']['id'], $remember);
+        return ['status' => true, 'message' => 'Login successful'];
+    }
+
+    /** Throttled credential check without a session, so a second OTP factor can run before login. */
+    public static function verifyPassword(string $email, string $password): array
+    {
         RequestSecurity::requireMutation();
         $email = self::email($email);
-        if (!self::allowAttempt('login', $email)) {
-            return ['status' => false, 'message' => 'Too many attempts. Try again in 15 minutes.', 'code' => 'throttled'];
-        }
+        if (!self::allowAttempt('login', $email)) return ['throttled' => true, 'user' => null];
         $user = self::query('SELECT * FROM users_tbl WHERE ' . self::emailPredicate(), [$email])->fetch(PDO::FETCH_ASSOC);
         $valid = strlen($password) <= 1024 && password_verify($password, $user['password'] ?? self::DUMMY_HASH);
-        if (!$valid || !$user || !self::enabled($user)) return self::FAILURE;
+        return ['throttled' => false, 'user' => ($valid && $user && self::enabled($user)) ? $user : null];
+    }
+
+    /** Persist and expose an authenticated session for an already-verified identity. */
+    public static function establishSession(int $id, bool $remember = false): void
+    {
         // Complete persistence before exposing the authenticated session/cookie.
-        self::query('UPDATE users_tbl SET login_time = ?, failed_attempts = 0 WHERE id = ?', [gmdate('Y-m-d H:i:s'), $user['id']]);
-        if ($remember) self::setRememberToken((int) $user['id']);
+        self::query('UPDATE users_tbl SET login_time = ?, failed_attempts = 0 WHERE id = ?', [gmdate('Y-m-d H:i:s'), $id]);
+        if ($remember) self::setRememberToken($id);
         else self::revokeCookieToken();
-        self::createSession((int) $user['id']);
-        return ['status' => true, 'message' => 'Login successful'];
+        self::createSession($id);
+    }
+
+    public static function userByEmail(string $email): ?array
+    {
+        $email = self::email($email);
+        if (!$email) return null;
+        $user = self::query('SELECT id, email, name, status, email_verify, locked_until FROM users_tbl WHERE ' . self::emailPredicate(), [$email])->fetch(PDO::FETCH_ASSOC);
+        return $user ?: null;
+    }
+
+    public static function markVerified(int $id): void
+    {
+        self::query('UPDATE users_tbl SET email_verify = 1 WHERE id = ?', [$id]);
+    }
+
+    /** Set a new password (used after an OTP reset) and revoke remember tokens so old sessions re-auth. */
+    public static function setPassword(int $id, string $password): bool
+    {
+        if (strlen($password) < 12 || strlen($password) > 72 || str_contains($password, "\0")) return false;
+        self::query('UPDATE users_tbl SET password = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $id]);
+        self::revokeRememberTokens($id);
+        return true;
     }
 
     private static function createSession(int $id): void
@@ -223,6 +257,7 @@ final class Auth
     public static function registrationAvailable(): bool
     {
         if(!filter_var(env('AUTH_REGISTRATION_ENABLED',false),FILTER_VALIDATE_BOOLEAN))return false;
+        if(env('AUTH_VERIFICATION_TRANSPORT','disabled')==='otp') return CustomerOtp::enabled();
         if(env('AUTH_VERIFICATION_TRANSPORT','disabled')==='queue') {
             return env('MAIL_TRANSPORT','disabled')==='smtp'
                 ||(env('APP_ENV','production')!=='production'&&env('MAIL_TRANSPORT','disabled')==='test');
@@ -252,7 +287,7 @@ final class Auth
             // Client-supplied designation/role is never authority or persisted by signup.
             self::query("INSERT INTO users_tbl (firstname, lastname, name, email, password, role, email_verify, status)
                 VALUES (?, ?, ?, ?, ?, 'user', 0, 1)", [$firstname, $lastname, $name, $email, $hash]);
-            self::persistVerification((int) $pdo->lastInsertId(), $proof);
+            if ($proof) self::persistVerification((int) $pdo->lastInsertId(), $proof);
             $pdo->commit();
             return ['status' => true, 'message' => 'Registration successful. Check your verification email.'];
         } catch (Throwable $e) {
@@ -269,8 +304,10 @@ final class Auth
     }
 
     /** Hashed, single-use, server-expiring proof; raw token exists only in private test mail. */
-    private static function verification(string $email): array
+    private static function verification(string $email): ?array
     {
+        // OTP mode issues a 6-digit code from the controller; no link token is staged.
+        if (env('AUTH_VERIFICATION_TRANSPORT', 'disabled') === 'otp') return null;
         $token = bin2hex(random_bytes(32));
         $url = rtrim((string) env('APP_URL', ''), '/');
         if (!filter_var($url, FILTER_VALIDATE_URL) || !in_array(parse_url($url, PHP_URL_SCHEME), ['http', 'https'], true)) {

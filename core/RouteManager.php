@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__.'/DeveloperTrace.php';
+
 final class RouteManager
 {
     public static function dispatch(array $routes): void
@@ -47,11 +49,28 @@ final class RouteManager
             return;
         }
         [$class, $method] = $handler;
-        if (!class_exists($class) || !is_callable([$controller = new $class(), $method])) {
-            self::error(500, 'server_error', 'Request handler unavailable.', $api);
-            return;
+        $traced = str_starts_with($route, 'api/v1/');
+        if ($traced) DeveloperTrace::begin($match['path'], $requestMethod,
+            class_exists('DeveloperKnowledge') ? DeveloperKnowledge::module($class) : 'Framework');
+        $failure = null;
+        try {
+            $invoke = static function () use ($class,$method,$parameters,$api): void {
+                if (!class_exists($class) || !is_callable([$controller = new $class(), $method])) {
+                    self::error(500, 'server_error', 'Request handler unavailable.', $api);
+                    return;
+                }
+                if ($api) DeveloperTrace::span($class.'::'.$method,fn()=>$controller->$method(...$parameters));
+                else $controller->$method(...$parameters);
+            };
+            if ($traced) DeveloperTrace::span('RouteManager::dispatch',$invoke);
+            else $invoke();
+        } catch (Throwable $error) {
+            $failure = $error;
+            throw $error;
+        } finally {
+            if ($traced) DeveloperTrace::finish($GLOBALS['pdo'] ?? null,
+                $failure ? ($failure instanceof RequestRejected ? $failure->status : 503) : (http_response_code() ?: 200));
         }
-        $controller->$method(...$parameters);
     }
 
     /** Validate registration independently of any user-selected path. */
@@ -75,7 +94,7 @@ final class RouteManager
                     self::validateHandler($handler);
                 }
             }
-            $entry = ['legacy' => $legacy, 'handlers' => $definition, 'parameters' => [], 'segments' => []];
+            $entry = ['path'=>$path, 'legacy' => $legacy, 'handlers' => $definition, 'parameters' => [], 'segments' => []];
             $parts = [];
             foreach (explode('/', $path) as $segment) {
                 if (preg_match('/\A\{(id|slug)\}\z/', $segment, $parameter)) {

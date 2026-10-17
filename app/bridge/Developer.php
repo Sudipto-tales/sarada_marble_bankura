@@ -62,7 +62,51 @@ class Developer extends BaseController
         if ($denied) http_response_code(403);
         $csrf = $_SESSION['developer_csrf'];
         session_write_close();
-        $this->respond('/app/page/developer.php', compact('page', 'account', 'csrf', 'denied'));
+        $this->respond($page==='knowledge' ? '/app/page/developer/knowledge.php' : '/app/page/developer.php', compact('page', 'account', 'csrf', 'denied'));
+    }
+
+    private function knowledgeGuard(): bool
+    {
+        if (!$this->start()) return false;
+        header('Content-Type: application/json; charset=utf-8');
+        $account=DeveloperAccess::identity();session_write_close();
+        if (!$account) { http_response_code(401);echo json_encode(['error'=>'Authentication required']);return false; }
+        if (!in_array('monitor.workflows.read',$account['permissions'],true)) {
+            http_response_code(403);echo json_encode(['error'=>'Knowledge lab permission required']);return false;
+        }
+        return true;
+    }
+
+    public function knowledge(): void
+    {
+        if (!$this->knowledgeGuard()) return;
+        global $apiRoutes;
+        $registry=DeveloperKnowledge::registry($apiRoutes);
+        try {
+            $id=$_GET['trace'] ?? null;
+            if ($id!==null && !is_string($id)) throw new InvalidArgumentException();
+            $traces=(new DeveloperKnowledge($GLOBALS['pdo']))->recent($id);
+            echo json_encode($registry+['storage'=>true,'traces'=>$traces],JSON_THROW_ON_ERROR);
+        } catch (InvalidArgumentException $error) {
+            http_response_code(422);echo json_encode(['error'=>'Invalid trace ID']);
+        } catch (Throwable $error) {
+            echo json_encode($registry+['storage'=>false,'traces'=>[],
+                'notice'=>'Trace storage unavailable. Ask your operator to apply migrations or check the monitoring database.'],JSON_THROW_ON_ERROR);
+        }
+    }
+
+    public function report(): void
+    {
+        if (!$this->knowledgeGuard()) return;
+        try {
+            $day=$_GET['day'] ?? gmdate('Y-m-d');
+            if (!is_string($day)) throw new InvalidArgumentException();
+            echo json_encode((new DeveloperKnowledge($GLOBALS['pdo']))->report($day),JSON_THROW_ON_ERROR);
+        } catch (InvalidArgumentException $error) {
+            http_response_code(422);echo json_encode(['error'=>'Choose a valid UTC date, today or earlier.']);
+        } catch (Throwable $error) {
+            http_response_code(503);echo json_encode(['error'=>'Daily report storage unavailable. Check migrations and database availability.']);
+        }
     }
 
     public function metrics(): void
