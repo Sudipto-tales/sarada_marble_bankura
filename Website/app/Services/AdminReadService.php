@@ -4,6 +4,7 @@
 final class AdminReadService
 {
     public const TABLES = [
+        'coupons'=>['Coupons','admin.pricing.edit',['code'=>'Code','kind'=>'Type','value'=>'Discount','used_count'=>'Uses','usage_limit'=>'Usage limit','enabled'=>'Enabled']],
         'products'=>['Products','admin.products.view',['name'=>'Material','category_name'=>'Category','brand_name'=>'Brand','status'=>'Status','price'=>'From (INR)','updated_at'=>'Updated']],
         'categories'=>['Categories','admin.products.view',['name'=>'Category','slug'=>'Slug','parent_name'=>'Parent','enabled'=>'Enabled']],
         'brands'=>['Brands','admin.products.view',['name'=>'Brand','slug'=>'Slug','enabled'=>'Enabled']],
@@ -32,6 +33,7 @@ final class AdminReadService
         $search=$input['search']['value']??$input['q']??'';
         $search=CommerceValues::text($search,80,'search',true);
         $config=match($table) {
+            'coupons'=>['coupons p','p.id,p.code,p.kind,p.value,p.used_count,p.usage_limit,p.enabled',['p.code','p.kind','p.value','p.used_count','p.usage_limit','p.enabled'],['p.code']],
             'products'=>['products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id',
                 'p.id,p.name,c.name AS category_name,b.name AS brand_name,p.status,p.updated_at,(SELECT MIN(v.unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS price',
                 ['p.name','c.name','b.name','p.status','price','p.updated_at'],['p.name','p.slug','c.name','b.name'], "p.id IN (SELECT product_id FROM product_variants WHERE sku LIKE ? ESCAPE '!')"],
@@ -63,6 +65,7 @@ final class AdminReadService
         $rows=CommerceDatabase::query($this->pdo,"SELECT $columns FROM $from$where ORDER BY {$sorts[$column]} $direction,$id ASC LIMIT $length OFFSET $start",$args)->fetchAll();
         foreach($rows as &$row){
             $row['id']=(string)$row['id'];
+            if($table==='coupons')$row['value']=($row['kind']==='fixed'?'INR ':'').self::decimal($row['value'],2).($row['kind']==='percent'?'%':'');
             foreach(['price','total'] as $field)if(array_key_exists($field,$row))$row[$field]=self::decimal($row[$field],2);
             foreach(['on_hand','reserved','available'] as $field)if(isset($row[$field]))$row[$field]=self::decimal($row[$field],3);
             if(isset($row['created']))$row['created']=gmdate('Y-m-d H:i',(int)$row['created']);
@@ -74,6 +77,22 @@ final class AdminReadService
         CommerceAccess::requirePermission('admin.inventory.view',$actor);
         $row=CommerceDatabase::query($this->pdo,'SELECT i.*,v.sku,v.sell_unit,v.qty_increment_milli,p.name FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE i.variant_id=?',[$id])->fetch();
         if(!$row)throw new RequestRejected(404,'not_found','Stock not found.');return $row;
+    }
+    public function reports(int $actorId,string $from,string $to):array
+    {
+        CommerceAccess::requirePermission('admin.analytics.view',$actorId);
+        $zone=new DateTimeZone('UTC');$dates=[];
+        foreach([$from,$to] as $value){
+            $date=DateTimeImmutable::createFromFormat('!Y-m-d',$value,$zone);
+            if(!$date||$date->format('Y-m-d')!==$value)CommerceValues::invalid('date');$dates[]=$date->getTimestamp();
+        }
+        [$start,$last]=$dates;$end=$last+86400;
+        if($last<$start||$end-$start>93*86400)CommerceValues::invalid('date_range');
+        $sales=CommerceDatabase::query($this->pdo,"SELECT COUNT(*) AS order_count,COALESCE(SUM(total_minor),0) AS revenue_minor FROM orders WHERE payment_status='paid' AND created_at>=? AND created_at<?",[$start,$end])->fetch();
+        $coupons=CommerceDatabase::query($this->pdo,'SELECT c.code,c.used_count,COUNT(r.id) AS range_uses,SUM(r.amount_minor) AS discount_minor FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id WHERE r.created_at>=? AND r.created_at<? GROUP BY c.id,c.code,c.used_count ORDER BY discount_minor DESC,c.id LIMIT 100',[$start,$end])->fetchAll();
+        $sales['revenue_minor']=CommerceValues::integer($sales['revenue_minor'],0,PHP_INT_MAX,'revenue_minor');
+        foreach($coupons as &$row)$row['discount_minor']=CommerceValues::integer($row['discount_minor'],0,PHP_INT_MAX,'discount_minor');unset($row);
+        return compact('from','to','sales','coupons');
     }
     public function overview(array $actor): array
     {

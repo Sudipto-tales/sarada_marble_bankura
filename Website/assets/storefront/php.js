@@ -74,6 +74,30 @@
   });
 })();
 
+/* Wishlist save: fill the heart in place; falls back to a full POST without JS. */
+(() => {
+  'use strict';
+  const badge = document.querySelector('.header-actions a[aria-label="Saved materials"] b');
+  document.querySelectorAll('form[data-wishlist]').forEach(form => {
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = form.querySelector('button'), action = form.elements.action;
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        const res = await fetch(form.action, { method:'POST', body:new FormData(form) });
+        if (!res.ok) throw 0;
+        const saved = action.value === 'add';
+        action.value = saved ? 'remove' : 'add';
+        button.classList.toggle('saved', saved);
+        button.setAttribute('aria-pressed', String(saved));
+        if (badge) badge.textContent = String(Math.max(0, (parseInt(badge.textContent,10)||0) + (saved ? 1 : -1)));
+        button.disabled = false;
+      } catch (_) { form.submit(); }
+    });
+  });
+})();
+
 /* The original mobile filter disclosure, retaining real GET filtering. */
 (() => {
   const form=document.querySelector('#store-filters');

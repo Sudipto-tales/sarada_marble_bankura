@@ -12,11 +12,15 @@ final class StaffAudit
         'inventory.adjust' => ['admin.inventory.adjust', 'variant'], 'order.transition' => ['admin.orders.edit', 'order'],
         'settings.save' => ['admin.settings.edit', 'settings'], 'pricing.save' => ['admin.pricing.edit', 'pricing_rule'],
         'access.assign' => ['admin.access.edit', 'user'], 'access.revoke' => ['admin.access.edit', 'user'],
+        'review.moderate' => ['admin.products.edit', 'review'],
+        'customer.devices.revoke' => ['admin.customers.view', 'user'],
+        'coupon.save' => ['admin.pricing.edit', 'coupon'], 'coupon.archive' => ['admin.pricing.edit', 'coupon'],
     ];
     private const FIELDS = ['revision', 'status', 'enabled', 'featured', 'slug', 'sku', 'name', 'category_id', 'brand_id',
         'variant_ids', 'unit_price_minor', 'on_hand_milli', 'reserved_milli', 'delta_milli', 'reason', 'role', 'role_id',
         'payment_mode', 'shipping_minor', 'tax_bps', 'cod_enabled', 'pricing_enabled', 'factor_ppm', 'min_minor', 'max_minor',
-        'sell_unit', 'qty_increment_milli', 'coverage_sqft_milli', 'image_id', 'rule_type', 'starts_at', 'ends_at'];
+        'sell_unit', 'qty_increment_milli', 'coverage_sqft_milli', 'image_id', 'rule_type', 'starts_at', 'ends_at',
+        'razorpay_enabled','code','kind','value','usage_limit','per_user_limit','min_order_minor','max_discount_minor'];
 
     public static function record(PDO $connection, int $actorId, string $action, string $targetType, ?int $targetId,
         string $operationKey, array $changes, ?string $requestId = null): int

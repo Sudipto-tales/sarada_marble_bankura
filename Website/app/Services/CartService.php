@@ -118,6 +118,24 @@ final class CartService
             $this->query('UPDATE carts SET revision=revision+1 WHERE id=?',[$cart['id']]);return (int)$cart['id'];
         });return $this->get($principal,$id);
     }
+    /** Add to the existing line quantity. Increments commute, so no expected revision is needed; stock is checked under lock. */
+    public function add(string $principal,int $variantId,$quantity):array
+    {
+        self::validatePrincipal($principal);$variantId=CommerceValues::id($variantId);
+        $id=CommerceDatabase::transaction($this->pdo,function() use($principal,$variantId,$quantity):int {
+            $cart=$this->ensure($principal);$this->noHold((int)$cart['id']);
+            $variant=$this->variants([$variantId])[$variantId]??null;
+            if(!$variant||!$this->sellable($variant)) throw new RequestRejected(409,'variant_unavailable','This item is unavailable.');
+            $existing=$this->query('SELECT id,qty_milli FROM cart_items WHERE cart_id=? AND variant_id=?',[$cart['id'],$variantId])->fetch();
+            $qty=CommerceValues::quantity(CommerceValues::sum([(int)($existing['qty_milli']??0),CommerceValues::quantity($quantity,$variant)]),$variant);
+            $stock=$this->query('SELECT on_hand_milli,reserved_milli FROM inventory WHERE variant_id=?'.CommerceDatabase::lock($this->pdo),[$variantId])->fetch();
+            if(!$stock||$qty>(int)$stock['on_hand_milli']-(int)$stock['reserved_milli']) throw new RequestRejected(409,'stock_conflict','Your bag would exceed the stock currently available for this item.');
+            if(!$existing&&(int)$this->query('SELECT COUNT(*) FROM cart_items WHERE cart_id=?',[$cart['id']])->fetchColumn()>=50) throw new RequestRejected(422,'cart_limit','A cart supports up to 50 items.');
+            if($existing) $this->query('UPDATE cart_items SET qty_milli=? WHERE id=?',[$qty,$existing['id']]);
+            else $this->query('INSERT INTO cart_items (cart_id,variant_id,qty_milli) VALUES (?,?,?)',[$cart['id'],$variantId,$qty]);
+            $this->query('UPDATE carts SET revision=revision+1 WHERE id=?',[$cart['id']]);return (int)$cart['id'];
+        });return $this->get($principal,$id);
+    }
     /** Atomic pair/cart writes: validate every line and current stock before the first item changes. */
     public function changeMany(string $principal,array $lines,int $expectedRevision,?int $cartId=null):array
     {

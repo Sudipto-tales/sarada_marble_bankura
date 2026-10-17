@@ -150,11 +150,21 @@ final class ProductService
         $slug=CommerceValues::slug($input['slug']??null); $name=CommerceValues::text($input['name']??null,190,'name');
         $enabled=CommerceValues::flag($input['enabled']??1,'enabled');
         $parent=isset($input['parent_id'])&&$input['parent_id']!==''?CommerceValues::id($input['parent_id']):null;
+        $hasTax=array_key_exists('tax_bps',$input);$tax=$hasTax&&$input['tax_bps']!==null&&$input['tax_bps']!==''?CommerceValues::integer($input['tax_bps'],0,10000,'tax_bps'):null;
         try {
-            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$parent,$key):int {
+            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$parent,$hasTax,$tax,$key):int {
                 CommerceAccess::requirePermission('admin.products.edit',$actorId);
                 if (!$this->query('SELECT id FROM catalog_hierarchy_lock WHERE id=1'.CommerceDatabase::lock($this->pdo))->fetchColumn()) {
                     throw new RuntimeException('Category tree lock is unavailable.');
+                }
+                if($hasTax){
+                    $prior=$this->query('SELECT target_id FROM admin_activity_log WHERE operation_key=?'.CommerceDatabase::lock($this->pdo),[$key])->fetch();
+                    if($prior){
+                        $target=(int)$prior['target_id'];
+                        if($id!==null&&$id!==$target)throw new RequestRejected(409,'audit_key_conflict','Operation key has different inputs.');
+                        StaffAudit::record($this->pdo,$actorId,'category.save','category',$target,$key,['name'=>$name,'slug'=>$slug,'enabled'=>$enabled,'tax_bps'=>$tax]);
+                        return $target; // A repeated GST edit must not restore a superseded tax rate.
+                    }
                 }
                 if ($id && !$this->query('SELECT id FROM categories WHERE id=?',[$id])->fetchColumn()) throw new RequestRejected(404,'not_found','Category not found.');
                 $cursor=$parent; $visited=[];
@@ -167,8 +177,10 @@ final class ProductService
                 }
                 if ($id) $this->query('UPDATE categories SET slug=?,name=?,enabled=?,parent_id=? WHERE id=?',[$slug,$name,$enabled,$parent,$id]);
                 else { $this->query('INSERT INTO categories (slug,name,enabled,parent_id) VALUES (?,?,?,?)',[$slug,$name,$enabled,$parent]); $id=(int)$this->pdo->lastInsertId(); }
+                if($hasTax)$this->query('UPDATE categories SET tax_bps=? WHERE id=?',[$tax,$id]);
                 self::advanceVersion($this->pdo);
-                StaffAudit::record($this->pdo,$actorId,'category.save','category',$id,$key,['name'=>$name,'slug'=>$slug,'enabled'=>$enabled]);
+                $changes=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasTax)$changes['tax_bps']=$tax;
+                StaffAudit::record($this->pdo,$actorId,'category.save','category',$id,$key,$changes);
                 return $id;
             });
         } catch (Throwable $e) { if (CommerceDatabase::uniqueConflict($e)) throw new RequestRejected(409,'catalog_conflict','Category slug already exists.'); throw $e; }

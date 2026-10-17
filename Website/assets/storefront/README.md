@@ -12,3 +12,7 @@ The PAR-UI-03 PHP adapters increase card typography and spacing, use content-siz
 ## HTML design restoration (PAR-HTML-01)
 
 `html-parity.css` restores the local HTML reference palette and compact layout after the PHP integration stylesheet. `home.js` implements the original manual carousel using escaped, server-supplied slide JSON. The PHP SVG helper `app/page/storefront/icons.php` contains the unchanged original drawings from `Html/storefront-icons.js`; no external icon package or third-party template was added. Home product images/prices come from the published catalog, while original bundled stone/room pictures remain decorative inspiration. Project enquiry notes save only to browser storage and are never sent. See `Website/docs/html-design-restoration.md` for scope and evidence.
+
+## Vendored libraries
+
+- `vendor/lottie.min.js` — lottie-web (light build) 5.12.2, MIT licensed, from cdnjs (https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie_light.min.js). Kept local; loaded only on a freshly placed order to play `order-success.json` (an in-house checkmark animation).
