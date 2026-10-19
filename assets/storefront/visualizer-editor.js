@@ -7,7 +7,7 @@
   function database(){return new Promise((resolve,reject)=>{const request=indexedDB.open(config.storageScope,1);request.onupgradeneeded=()=>request.result.createObjectStore('designs',{keyPath:'id'});request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(Error('Browser storage is unavailable.'));});}
   async function store(action,value){const db=await database();return new Promise((resolve,reject)=>{const tx=db.transaction('designs',action==='get'||action==='all'?'readonly':'readwrite'),s=tx.objectStore('designs');let request;if(action==='get')request=s.get(value);else if(action==='all')request=s.getAll();else if(action==='put')request=s.put(value);else request=s.delete(value);tx.oncomplete=()=>{db.close();resolve(request.result);};tx.onerror=()=>{db.close();reject(Error('Could not save the design. Browser storage may be full.'));};tx.onabort=tx.onerror;});}
   function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  function defaultState(id,product,corners){return {id,label:id,product,corners,enabled:false,repeat:4,rotation:0,grout:.006,shade:.35};}
+  function defaultState(id,product,corners){return {id,label:id,product,corners,enabled:false,repeat:2,rotation:0,grout:0,shade:.35};}
   async function mount({main,products,rooms,params,escape:esc,toast}){
     const first=products.find(p=>p.id===(config.selectedMaterial||params.get('id')))||products[0];
     const textureUrl=p=>p.textureUrl||`${assetBase}assets/textures/marble/${p.textureId}.webp`;

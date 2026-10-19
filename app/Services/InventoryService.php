@@ -119,10 +119,34 @@ final class InventoryService
             $this->query('INSERT INTO inventory_reservation_items (reservation_id,variant_id,qty_milli) VALUES (?,?,?)',[$id,$variant,$quantity]);
             $this->movement($variant,0,$quantity,'reserve','reserve:'.$id,null,$id);
         }
-        (new QueueService($this->pdo))->reservationExpiry($id);
+        (new QueueService($this->pdo))->reservationExpiry($id,$now+$ttl);
         ProductService::advanceVersion($this->pdo); return $this->reservation($id);
     }
     public function consume(int $id,string $principal,?int $orderId=null):array { return $this->close($id,'consumed',$principal,$orderId); }
+    /** Release an active reservation only once its lease has actually expired. Idempotent for a replayed job. */
+    public function expireReservation(int $id):string
+    {
+        $this->transactionRequired(); $id=CommerceValues::id($id);
+        $header=$this->query('SELECT * FROM inventory_reservations WHERE id=?'.CommerceDatabase::lock($this->pdo),[$id])->fetch();
+        if(!$header) return 'missing';
+        if($header['state']!=='active') return 'closed';
+        if((int)$header['expires_at']>CommerceDatabase::clock($this->pdo)) return 'active';
+        $this->close($id,'expired',$header['principal_key'],null); return 'expired';
+    }
+    /** Edge-triggered low-stock alert. Default-off (threshold 0); fires once per dip until stock recovers. */
+    private function maybeLowStock(int $variantId,int $newOnHand,int $flag):void
+    {
+        $threshold=CommerceValues::integer((string)env('INVENTORY_LOW_STOCK_THRESHOLD_MILLI','0'),0,CommerceValues::MAX_QUANTITY,'low_stock_threshold');
+        if($threshold===0) return;
+        if($newOnHand<=$threshold&&$flag===0) {
+            $this->query('INSERT INTO low_stock_alerts (variant_id,threshold_milli,on_hand_milli,created_at) VALUES (?,?,?,?)',[$variantId,$threshold,$newOnHand,CommerceDatabase::clock($this->pdo)]);
+            $alertId=(int)$this->pdo->lastInsertId();
+            $this->query('UPDATE inventory SET low_stock_notified=1 WHERE variant_id=?',[$variantId]);
+            (new QueueService($this->pdo))->lowStockAlert($alertId);
+        } elseif($newOnHand>$threshold&&$flag===1) {
+            $this->query('UPDATE inventory SET low_stock_notified=0 WHERE variant_id=?',[$variantId]);
+        }
+    }
     /** Validate exact owned held quantities and expose current locked server quotes. */
     public function checkoutLines(int $id,string $principal,array $expected):array
     {
@@ -161,6 +185,7 @@ final class InventoryService
             $quantity=$row['quantity']; $stock=$row['stock']; $delta=$state==='consumed'?-$quantity:0;
             $this->stock($stock,(int)$stock['on_hand_milli']+$delta,(int)$stock['reserved_milli']-$quantity);
             $this->movement($variant,$delta,-$quantity,$state,($state==='consumed'?'consume:':'release:').$id,null,$id,$orderId);
+            if($state==='consumed') $this->maybeLowStock($variant,(int)$stock['on_hand_milli']+$delta,(int)($stock['low_stock_notified']??0));
         }
         $this->query('UPDATE inventory_reservations SET state=? WHERE id=?',[$state,$id]);
         ProductService::advanceVersion($this->pdo); return $this->reservation($id);
@@ -189,6 +214,7 @@ final class InventoryService
         foreach ($rows as $variant => $row) {
             $this->stock($row['stock'], (int)$row['stock']['on_hand_milli'] + $row['quantity'], (int)$row['stock']['reserved_milli']);
             $this->movement($variant, $row['quantity'], 0, 'cancelled', 'cancel:' . $orderId, $actorId, $reservationId, $orderId);
+            $this->maybeLowStock($variant, (int)$row['stock']['on_hand_milli'] + $row['quantity'], (int)($row['stock']['low_stock_notified'] ?? 0));
         }
         ProductService::advanceVersion($this->pdo);
     }
@@ -210,6 +236,7 @@ final class InventoryService
             CommerceValues::quantity(abs($delta),$row['variant']);
             $this->stock($stock,(int)$stock['on_hand_milli']+$delta,(int)$stock['reserved_milli']);
             $this->movement($variantId,$delta,0,$reason,$key,$actorId);
+            $this->maybeLowStock($variantId,(int)$stock['on_hand_milli']+$delta,(int)($stock['low_stock_notified']??0));
             ProductService::advanceVersion($this->pdo);
             StaffAudit::record($this->pdo,$actorId,'inventory.adjust','variant',$variantId,$key,['delta_milli'=>$delta,'reason'=>$reason,'on_hand_milli'=>(int)$stock['on_hand_milli']+$delta]);
             return $this->query('SELECT * FROM inventory WHERE variant_id=?',[$variantId])->fetch();

@@ -92,10 +92,11 @@ class Cart extends StorefrontController
             $addresses = (new AddressService($this->pdo))->listing($actor['id']);
             $modes = OrderStates::paymentModes();
             $cashback = (new SettingsService($this->pdo))->cashback((int)$cart['subtotal_minor']);
-            $selection = null; $key = null; $quote = null;
+            $selection = null; $key = null;
             $couponCode=($_SESSION['checkout_coupon']['actor']??null)===$actor['id']?($_SESSION['checkout_coupon']['code']??''):'';
             $coupon=null;$couponError=null;
             if($couponCode!=='')try{$coupon=(new CouponService($this->pdo))->preview($cart,$couponCode);}catch(RequestRejected $error){$couponError=$error->getMessage();}
+            $quote = OrderService::quote($cart, $coupon); // display breakdown; the selection branch re-stores it with the checkout key
             if ($couponError===null && isset($_GET['address_id'], $_GET['payment_mode'])) {
                 $selection = self::selection(['cart_id' => $cart['id'], 'cart_revision' => $cart['revision'],
                     'address_id' => $_GET['address_id'], 'payment_mode' => $_GET['payment_mode']]);
@@ -128,6 +129,45 @@ class Cart extends StorefrontController
             }
             $this->redirect('checkout'.($query?'?'.http_build_query($query):''));
         });
+    }
+    /** Live checkout engine: recompute breakdown + checkout key for an address/payment/coupon selection without a page reload. */
+    public function quote(): void
+    {
+        $this->handle(function():void {
+            RequestSecurity::requireMutation(); $actor = CommerceAccess::requireActor();
+            $purchaseCart = ($_POST['purchase_cart'] ?? '') === '' ? null : CommerceValues::id($_POST['purchase_cart']);
+            $carts = new CartService($this->pdo);
+            $cart = $purchaseCart === null ? $carts->get('user:'.$actor['id']) : $carts->purchaseCart($actor['id'], $purchaseCart);
+            if (!$cart['items']) throw new RequestRejected(409, 'cart_empty', 'Your bag is empty.');
+            $code = CommerceValues::text($_POST['coupon_code'] ?? '', 40, 'coupon', true);
+            $coupon = null; $couponError = null;
+            if ($code === '') unset($_SESSION['checkout_coupon']);
+            else try { $coupon = (new CouponService($this->pdo))->preview($cart, $code); $_SESSION['checkout_coupon'] = ['actor'=>$actor['id'],'code'=>$coupon['code']]; }
+                catch (RequestRejected $e) { $couponError = $e->getMessage(); unset($_SESSION['checkout_coupon']); }
+            $quote = OrderService::quote($cart, $coupon);
+            $key = null; $selection = null;
+            $addressId = ($_POST['address_id'] ?? '') === '' ? null : CommerceValues::id($_POST['address_id']);
+            $mode = CommerceValues::text($_POST['payment_mode'] ?? '', 20, 'payment_mode', true);
+            if ($addressId !== null && $mode !== '') {
+                (new AddressService($this->pdo))->get($actor['id'], $addressId); // ownership check
+                OrderStates::payment($mode);
+                $selection = self::selection(['cart_id'=>$cart['id'],'cart_revision'=>$cart['revision'],'address_id'=>$addressId,'payment_mode'=>$mode]);
+                $fingerprint = hash('sha256', json_encode([$actor['id'], $selection, $quote], JSON_THROW_ON_ERROR));
+                RequestSecurity::session(); $_SESSION['checkout_keys'] ??= [];
+                if (!isset($_SESSION['checkout_keys'][$fingerprint])) {
+                    if (count($_SESSION['checkout_keys']) >= 20) array_shift($_SESSION['checkout_keys']);
+                    $_SESSION['checkout_keys'][$fingerprint] = ['key'=>bin2hex(random_bytes(32)),'actor'=>$actor['id'],'selection'=>$selection,'quote'=>$quote,'coupon'=>$coupon];
+                }
+                $key = $_SESSION['checkout_keys'][$fingerprint]['key'];
+            }
+            $tax = (int)$quote['tax_minor']; $cgst = intdiv($tax, 2);
+            echo json_encode(['ok'=>true,'key'=>$key,'selection'=>$selection,
+                'coupon'=>$coupon ? ['code'=>$coupon['code'],'discount_minor'=>(int)$coupon['discount_minor']] : null, 'coupon_error'=>$couponError,
+                'breakdown'=>['subtotal_minor'=>(int)$quote['subtotal_minor'],'discount_minor'=>(int)($quote['discount_minor']??0),
+                    'cgst_minor'=>$cgst,'sgst_minor'=>$tax-$cgst,'tax_minor'=>$tax,'tax_bps'=>(int)$quote['policy']['tax_bps'],
+                    'shipping_minor'=>(int)$quote['shipping_minor'],'total_minor'=>(int)$quote['total_minor']],
+                'request_id'=>bin2hex(random_bytes(16))], JSON_THROW_ON_ERROR);
+        }, true);
     }
     public function placeOrder(): void
     {

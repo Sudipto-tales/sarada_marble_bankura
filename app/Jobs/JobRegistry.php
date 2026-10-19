@@ -36,12 +36,13 @@ final class JobRegistry
         if(!is_array($payload)||array_is_list($payload)) throw new RequestRejected(422,'invalid_job','Invalid job payload.');
         $envelope=self::envelope($job['queue'],$job['type'],(int)$job['version'],$payload);return json_decode($envelope['payload'],true,8,JSON_THROW_ON_ERROR);
     }
-    /** Maintenance and analytics stay held until their domain consumers integrate. */
-    public static function enabledQueues():array {return ['emails'];}
+    /** Analytics (purchase_events) stays held until EVT-01 registers its consumer. */
+    public static function enabledQueues():array {return ['emails','maintenance'];}
     public static function execute(PDO $pdo,array $job):void
     {
         self::decode($job);
-        if(in_array($job['type'],['auth_verification','order_confirmation','order_cancelled','order_status'],true)) {NotificationJob::run($pdo,$job);return;}
+        if(in_array($job['type'],['auth_verification','order_confirmation','order_cancelled','order_status','low_stock_alert'],true)) {NotificationJob::run($pdo,$job);return;}
+        if($job['type']==='reservation_expiry') {ReservationExpiryJob::run($pdo,$job);return;}
         throw new JobExecutionException('unknown_handler',true);
     }
 }

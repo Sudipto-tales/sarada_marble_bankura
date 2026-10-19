@@ -34,7 +34,7 @@ abstract class StorefrontController extends BaseController
     public static function money($minor): string
     {
         $minor = (int)$minor;
-        return 'INR ' . intdiv($minor, 100) . '.' . str_pad((string)($minor % 100), 2, '0', STR_PAD_LEFT);
+        return '₹' . number_format(intdiv($minor, 100)) . '.' . str_pad((string)($minor % 100), 2, '0', STR_PAD_LEFT);
     }
     public static function quantity($milli): string
     {

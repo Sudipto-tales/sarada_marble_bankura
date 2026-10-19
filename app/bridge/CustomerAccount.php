@@ -52,7 +52,7 @@ class CustomerAccount extends StorefrontController
             $cart = (new CartService($this->pdo))->buyNow($actor['id'], $pending['variant_id'], $pending['quantity'], $pending['key']);
             $this->redirect('checkout?purchase_cart=' . $cart['id']); return;
         }
-        $this->redirect('cart');
+        $this->redirect('');
     }
     public function otp(): void
     {
@@ -135,13 +135,15 @@ class CustomerAccount extends StorefrontController
     }
     public function address(): void
     {
-        $this->handle(function (): void {
+        $api = str_contains($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '', 'XMLHttpRequest');
+        $this->handle(function () use ($api): void {
             RequestSecurity::requireMutation(); $actor = CommerceAccess::requireActor();
             // The shared service checks owner and expected revision for edits.
             $input = array_intersect_key($_POST, array_flip(['id', 'label', 'recipient', 'phone', 'line1', 'line2', 'city', 'state', 'postal_code', 'country_code', 'is_default']));
-            (new AddressService($this->pdo))->save($actor['id'], $input, CommerceValues::integer($_POST['revision'] ?? 0, 0, PHP_INT_MAX, 'revision'));
+            $address = (new AddressService($this->pdo))->save($actor['id'], $input, CommerceValues::integer($_POST['revision'] ?? 0, 0, PHP_INT_MAX, 'revision'));
+            if ($api) { echo json_encode(['ok'=>true,'address'=>self::jsonValues($address),'request_id'=>bin2hex(random_bytes(16))], JSON_THROW_ON_ERROR); return; }
             $this->redirect(isset($input['id']) ? 'account' : 'checkout');
-        });
+        }, $api);
     }
     public function archiveAddress(): void
     {

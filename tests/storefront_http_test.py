@@ -204,7 +204,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check(status == 200 and all(section in body for section in ['id="about-stone"', 'id="specifications"', 'id="delivery"', 'id="reviews"']), 'Product detail renders its information sections without JavaScript.')
             check('18.5 mm' in body and '2400 mm' in body and '1200 mm' in body and '16 sqft' in body, 'Specifications expose actual dimensions and variant coverage with correct units.')
             check('data-mobile-purchase' in body and 'product-detail.js' in body and 'product-detail.css' in body
-                  and 'No published reviews yet' in body and 'verified-purchase review' not in body and '25% off' not in body, 'Product purchase enhancements load without fabricated reviews or discounts.')
+                  and 'No reviews yet' in body and 'verified-purchase review' not in body and '25% off' not in body, 'Product purchase enhancements load without fabricated reviews or discounts.')
             add = form(body, 'variant_id')
             add['quantity'] = '1.5'
             invalid = dict(add, csrf='invalid')
@@ -212,7 +212,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check(guest.request('/cart', 'POST', add)[0] == 303, 'Guest can add a real variant.')
             check('commerce_guest' in guest.cookies, 'Guest proof persists in a protected cookie.')
             status, headers, body = guest.request('/cart')
-            check('1.5' in body and 'INR 1.52' in body, 'Cart uses decimal sell units and canonical half-up money.')
+            check('1.5' in body and '₹1.52' in body, 'Cart uses decimal sell units and canonical half-up money.')
             owned_cart = form(body, 'variant_id')
             check('Your cart is empty' in other.request('/cart')[2], 'Second guest sees an independent cart.')
             other_csrf = form(other.request('/account')[2], 'email')['csrf']
@@ -224,7 +224,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             status, headers, _ = other.request('/cart', 'POST', dict(accumulate, return_to='product/http-marble'))
             check(status == 303 and headers.get('Location') == '/product/http-marble', 'Add to bag can return to the browsing page.')
             other_body = other.request('/product/http-marble')[2]
-            check('now in your bag' in other_body and 'INR 2.02' in other.request('/cart')[2], 'Repeated add to bag accumulates quantity and shows a notice.')
+            check('now in your bag' in other_body and '₹2.02' in other.request('/cart')[2], 'Repeated add to bag accumulates quantity and shows a notice.')
             check(other.request('/cart', 'POST', dict(accumulate, quantity='10000'))[0] == 409, 'Add to bag cannot exceed available stock.')
             check(guest.request('/cart', 'POST', owned_cart)[0] == 303, 'Cart page update uses the current revision.')
             check(guest.request('/cart', 'POST', owned_cart)[0] == 409, 'Stale cart revision returns conflict.')
@@ -235,7 +235,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check(guest.request('/account', 'POST', login)[0] == 303, 'Real Auth login succeeds and merges guest cart.')
             check('commerce_guest' not in guest.cookies, 'Merged guest proof is cleared.')
             status, headers, body = guest.request('/cart')
-            check('INR 1.52' in body and 'Your cart is empty' not in body, 'Merged cart retains one copy of guest quantity.')
+            check('₹1.52' in body and 'Your cart is empty' not in body, 'Merged cart retains one copy of guest quantity.')
             account = guest.request('/account')[2]
             address_form = form(account, 'recipient')
             address_form.update(recipient='HTTP Customer', phone='9999988888', line1='Station Road', city='Bankura', state='West Bengal', postal_code='722101')
@@ -243,9 +243,9 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check(guest.request('/account/addresses', 'POST', address_form)[0] == 303, 'Owned address creation reaches checkout.')
             status, headers, body = guest.request('/checkout')
             check(status == 200 and 'Cash on delivery' in body and 'simulation' not in body, 'Checkout shows only enabled payment modes.')
-            # Read the address from the HTML option, without selecting the other customer's record.
+            # Read the address from the first address radio, without selecting the other customer's record.
             import re
-            address_id = re.search(r'<select name="address_id" required><option value="([0-9]+)"', body)[1]
+            address_id = re.search(r'<input type="radio" name="address_id" value="([0-9]+)"', body)[1]
             review_url = '/checkout?' + urlencode({'address_id': address_id, 'payment_mode': 'cod'})
             review = guest.request(review_url)[2]
             place = form(review, 'checkout_key')
@@ -262,7 +262,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             order_url = headers['Location']
             check(guest.request('/checkout', 'POST', place)[1].get('Location') == order_url, 'Lost-response HTTP retry returns the same order.')
             status, headers, body = guest.request(order_url)
-            check(status == 200 and 'Station Road' in body and 'unpaid' in body and 'INR 4.17' in body, 'Confirmation renders accepted server prices and ignores browser totals.')
+            check(status == 200 and 'Station Road' in body and 'Unpaid' in body and '₹4.17' in body, 'Confirmation renders accepted server prices and ignores browser totals.')
             invoice_url = order_url + '/invoice'
             status, headers, invoice = guest.request(invoice_url)
             check(status == 200 and 'Print / Save PDF' in invoice and '@media print' in invoice, 'Owner can open a print-friendly HTML invoice.')
@@ -270,7 +270,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             invoice_row = run_fixture('inspect')['order_rows'][0]
             for field in ['subtotal_minor','discount_minor','shipping_minor','tax_minor','total_minor']:
                 amount = int(invoice_row[field])
-                check(f'data-total="{field}">INR {amount//100}.{amount%100:02d}' in invoice, 'Invoice ' + field + ' matches the persisted order without recomputing it.')
+                check(f'data-total="{field}">₹{amount//100}.{amount%100:02d}' in invoice, 'Invoice ' + field + ' matches the persisted order without recomputing it.')
             check('Your cart is empty' in guest.request('/cart')[2], 'Successful checkout closes cart without controller-side clearing.')
             other_login = form(other.request('/account')[2], 'email')
             other_login.update(email='http-b@example.test', password='Disposable-HTTP-Customer-Password')
@@ -377,9 +377,10 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             add_form.update(variant_id=str(seed['variants'][0]),quantity='1')
             check(guest.request('/cart','POST',add_form)[0] == 303, 'Coupon checkout uses the real owned cart.')
             checkout = guest.request('/checkout')[2]
-            coupon_address = re.search(r'<select name="address_id" required><option value="([0-9]+)"', checkout)[1]
+            coupon_address = re.search(r'<input type="radio" name="address_id" value="([0-9]+)"', checkout)[1]
             coupon_review_url = '/checkout?' + urlencode({'address_id':coupon_address,'payment_mode':'cod'})
-            coupon_apply = form(guest.request(coupon_review_url)[2], 'coupon_code')
+            coupon_apply = next(item['inputs'] for item in Forms(guest.request(coupon_review_url)[2]).forms
+                                if item['action'] and item['action'].endswith('/checkout/coupon'))
             coupon_apply['coupon_code'] = 'http10'
             check(guest.request('/checkout/coupon','POST',dict(coupon_apply,csrf='bad'))[0] == 403, 'Applying a coupon requires CSRF.')
             check(guest.request('/checkout/coupon','POST',coupon_apply)[0] == 303, 'Valid coupon is stored in the private reviewed checkout session.')
@@ -397,7 +398,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             expected_tax = (taxable * 500 + 5000) // 10000
             expected_total = taxable + 125 + expected_tax
             check(int(coupon_row['discount_minor']) == 10 and int(coupon_row['tax_minor']) == expected_tax and int(coupon_row['total_minor']) == expected_total
-                  and f'INR {expected_total//100}.{expected_total%100:02d}' in order_html and 'INR 0.10' in order_html, 'Order renders authoritative discount, delivery and post-discount tax.')
+                  and f'₹{expected_total//100}.{expected_total%100:02d}' in order_html and '₹0.10' in order_html, 'Order renders authoritative discount, delivery and post-discount tax.')
             check(guest.request('/checkout','POST',coupon_place)[1].get('Location') == coupon_order, 'Discounted HTTP retry returns the same order despite exhausted usage limit.')
             check(staff.request('/admin/reports')[0] == 200 and 'Paid order revenue' in staff.request('/admin/reports')[2], 'Sales reports render bounded real aggregates.')
             check(staff.request('/admin/reports?from=2020-01-01&to=2026-10-16')[0] == 422, 'Reports reject an excessive date range.')
@@ -407,7 +408,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check(status == 200 and 'Coupon Road' in discounted_invoice, 'Discounted order invoice retains its owned delivery snapshot.')
             for field in ['subtotal_minor','discount_minor','shipping_minor','tax_minor','total_minor']:
                 amount = int(coupon_row[field])
-                check(f'data-total="{field}">INR {amount//100}.{amount%100:02d}' in discounted_invoice, 'Discounted invoice ' + field + ' matches the persisted order.')
+                check(f'data-total="{field}">₹{amount//100}.{amount%100:02d}' in discounted_invoice, 'Discounted invoice ' + field + ' matches the persisted order.')
             signin = Client(port).request('/account')[2]
             check('/account/forgot' in signin and Client(port).request('/account/forgot')[0] == 200, 'Existing password reset entry remains reachable from sign-in.')
             category_page = staff.request('/admin/categories')[2]

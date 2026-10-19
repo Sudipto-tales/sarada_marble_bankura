@@ -1,0 +1,50 @@
+/* Order confirmation + detail — storefront palette, with the rolling-checkmark success hero. */
+.button-wide{width:100%;padding:14px;font-size:14px;justify-content:center;text-align:center}
+
+/* Success hero */
+.order-success{max-width:560px;margin:10px auto 36px;padding:36px 28px 32px;text-align:center;background:white;border:1px solid var(--line);border-radius:22px;box-shadow:0 24px 60px -40px #082c4055}
+.order-success-anim{width:140px;height:140px;margin:0 auto 6px}
+.order-success-anim svg{width:100%!important;height:100%!important}
+.order-success h1{font-size:clamp(24px,3vw,30px);letter-spacing:-.5px;margin:0 0 10px}
+.order-success-lead{font-size:14px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto}
+.order-success-lead strong{color:var(--ink)}
+.order-success-total{display:inline-block;margin:16px 0 22px;padding:8px 16px;border-radius:30px;background:#e3f0ec;color:#1f7a52;font-weight:700;font-size:14px}
+.order-success-actions{display:flex;flex-direction:column;align-items:stretch;gap:10px;max-width:300px;margin:0 auto}
+.order-success-actions .text-button{margin-top:4px;font-size:13px;font-weight:600;color:var(--teal)}
+
+body[data-page=order] .page-intro h1{font-size:clamp(22px,2.4vw,28px);letter-spacing:-.5px}
+body[data-page=order] .page-intro strong{color:var(--teal)}
+
+.order-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start}
+.order-main{display:grid;gap:20px;min-width:0}
+.order-aside{display:grid;gap:16px;min-width:0;position:sticky;top:110px}
+.order-layout .panel{margin:0;border:1px solid var(--line);border-radius:16px;padding:22px;background:white}
+.order-layout .panel h2{font-size:16px;letter-spacing:-.3px;margin-bottom:14px}
+
+.order-item{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.order-item:first-of-type{border-top:0;padding-top:0}
+.order-thumb{width:44px;height:44px;border-radius:10px;background:#eef3f4;color:var(--teal);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;text-transform:uppercase}
+.order-item strong{display:block;font-size:13px;line-height:1.3}
+.order-item small{display:block;font-size:11px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.order-price{font-size:13px;font-weight:600;white-space:nowrap}
+
+.order-totals{display:grid;gap:9px;margin:0 0 16px}
+.order-totals>div{display:flex;justify-content:space-between;gap:12px;font-size:12.5px}
+.order-totals dt{color:var(--muted);margin:0}.order-totals dd{margin:0}
+.order-totals .is-discount dt,.order-totals .is-discount dd{color:var(--gold)}
+.order-total{border-top:1px solid var(--line);padding-top:10px;margin-top:3px}
+.order-total dt{color:var(--ink);font-weight:700;font-size:13px}
+.order-total dd{color:var(--teal);font-weight:750;font-size:15px}
+.order-aside .button-wide{margin-top:4px}
+.order-address{font-size:13px;line-height:1.7;color:var(--ink)}
+
+.order-timeline ol{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.order-timeline li{position:relative;padding:0 0 18px 22px;border-left:2px solid var(--line);margin-left:5px}
+.order-timeline li:last-child{border-left-color:transparent;padding-bottom:0}
+.order-timeline li::before{content:"";position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--teal);border:2px solid white}
+.order-timeline strong{font-size:13px}
+.order-timeline time{display:block;font-size:11px;color:var(--muted);margin:2px 0 4px}
+.order-timeline p{font-size:12px;color:#41474c;margin:0;line-height:1.6}
+
+@media(max-width:900px){.order-layout{grid-template-columns:1fr}.order-aside{position:static}}
+@media(max-width:700px){.order-success{padding:28px 20px}.order-layout .panel{padding:18px}}
