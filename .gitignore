@@ -19,3 +19,6 @@ key.properties
 /Website/tests/**/__pycache__/
 /Tools/catalog_scraper/__pycache__/
 /Tools/deployment/__pycache__/
+
+# Stray embedded plugin repo, not part of this project
+/skills/
