@@ -1,0 +1,120 @@
+/* Inspired refresh layer — original CSS using the generic modern-ecommerce
+   rhythm (lifted cards, pill buttons, accented headings, trust/CTA bands).
+   Loaded last so it enhances shared primitives on every storefront page while
+   keeping the Stone Atelier brand palette. Not derived from any template. */
+
+/* Display typography: Syne for headings over the Inter UI/body face.
+   Loaded last so it carries the display face onto every page's headings
+   without editing each per-context size rule (sizes/tracking stay tuned). */
+h1,h2,h3,.rf-cta-copy h2,.php-variant-heading{font-family:var(--font-head);font-weight:700;letter-spacing:-.01em}
+h3{font-weight:600}
+.eyebrow,.pdp-discovery .eyebrow{font-family:var(--font-body);font-weight:600;text-transform:uppercase}
+/* Inline emphasis in prose reads as a clear semibold, not a layout weight. */
+p strong,p b,li strong,li b,.prose strong{font-weight:600;color:var(--ink)}
+
+/* Smoother, lifted interactions (additive: transform/shadow don't reflow). */
+.button{border-radius:8px;transition:transform .15s ease,box-shadow .15s ease,background .15s ease}
+.button:hover{transform:translateY(-1px);box-shadow:0 6px 18px #49553f24}
+.button.light{box-shadow:0 1px 2px #292d2910}
+.stone-card,.h-promo,.h-collection,.h-bestsellers article,.h-services>a,.h-facts a{transition:transform .18s ease,box-shadow .18s ease}
+.stone-card:hover,.h-collection:hover,.h-bestsellers article:hover,.h-services>a:hover,.h-facts a:hover{transform:translateY(-3px);box-shadow:0 10px 30px #292d2914}
+.h-promo:hover{box-shadow:0 14px 34px #141a1326}
+
+/* Section headings gain a small brand accent for a cleaner catalogue feel. */
+.h-heading h2{position:relative;padding-left:14px}
+.h-heading h2::before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);width:4px;height:1.05em;border-radius:3px;background:var(--clay)}
+.h-heading a{margin-left:auto;color:var(--teal);font-weight:700;transition:color .15s ease}
+.h-heading a:hover{color:var(--clay)}
+
+/* Trust / benefits strip. */
+.rf-trust{margin-top:25px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:22px;background:var(--cream);border:1px solid var(--line);border-radius:14px}
+.rf-trust-item{display:flex;align-items:center;gap:14px}
+.rf-trust-icon{flex:0 0 auto;width:44px;height:44px;display:grid;place-items:center;border-radius:11px;background:#fff;border:1px solid var(--line)}
+.rf-trust-icon svg{width:22px;height:22px;fill:none;stroke:var(--deep);stroke-width:1.3}
+.rf-trust-item strong{display:block;font-size:13px}
+.rf-trust-item small{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:3px}
+
+/* Call-to-action band. */
+.rf-cta{margin-top:25px;display:flex;flex-wrap:wrap;align-items:center;gap:24px;justify-content:space-between;padding:34px;border-radius:18px;color:#fffdf8;background:radial-gradient(ellipse at 85% 20%,#8a9a6555,transparent 55%),linear-gradient(120deg,#49553f,#172019)}
+.rf-cta-copy{max-width:560px}
+.rf-cta-copy h2{margin:12px 0 8px;font-size:26px;letter-spacing:-.6px}
+.rf-cta-copy p{color:#e6e9dd;font-size:13px;line-height:1.7}
+.rf-cta-actions{display:flex;gap:12px;flex-wrap:wrap}
+.rf-cta .button.light{background:#fffdf8;color:#2b3327}
+
+/* Form & account pages (register, login, account, address, checkout…):
+   softer panels and inputs with a brand focus, matching the refreshed cards. */
+.panel{border-radius:14px;box-shadow:0 2px 10px #292d2908}
+.panel input,.panel select,.panel textarea,.form-grid input,.form-grid select,.form-grid textarea,.field input,.field select{border-radius:8px;transition:border-color .15s ease}
+.panel input:focus,.panel select:focus,.panel textarea:focus,.form-grid input:focus,.form-grid select:focus,.form-grid textarea:focus,.field input:focus,.field select:focus{border-color:var(--deep)}
+#area-calculator .form-grid+.button{margin-top:28px}
+
+@media(max-width:900px){.rf-trust{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.rf-trust{grid-template-columns:1fr;padding:16px}.rf-cta{padding:22px}.rf-cta-copy h2{font-size:21px}}
+/* Checkout: payment methods (COD, online…) as selectable cards. */
+.php-pay-options{border:0;padding:0;margin:18px 0;display:grid;gap:10px}
+.php-pay-options legend{font-weight:700;padding:0;margin-bottom:4px}
+.php-pay-option{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fffdf8;cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease}
+.php-pay-option:hover{border-color:var(--sage)}
+.php-pay-option:has(input:checked){border-color:var(--deep);box-shadow:inset 0 0 0 1px var(--deep)}
+.php-pay-option input{accent-color:var(--deep);width:17px;height:17px;flex:0 0 auto}
+.php-pay-name{font-weight:650}
+.php-cashback{margin-left:auto;font-size:11px;color:var(--clay);white-space:nowrap}
+
+/* Product, cart & wishlist: unify radius and carry the refreshed hover feel. */
+.gallery-main{border-radius:14px}
+.gallery-thumbs button{transition:border-color .15s ease,transform .15s ease}
+.gallery-thumbs button:hover{transform:translateY(-2px)}
+.pdp-chip{transition:background .15s ease,color .15s ease}
+.breadcrumb a{transition:color .15s ease}
+.breadcrumb a:hover{color:var(--clay)}
+.bag-photo{transition:transform .2s ease}
+.php-bag-item:hover .bag-photo img{transform:scale(1.03)}
+
+/* Product card: heart over image (fills red in place, no redirect), sale badge,
+   underlined title/explore links, compact outline "Add" beside a filled "Buy now". */
+.save-stone-form{margin:0;padding:0}
+.save-stone{position:absolute;top:16px;right:16px;display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:#fffdf8ee;box-shadow:0 1px 5px #292d2924;color:var(--deep);cursor:pointer;z-index:2;transition:transform .15s ease,color .15s ease}
+.save-stone svg{width:17px;height:17px}
+.save-stone:hover{transform:scale(1.08)}
+.save-stone.saved,.save-stone[aria-pressed=true]{color:#d92d4b}
+.save-stone.saved svg,.save-stone[aria-pressed=true] svg{fill:#d92d4b;stroke:#d92d4b}
+.badge-sale{background:var(--clay);color:#fff;font-weight:700}
+.stone-price{align-items:baseline}
+.stone-price strong{font-size:14px}
+.stone-price del{color:var(--muted);font-weight:400;font-size:11px}
+.stone-card h3 a{text-decoration:none}
+.card-bottom a{text-decoration:none;color:var(--deep)}
+.card-cta{display:flex;gap:8px;margin-top:12px}
+.card-cta form{margin:0;padding:0}
+.card-cta .card-add{flex:0 0 auto;gap:6px;padding:8px 12px;font-size:11px}
+.card-cta .card-add svg{width:15px;height:15px}
+.card-cta .card-buy{flex:1;padding:8px 12px;font-size:12px;font-weight:650}
+.card-cta .quick-add-unavailable{flex:1;align-self:center;font-size:11px;color:var(--muted)}
+
+@media(prefers-reduced-motion:reduce){.gallery-thumbs button:hover{transform:none}.php-bag-item:hover .bag-photo img{transform:none}.save-stone:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){.button,.stone-card,.h-promo,.h-collection,.h-bestsellers article,.h-services>a,.h-facts a{transition:none}.button:hover,.stone-card:hover,.h-collection:hover,.h-bestsellers article:hover,.h-services>a:hover,.h-facts a:hover,.h-promo:hover{transform:none}}
+
+/* Header live-search suggestions: grouped, image-led results below the search box. */
+header .search{position:relative;width:260px;padding:5px 5px 5px 14px;border-radius:999px;border:1px solid rgba(15,23,42,.08);background:linear-gradient(180deg,#fff,#f3f5f6);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 2px rgba(15,23,42,.05);transition:box-shadow .2s,border-color .2s,background .2s}
+header .search:hover{border-color:rgba(14,108,134,.25)}
+header .search:focus-within{border-color:var(--teal);background:#fff;box-shadow:0 0 0 4px rgba(43,184,204,.15),0 8px 22px rgba(15,23,42,.08)}
+header .search input{font-size:11px;-webkit-appearance:none;appearance:none}
+header .search input:hover,header .search input:focus,header .search input:focus-visible,header .search button:focus-visible{outline:none;box-shadow:none}
+header .search button{width:36px;height:36px;border-radius:999px;background:linear-gradient(180deg,var(--bright),var(--teal));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 2px 6px rgba(14,108,134,.35);transition:filter .2s}
+header .search button:hover{filter:brightness(1.07)}
+.search-suggest{position:absolute;top:calc(100% + 10px);right:0;left:auto;width:min(460px,92vw);background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 60px rgba(15,23,42,.18);padding:8px;max-height:min(72vh,460px);overflow:auto;z-index:40;text-align:left;-webkit-overflow-scrolling:touch}
+@media(max-width:650px){header .search{width:100%;padding-left:12px}.search-suggest{left:0;right:0;width:auto}}
+.search-group{padding:2px 0}
+.search-group+.search-group{border-top:1px solid var(--line)}
+.search-group-head{font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);font-weight:700;padding:6px 10px 4px}
+.search-hit{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px}
+.search-hit:hover,.search-hit:focus-visible{background:var(--cream)}
+.search-hit img,.search-thumb-blank{width:44px;height:44px;border-radius:7px;flex-shrink:0;object-fit:cover;background:#f0efeb}
+.search-hit-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.search-hit-name{font-size:12px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.search-hit-meta{font-size:10px;color:var(--muted)}
+.search-price{font-size:11px;font-weight:700;color:var(--teal);white-space:nowrap}
+.search-all{display:block;text-align:center;padding:10px;font-size:11px;font-weight:700;color:var(--teal);border-top:1px solid var(--line);margin-top:4px}
+.search-all:hover{background:var(--cream)}
+.search-empty{padding:16px 12px;font-size:11px;color:var(--muted);text-align:center}

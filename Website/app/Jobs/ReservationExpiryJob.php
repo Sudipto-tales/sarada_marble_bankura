@@ -1,30 +1,16 @@
 <?php
 
-/** Scans active expired reservations and releases them via InventoryService. */
+/** Releases one expired reservation under lock, then acknowledges the lease. Idempotent on replay. */
 final class ReservationExpiryJob
 {
     public static function run(PDO $pdo, array $job): void
     {
-        $payload = JobRegistry::decode($job);
-        $reservationId = (int)($payload['reservation_id'] ?? 0);
-        if ($reservationId <= 0) {
-            if (!$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
-                $pdo->rollBack();
-            }
-            return;
-        }
-        $inventory = new InventoryService($pdo);
-        $reservation = $inventory->reservation($reservationId);
-        $now = CommerceDatabase::clock($pdo);
-        if ($reservation['state'] !== 'active' || (int)$reservation['expires_at'] > $now) {
-            if (!$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
-                $pdo->rollBack();
-            }
-            return;
-        }
-        $result = $inventory->release($reservationId, $reservation['principal_key'], true);
-        if (!$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
-            $pdo->rollBack();
-        }
+        $reservationId = (int)JobRegistry::decode($job)['reservation_id'];
+        $queue = new Queue($pdo);
+        CommerceDatabase::transaction($pdo, function () use ($pdo, $job, $queue, $reservationId): void {
+            // Claimed before its lease actually expired: leave it for a later run rather than dropping the release.
+            if ((new InventoryService($pdo))->expireReservation($reservationId) === 'active') throw new JobExecutionException('reservation_not_expired');
+            if (!$queue->acknowledge((int)$job['id'], $job['lease_token'])) throw new JobExecutionException('lease_lost');
+        });
     }
 }

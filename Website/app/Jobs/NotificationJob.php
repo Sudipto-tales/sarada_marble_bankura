@@ -6,8 +6,8 @@ final class NotificationJob
     public static function run(PDO $pdo,array $job):void
     {
         $payload=JobRegistry::decode($job);$type=$job['type'];$queue=new Queue($pdo);
-        if(!in_array($type,['auth_verification','order_confirmation','order_cancelled','order_status'],true)) throw new JobExecutionException('unknown_handler',true);
-        $target=$payload[$type==='auth_verification'?'verification_id':'order_id'];
+        if(!in_array($type,['auth_verification','order_confirmation','order_cancelled','order_status','low_stock_alert'],true)) throw new JobExecutionException('unknown_handler',true);
+        $target=$payload[['auth_verification'=>'verification_id','low_stock_alert'=>'alert_id'][$type]??'order_id'];
         $deliveryKey=$type.':'.$target.':v1';$deliveryToken=bin2hex(random_bytes(32));
         $message=CommerceDatabase::transaction($pdo,function() use($pdo,$job,$type,$target,$deliveryKey,$deliveryToken):?array {
             $q=fn($sql,$args=[])=>CommerceDatabase::query($pdo,$sql,$args);$lock=CommerceDatabase::lock($pdo);$now=CommerceDatabase::clock($pdo);
@@ -22,6 +22,18 @@ final class NotificationJob
                 if(env('APP_ENV','production')==='production'&&parse_url($url,PHP_URL_SCHEME)!=='https')throw new JobExecutionException('verification_https_required');
                 $token=bin2hex(random_bytes(32));
                 $subject='Verify your Maa Sarada account';$body='Verify your email: '.$url.'/auth/verify_email?token='.$token."\nExpires at ".gmdate('Y-m-d H:i:s',(int)$proof['expires_at'])." UTC. If you did not request this account, ignore this message.";
+                $recipient=$user['email'];
+            } elseif($type==='low_stock_alert') {
+                $ops=(string)env('OPS_ALERT_EMAIL','');
+                if(!filter_var($ops,FILTER_VALIDATE_EMAIL)) throw new JobExecutionException('ops_recipient_missing');
+                $alert=$q('SELECT * FROM low_stock_alerts WHERE id=?'.$lock,[$target])->fetch();
+                if(!$alert) throw new JobExecutionException('alert_missing',true);
+                $variant=$q('SELECT v.sku,p.name FROM product_variants v JOIN products p ON p.id=v.product_id WHERE v.id=?',[$alert['variant_id']])->fetch();
+                if(!$variant) throw new JobExecutionException('alert_variant_missing',true);
+                $fmt=static fn($milli)=>intdiv((int)$milli,1000).'.'.str_pad((string)((int)$milli%1000),3,'0',STR_PAD_LEFT);
+                $subject='Low stock alert: '.$variant['sku'];
+                $body=$subject."\nProduct: ".$variant['name']."\nSKU: ".$variant['sku']."\nOn hand: ".$fmt($alert['on_hand_milli'])."\nThreshold: ".$fmt($alert['threshold_milli']);
+                $recipient=$ops;
             } else {
                 $order=$q('SELECT * FROM orders WHERE id=?'.$lock,[$target])->fetch();if(!$order)throw new JobExecutionException('order_missing',true);
                 if(($type==='order_cancelled'&&$order['status']!=='cancelled')||($type==='order_confirmation'&&$order['status']==='cancelled'))return null;
@@ -38,6 +50,7 @@ final class NotificationJob
                 }
                 $total=(int)$order['total_minor'];$formatted=intdiv($total,100).'.'.str_pad((string)($total%100),2,'0',STR_PAD_LEFT);
                 $body=$subject."\nOrder: ".$order['order_number'].($type==='order_status'?"\nStatus: ".$order['status']:'')."\nTotal: INR ".$formatted."\nPayment: ".$order['payment_mode'].' / '.$order['payment_status'];
+                $recipient=$user['email'];
             }
             $sql="INSERT INTO notification_deliveries (delivery_key,type,target_id,status) VALUES (?,?,?,'pending')";
             $sql.=$pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'?' ON DUPLICATE KEY UPDATE id=id':' ON CONFLICT(delivery_key) DO NOTHING';
@@ -49,7 +62,7 @@ final class NotificationJob
             // Final live-job lock fences preparation; it is released before transport I/O.
             $live=$q("SELECT lease_token,lease_expires_at FROM jobs WHERE id=? AND status='running'".$lock,[$job['id']])->fetch();
             if(!$live||$live['lease_token']!==$job['lease_token']||(int)$live['lease_expires_at']<=CommerceDatabase::clock($pdo))throw new JobExecutionException('lease_lost');
-            return ['to'=>$user['email'],'subject'=>$subject,'body'=>$body,'delivery_id'=>(int)$delivery['id'],'delivery_key'=>$deliveryKey];
+            return ['to'=>$recipient,'subject'=>$subject,'body'=>$body,'delivery_id'=>(int)$delivery['id'],'delivery_key'=>$deliveryKey];
         });
         if(!$message) {if(!$queue->acknowledge((int)$job['id'],$job['lease_token']))throw new JobExecutionException('lease_lost');return;}
         try {

@@ -18,5 +18,12 @@ $storeIcons =  [
     'shower' => '<path d="M18 22V5a3 3 0 0 0-6 0v2M6 10h12L12 7l-6 3ZM7 14v1m5-1v1m5-1v1M7 19v1m5-1v1m5-1v1"/>',
     'toilet' => '<path d="M6 3h11v9H6zM3 12h18c0 5-5 6-5 6l1 4H8l1-4s-6-1-6-6Z"/>',
     'tools' => '<path d="m4 20 12-12M14 3a5 5 0 0 0 7 7l-5-1-1-5M3 17l4 4M3 3l5 5m-2-5 15 15-3 3L3 6Z"/>',
+    'trash' => '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+    'close' => '<path d="M6 6l12 12M18 6 6 18"/>',
+    'compare' => '<path d="M7 7h13l-3-3m3 3-3 3M17 17H4l3-3m-3 3 3 3"/>',
+    'instagram' => '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r="1"/>',
+    'facebook' => '<path d="M14 9V7a2 2 0 0 1 2-2h2V2h-3a5 5 0 0 0-5 5v2H7v3h3v9h4v-9h3l1-3h-4Z"/>',
+    'youtube' => '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3V9Z"/>',
+    'whatsapp' => '<path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.3A9 9 0 1 0 12 3Z"/><path d="M8.5 7.7c.2-.1.5 0 .6.2l.8 1.4c.1.2.1.4 0 .6l-.5.8c.5 1 1.3 1.8 2.3 2.3l.8-.5c.2-.1.4-.1.6 0l1.4.8c.2.1.3.4.2.6-.3.9-1.2 1.5-2.1 1.4a7 7 0 0 1-6-6c-.1-.9.5-1.8 1.4-2.1Z"/>',
 ];
 $icon = static fn(string $name): string => '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($storeIcons[$name] ?? $storeIcons['slab']) . '</svg>';

@@ -79,23 +79,86 @@
   'use strict';
   const badge = document.querySelector('.header-actions a[aria-label="Saved materials"] b');
   document.querySelectorAll('form[data-wishlist]').forEach(form => {
-    form.addEventListener('submit', async event => {
+    form.addEventListener('submit', event => {
+      // Toggle the heart in place immediately; the write is sent in the background, never reloading.
       event.preventDefault();
       const button = form.querySelector('button'), action = form.elements.action;
-      if (button.disabled) return;
-      button.disabled = true;
-      try {
-        const res = await fetch(form.action, { method:'POST', body:new FormData(form) });
-        if (!res.ok) throw 0;
-        const saved = action.value === 'add';
-        action.value = saved ? 'remove' : 'add';
-        button.classList.toggle('saved', saved);
-        button.setAttribute('aria-pressed', String(saved));
-        if (badge) badge.textContent = String(Math.max(0, (parseInt(badge.textContent,10)||0) + (saved ? 1 : -1)));
-        button.disabled = false;
-      } catch (_) { form.submit(); }
+      if (button.dataset.busy) return;
+      button.dataset.busy = '1';
+      const saved = action.value === 'add';
+      action.value = saved ? 'remove' : 'add';
+      button.classList.toggle('saved', saved);
+      button.setAttribute('aria-pressed', String(saved));
+      if (badge) badge.textContent = String(Math.max(0, (parseInt(badge.textContent,10)||0) + (saved ? 1 : -1)));
+      fetch(form.action, { method:'POST', body:new FormData(form) }).catch(() => {}).finally(() => { delete button.dataset.busy; });
     });
   });
+})();
+
+/* Header live search: grouped suggestions with thumbnails from the public products API.
+   Falls back to the plain GET form (action=shop) whenever JS, the network or the API is unavailable. */
+(() => {
+  'use strict';
+  const form = document.querySelector('header .search');
+  const input = form && form.querySelector('input[name="q"]');
+  const api = form && form.dataset.api;
+  if (!form || !input || !api) return;
+  const base = form.dataset.base || '';
+  const panel = document.createElement('div');
+  panel.className = 'search-suggest';
+  panel.id = 'search-suggest';
+  panel.setAttribute('role', 'listbox');
+  panel.hidden = true;
+  form.append(panel);
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const money = minor => '₹' + Math.floor((parseInt(minor, 10) || 0) / 100).toLocaleString('en-IN');
+  const open = html => { panel.innerHTML = html; panel.hidden = false; input.setAttribute('aria-expanded', 'true'); };
+  const close = () => { panel.hidden = true; input.setAttribute('aria-expanded', 'false'); };
+
+  const render = (items, q) => {
+    if (!items.length) { open('<p class="search-empty">No matches for “' + esc(q) + '”. Press Enter to search the full catalogue.</p>'); return; }
+    const groups = new Map();
+    items.forEach(i => { const key = i.category_name || 'Other'; (groups.get(key) || groups.set(key, []).get(key)).push(i); });
+    let html = '';
+    groups.forEach((list, cat) => {
+      html += '<div class="search-group"><p class="search-group-head">' + esc(cat) + '</p>';
+      list.forEach(i => {
+        const img = i.images && i.images[0];
+        const thumb = img ? '<img loading="lazy" src="' + esc(base + img.path) + '" alt="' + esc(img.alt_text) + '">' : '<span class="search-thumb-blank"></span>';
+        const price = i.min_price_minor ? '<span class="search-price">From ' + money(i.min_price_minor) + '</span>' : '';
+        html += '<a class="search-hit" role="option" href="' + esc(base + 'product/' + i.slug) + '">' + thumb +
+          '<span class="search-hit-text"><span class="search-hit-name">' + esc(i.name) + '</span>' +
+          '<span class="search-hit-meta">' + esc(i.brand_name || i.category_name) + '</span></span>' + price + '</a>';
+      });
+      html += '</div>';
+    });
+    html += '<a class="search-all" href="' + esc(base + 'shop?q=' + encodeURIComponent(q)) + '">See all results for “' + esc(q) + '” ↗</a>';
+    open(html);
+  };
+
+  let timer, controller, lastQuery = '';
+  const search = async q => {
+    if (controller) controller.abort();
+    controller = new AbortController();
+    try {
+      const res = await fetch(api + '?q=' + encodeURIComponent(q) + '&per_page=8', { signal: controller.signal, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!res.ok) { close(); return; }
+      const body = await res.json();
+      if (q === lastQuery) render(body.data || [], q);
+    } catch (_) { /* abort or network error: the plain form submit remains the fallback */ }
+  };
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    lastQuery = q;
+    clearTimeout(timer);
+    if (q.length < 2) { close(); return; }
+    timer = setTimeout(() => search(q), 200);
+  });
+  input.addEventListener('focus', () => { if (input.value.trim().length >= 2 && panel.innerHTML) panel.hidden = false; });
+  input.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+  document.addEventListener('click', event => { if (!form.contains(event.target)) close(); });
 })();
 
 /* The original mobile filter disclosure, retaining real GET filtering. */

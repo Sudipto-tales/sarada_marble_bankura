@@ -28,13 +28,18 @@ function removeTree(string $directory): void
 }
 function latestOtp(string $email, string $purpose): string
 {
-    $code = null;
+    // Match the delivered code to the active DB row: request() replaces prior codes, and the
+    // random test-mail filenames are not time-ordered, so return the one that still verifies.
+    global $pdo;
+    $stmt = $pdo->prepare('SELECT a.code_hash FROM auth_otp_codes a JOIN users_tbl u ON u.id = a.user_id WHERE u.email = ? AND a.purpose = ?');
+    $stmt->execute([$email, $purpose]);
+    $hash = $stmt->fetchColumn();
     foreach (glob(PrivateStorage::directory('test-mail') . '/*.json') as $file) {
         $mail = json_decode(file_get_contents($file), true);
-        if (($mail['to'] ?? null) === $email && ($mail['purpose'] ?? null) === $purpose && isset($mail['otp'])) $code = $mail['otp'];
+        if (($mail['to'] ?? null) === $email && ($mail['purpose'] ?? null) === $purpose && isset($mail['otp'])
+            && $hash !== false && hash_equals((string) $hash, hash('sha256', $purpose . ':' . $mail['otp']))) return $mail['otp'];
     }
-    if ($code === null) throw new RuntimeException('Missing delivered OTP for ' . $purpose);
-    return $code;
+    throw new RuntimeException('Missing delivered OTP for ' . $purpose);
 }
 function mutation(): void { $_SERVER['REQUEST_METHOD'] = 'POST'; $_POST = ['csrf' => RequestSecurity::csrfToken()]; }
 function count_rows(string $sql, array $values = []): int { global $pdo; $stmt = $pdo->prepare($sql); $stmt->execute($values); return (int) $stmt->fetchColumn(); }

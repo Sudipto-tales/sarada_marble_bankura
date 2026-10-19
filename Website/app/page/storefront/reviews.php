@@ -2,9 +2,8 @@
 <div class="breadcrumb"><a href="<?= $u('product/'.$product['slug']) ?>"><?= $e($product['name']) ?></a><span>/</span><span>Customer reviews</span></div>
 <section class="pdp-section"><h1>Ratings &amp; reviews</h1><?php require __DIR__.'/review_summary.php'; ?></section>
 <section class="pdp-section" style="margin-top:24px"><h2><?= $own?'Edit your review':'Write a review' ?></h2>
-<?php if(!$actor): ?><p><a class="text-button" href="<?= $u('account') ?>">Sign in</a> to review a delivered purchase.</p><?php elseif(!$eligible): ?><p>You can review this material after your order has been delivered.</p><?php else: ?>
-<?php if($own): ?><p>Your review is <?= $e($own['status']) ?>. Edits are checked again before publication.</p><?php endif; ?>
-<p>Your first name and review will be public after approval. Do not include contact or payment information.</p>
+<?php if(!$actor): ?><p><a class="text-button" href="<?= $u('account') ?>">Sign in</a> to write a review.</p><?php else: ?>
+<p>Your first name and review are published immediately. Do not include contact or payment information.</p>
 <form method="post" action="<?= $u('product/'.$product['slug'].'/reviews') ?>" class="pdp-review-form"><input type="hidden" name="csrf" value="<?= $e(RequestSecurity::csrfToken()) ?>"><input type="hidden" name="revision" value="<?= $e($own['revision']??0) ?>">
 <label>Rating<select name="rating" required><?php for($i=5;$i>=1;$i--): ?><option value="<?= $i ?>" <?= (int)($own['rating']??5)===$i?'selected':'' ?>><?= $i ?> <?= $i===1?'star':'stars' ?></option><?php endfor; ?></select></label>
 <label>Title<input name="title" required maxlength="120" value="<?= $e($own['title']??'') ?>"></label><label>Your experience<textarea name="body" required minlength="10" maxlength="2000" rows="5"><?= $e($own['body']??'') ?></textarea></label><button class="button">Submit for review</button></form>

@@ -35,7 +35,7 @@ if (in_array($command, ['help', '--help', '-h'], true)) {
     echo "Create commerce staff: php vayu commerce:create you@example.com [admin|catalog_manager|operations|viewer]\n";
     echo "Inspect old orphan images: php vayu catalog:images:clean [--delete]\n";
     echo "Seed development demo catalog: php vayu demo:seed --actor-id=ID\n";
-    echo "Bounded worker: php vayu queue:work --queues=emails --max=20 --max-seconds=30\nRetry one failed job: php vayu queue:retry --failed-id=123\n";
+    echo "Bounded worker: php vayu queue:work --queues=emails,maintenance --max=20 --max-seconds=30\nRetry one failed job: php vayu queue:retry --failed-id=123\n";
     exit(0);
 }
 if ($command === 'demo:seed') {

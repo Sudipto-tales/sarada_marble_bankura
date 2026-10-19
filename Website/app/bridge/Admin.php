@@ -54,7 +54,8 @@ class Admin extends StorefrontController
     }
     public function index(): void
     {
-        $this->handle(fn()=> $this->render('overview',['cards'=>(new AdminReadService($this->pdo))->overview($this->actor())]));
+        $this->handle(function():void{$actor=$this->actor();$read=new AdminReadService($this->pdo);
+            $this->render('overview',['cards'=>$read->overview($actor),'attention'=>$read->attention($actor)]);});
     }
     public function products(): void { $this->table('products'); }
     public function table(string $module): void
@@ -273,8 +274,25 @@ class Admin extends StorefrontController
         $this->handle(function():void {
             $actor=CommerceAccess::requirePermission('admin.analytics.view');
             $from=CommerceValues::text($_GET['from']??gmdate('Y-m-d',time()-29*86400),10,'from');$to=CommerceValues::text($_GET['to']??gmdate('Y-m-d'),10,'to');
-            $report=(new AdminReadService($this->pdo))->reports($actor['id'],$from,$to);$this->render('reports',compact('report'));
+            $report=(new AdminReadService($this->pdo))->reports($actor['id'],$from,$to);
+            if(($_GET['format']??'')==='csv'){$this->reportCsv($report);return;}
+            $this->render('reports',compact('report'));
         });
+    }
+    private function reportCsv(array $report):void
+    {
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="sales-report-'.$report['from'].'-to-'.$report['to'].'.csv"');
+        $out=fopen('php://output','w');
+        fputcsv($out,['Sales report',$report['from'].' to '.$report['to'].' (UTC)']);
+        fputcsv($out,[]);fputcsv($out,['Summary','']);
+        fputcsv($out,['Paid orders',$report['sales']['order_count']]);
+        fputcsv($out,['Paid revenue (INR)',AdminReadService::decimal($report['sales']['revenue_minor'],2)]);
+        fputcsv($out,[]);fputcsv($out,['Orders by status','Orders','Value (INR)']);
+        foreach($report['statuses'] as $row)fputcsv($out,[$row['status'],$row['order_count'],AdminReadService::decimal($row['value_minor'],2)]);
+        fputcsv($out,[]);fputcsv($out,['Top products (paid)','Units','Revenue (INR)','Orders']);
+        foreach($report['topProducts'] as $row)fputcsv($out,[$row['name'],self::quantity($row['qty_milli']),AdminReadService::decimal($row['revenue_minor'],2),$row['order_count']]);
+        fclose($out);
     }
     public function reviews(): void
     {
