@@ -22,3 +22,7 @@ key.properties
 
 # Stray embedded plugin repo, not part of this project
 /skills/
+
+# Local-only staging dirs, not part of the project
+/Hyper/
+/Html/admin/
