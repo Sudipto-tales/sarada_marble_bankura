@@ -53,7 +53,8 @@ final class ProductService
             'description'=>CommerceValues::text($input['description'] ?? '',10000,'description',true),
             'tags'=>CommerceValues::text($input['tags'] ?? '',1000,'tags',true),'category_id'=>CommerceValues::id($input['category_id'] ?? null,'category_id'),
             'brand_id'=>isset($input['brand_id']) && $input['brand_id'] !== '' ? CommerceValues::id($input['brand_id'],'brand_id') : null,
-            'status'=>$status,'featured'=>CommerceValues::flag($input['featured'] ?? 0,'featured')];
+            'status'=>$status,'featured'=>CommerceValues::flag($input['featured'] ?? 0,'featured'),
+            'advance_bps'=>($input['advance_bps'] ?? null) === null ? null : CommerceValues::integer($input['advance_bps'],0,10000,'advance_bps')];
         if (!is_array($input['variants'] ?? null)) CommerceValues::invalid('variants');
         $variants = $this->variants($input['variants']);
         $details = isset($input['details']) ? ProductDetailService::validate($input['details']) : null;
@@ -79,9 +80,9 @@ final class ProductService
                 if ($data['status'] === 'active' && (!(int)$category['enabled'] || ($brand && !(int)$brand['enabled']))) CommerceValues::invalid('category_or_brand');
                 $now = gmdate('Y-m-d\TH:i:s\Z');
                 if ($id) {
-                    $this->query('UPDATE products SET slug=?, name=?, description=?, tags=?, category_id=?, brand_id=?, status=?, featured=?, revision=revision+1, updated_at=? WHERE id=?',array_merge(array_values($data),[$now,$id]));
+                    $this->query('UPDATE products SET slug=?, name=?, description=?, tags=?, category_id=?, brand_id=?, status=?, featured=?, advance_bps=?, revision=revision+1, updated_at=? WHERE id=?',array_merge(array_values($data),[$now,$id]));
                 } else {
-                    $this->query('INSERT INTO products (slug,name,description,tags,category_id,brand_id,status,featured,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',array_merge(array_values($data),[$now,$now]));
+                    $this->query('INSERT INTO products (slug,name,description,tags,category_id,brand_id,status,featured,advance_bps,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',array_merge(array_values($data),[$now,$now]));
                     $id = (int)$this->pdo->lastInsertId();
                 }
                 $kept = []; $seen = [];
@@ -151,19 +152,21 @@ final class ProductService
         $enabled=CommerceValues::flag($input['enabled']??1,'enabled');
         $parent=isset($input['parent_id'])&&$input['parent_id']!==''?CommerceValues::id($input['parent_id']):null;
         $hasTax=array_key_exists('tax_bps',$input);$tax=$hasTax&&$input['tax_bps']!==null&&$input['tax_bps']!==''?CommerceValues::integer($input['tax_bps'],0,10000,'tax_bps'):null;
+        $hasAdvance=array_key_exists('advance_bps',$input);$advance=$hasAdvance&&$input['advance_bps']!==null&&$input['advance_bps']!==''?CommerceValues::integer($input['advance_bps'],0,10000,'advance_bps'):null;
         try {
-            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$parent,$hasTax,$tax,$key):int {
+            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$parent,$hasTax,$tax,$hasAdvance,$advance,$key):int {
                 CommerceAccess::requirePermission('admin.products.edit',$actorId);
                 if (!$this->query('SELECT id FROM catalog_hierarchy_lock WHERE id=1'.CommerceDatabase::lock($this->pdo))->fetchColumn()) {
                     throw new RuntimeException('Category tree lock is unavailable.');
                 }
-                if($hasTax){
+                if($hasTax||$hasAdvance){
                     $prior=$this->query('SELECT target_id FROM admin_activity_log WHERE operation_key=?'.CommerceDatabase::lock($this->pdo),[$key])->fetch();
                     if($prior){
                         $target=(int)$prior['target_id'];
                         if($id!==null&&$id!==$target)throw new RequestRejected(409,'audit_key_conflict','Operation key has different inputs.');
-                        StaffAudit::record($this->pdo,$actorId,'category.save','category',$target,$key,['name'=>$name,'slug'=>$slug,'enabled'=>$enabled,'tax_bps'=>$tax]);
-                        return $target; // A repeated GST edit must not restore a superseded tax rate.
+                        $replay=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasTax)$replay['tax_bps']=$tax;if($hasAdvance)$replay['advance_bps']=$advance;
+                        StaffAudit::record($this->pdo,$actorId,'category.save','category',$target,$key,$replay);
+                        return $target; // A repeated GST/advance edit must not restore a superseded rate.
                     }
                 }
                 if ($id && !$this->query('SELECT id FROM categories WHERE id=?',[$id])->fetchColumn()) throw new RequestRejected(404,'not_found','Category not found.');
@@ -178,8 +181,9 @@ final class ProductService
                 if ($id) $this->query('UPDATE categories SET slug=?,name=?,enabled=?,parent_id=? WHERE id=?',[$slug,$name,$enabled,$parent,$id]);
                 else { $this->query('INSERT INTO categories (slug,name,enabled,parent_id) VALUES (?,?,?,?)',[$slug,$name,$enabled,$parent]); $id=(int)$this->pdo->lastInsertId(); }
                 if($hasTax)$this->query('UPDATE categories SET tax_bps=? WHERE id=?',[$tax,$id]);
+                if($hasAdvance)$this->query('UPDATE categories SET advance_bps=? WHERE id=?',[$advance,$id]);
                 self::advanceVersion($this->pdo);
-                $changes=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasTax)$changes['tax_bps']=$tax;
+                $changes=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasTax)$changes['tax_bps']=$tax;if($hasAdvance)$changes['advance_bps']=$advance;
                 StaffAudit::record($this->pdo,$actorId,'category.save','category',$id,$key,$changes);
                 return $id;
             });
@@ -292,12 +296,40 @@ final class ProductService
     {
         return DeveloperTrace::span(__METHOD__,fn()=>$this->listProductsObserved($filters,$staffId));
     }
+    /** A category slug plus every descendant category id, so filtering a parent returns its sub-categories' products. */
+    private function categoryTreeIds(string $slug): array
+    {
+        $byParent=[]; $start=null;
+        foreach ($this->query('SELECT id,parent_id,slug FROM categories')->fetchAll() as $r) {
+            $byParent[(int)($r['parent_id']??0)][]=(int)$r['id'];
+            if ($r['slug']===$slug) $start=(int)$r['id'];
+        }
+        if ($start===null) return [-1]; // unknown slug matches nothing
+        $ids=[]; $seen=[]; $stack=[$start];
+        while ($stack) { $id=(int)array_pop($stack); if (isset($seen[$id])) continue; $seen[$id]=true; $ids[]=$id; foreach ($byParent[$id]??[] as $child) $stack[]=$child; }
+        return $ids;
+    }
+    /** A representative image for a category: the lead published product's image, searched across its sub-categories. */
+    public function categoryImage(string $slug): ?string
+    {
+        $ids=$this->categoryTreeIds(CommerceValues::slug($slug)); $in=implode(',',array_fill(0,count($ids),'?'));
+        $path=$this->query("SELECT pi.path FROM product_images pi JOIN products p ON p.id=pi.product_id
+            WHERE p.status='active' AND p.category_id IN ($in)
+            AND (pi.variant_id IS NULL OR EXISTS(SELECT 1 FROM product_variants vi WHERE vi.id=pi.variant_id AND vi.enabled=1))
+            AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)
+            ORDER BY p.featured DESC, p.id DESC LIMIT 1",$ids)->fetchColumn();
+        return $path===false?null:$path;
+    }
     private function listProductsObserved(array $filters, ?int $staffId): array
     {
         $page=CommerceValues::integer($filters['page']??1,1,1000,'page'); $perPage=CommerceValues::integer($filters['per_page']??12,1,50,'per_page');
         $clauses=[]; $values=[];
         if ($staffId===null) $clauses[]="p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1) AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)";
-        foreach (['category'=>'c.slug','brand'=>'b.slug'] as $name=>$column) if (isset($filters[$name])&&$filters[$name]!=='') { $clauses[]="$column=?"; $values[]=CommerceValues::slug($filters[$name]); }
+        if (isset($filters['brand'])&&$filters['brand']!=='') { $clauses[]='b.slug=?'; $values[]=CommerceValues::slug($filters['brand']); }
+        if (isset($filters['category'])&&$filters['category']!=='') {
+            $ids=$this->categoryTreeIds(CommerceValues::slug($filters['category']));
+            $clauses[]='p.category_id IN ('.implode(',',array_fill(0,count($ids),'?')).')'; foreach($ids as $cid)$values[]=$cid;
+        }
         if (isset($filters['q'])&&$filters['q']!=='') {
             $q=CommerceValues::text($filters['q'],80,'q'); $q='%'.str_replace(['!','%','_'],['!!','!%','!_'],$q).'%';
             $clauses[]="(p.name LIKE ? ESCAPE '!' OR p.tags LIKE ? ESCAPE '!')"; $values[]=$q; $values[]=$q;

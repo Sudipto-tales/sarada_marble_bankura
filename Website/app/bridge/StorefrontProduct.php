@@ -7,11 +7,12 @@ class StorefrontProduct extends StorefrontController
         $this->handle(function (): void {
             $catalog = new CatalogReadService($this->pdo);
             $products = $catalog->listing(['per_page' => 50]);
-            $categories = (new ProductService($this->pdo))->taxonomies()['categories'];
+            $productService = new ProductService($this->pdo);
+            $categories = array_values(array_filter($productService->taxonomies()['categories'], static fn(array $c): bool => $c['parent_id'] === null));
             $categoryCards = [];
-            foreach (array_slice($categories, 0, 8) as $category) {
+            foreach ($categories as $category) {
                 $preview = $catalog->listing(['category'=>$category['slug'], 'per_page'=>1]);
-                $categoryCards[] = $category + ['material_count'=>$preview['total'], 'preview'=>$preview['items'][0]['images'][0]['path'] ?? null];
+                $categoryCards[] = $category + ['material_count'=>$preview['total'], 'preview'=>$productService->categoryImage($category['slug'])];
             }
             $testimonial = null;
             foreach (array_slice($products['items'], 0, 8) as $material) {
@@ -38,10 +39,11 @@ class StorefrontProduct extends StorefrontController
         $this->handle(function (): void {
             $catalog = new CatalogReadService($this->pdo);
             $products = $catalog->listing(['per_page' => 50]);
+            $productService = new ProductService($this->pdo);
             $categoryCards = [];
-            foreach (array_slice((new ProductService($this->pdo))->taxonomies()['categories'], 0, 4) as $category) {
+            foreach (array_slice(array_values(array_filter($productService->taxonomies()['categories'], static fn(array $c): bool => $c['parent_id'] === null)), 0, 4) as $category) {
                 $preview = $catalog->listing(['category' => $category['slug'], 'per_page' => 1]);
-                $categoryCards[] = $category + ['material_count' => $preview['total'], 'preview' => $preview['items'][0]['images'][0]['path'] ?? null];
+                $categoryCards[] = $category + ['material_count' => $preview['total'], 'preview' => $productService->categoryImage($category['slug'])];
             }
             $this->respond('app/page/storefront/offers.php', compact('products', 'categoryCards'));
         });

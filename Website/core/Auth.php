@@ -151,6 +151,14 @@ final class Auth
         return true;
     }
 
+    /** Store a customer's two-step preference: enablement, the single active channel and its contact phone. */
+    public static function setTwoFactor(int $id, bool $enabled, string $channel = 'email', ?string $phone = null): void
+    {
+        if (!in_array($channel, ['email', 'whatsapp', 'sms'], true)) $channel = 'email';
+        self::query('UPDATE users_tbl SET otp_enabled = ?, otp_channel = ?, otp_phone = ? WHERE id = ?',
+            [$enabled ? 1 : 0, $channel, $phone !== '' ? $phone : null, $id]);
+    }
+
     private static function createSession(int $id): void
     {
         if (!session_regenerate_id(true)) throw new RuntimeException('Session is unavailable.');

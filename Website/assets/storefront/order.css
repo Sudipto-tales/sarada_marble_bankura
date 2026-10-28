@@ -38,13 +38,32 @@ body[data-page=order] .page-intro strong{color:var(--teal)}
 .order-aside .button-wide{margin-top:4px}
 .order-address{font-size:13px;line-height:1.7;color:var(--ink)}
 
-.order-timeline ol{list-style:none;margin:0;padding:0;display:grid;gap:0}
-.order-timeline li{position:relative;padding:0 0 18px 22px;border-left:2px solid var(--line);margin-left:5px}
-.order-timeline li:last-child{border-left-color:transparent;padding-bottom:0}
-.order-timeline li::before{content:"";position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--teal);border:2px solid white}
-.order-timeline strong{font-size:13px}
-.order-timeline time{display:block;font-size:11px;color:var(--muted);margin:2px 0 4px}
-.order-timeline p{font-size:12px;color:#41474c;margin:0;line-height:1.6}
+/* Package tracker — journey stepper with brand palette */
+.order-track-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.order-track-head h2{margin:0}
+.order-track-pill{display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:30px;font-size:12px;font-weight:700;background:#e4e8da;color:var(--deep)}
+.order-track-pill.is-active{background:#eef3e9;color:#4a6a3f}
+.order-track-pill.is-done{background:#e3f0ec;color:#1f7a52}
+.order-track-pill.is-cancelled{background:#f6e2db;color:var(--clay)}
+.order-track-pill svg{width:15px;height:15px}
+
+.track-steps{list-style:none;margin:0;padding:0}
+.track-step{position:relative;display:grid;grid-template-columns:40px 1fr;gap:14px;padding-bottom:22px}
+.track-step:last-child{padding-bottom:0}
+.track-step::before{content:"";position:absolute;left:19px;top:42px;bottom:-2px;width:2px;background:var(--line)}
+.track-step:last-child::before{display:none}
+.track-step.is-done::before{background:var(--teal)}
+.track-node{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:2px solid var(--line);color:var(--muted);z-index:1}
+.track-node svg{width:18px;height:18px}
+.track-step.is-done .track-node{background:var(--teal);border-color:var(--teal);color:#fffdf8}
+.track-step.is-current .track-node{border-color:var(--teal);color:var(--teal);box-shadow:0 0 0 4px #6471581f}
+.track-step.is-cancelled .track-node{background:var(--clay);border-color:var(--clay);color:#fffdf8}
+.track-label{padding-top:8px;min-width:0}
+.track-label strong{display:block;font-size:13.5px;line-height:1.2}
+.track-step.is-upcoming .track-label strong,.track-step.is-void .track-label strong{color:var(--muted)}
+.track-label time{display:block;font-size:11px;color:var(--muted);margin-top:4px}
+.track-label p{font-size:11.5px;color:#41474c;margin:3px 0 0;line-height:1.5;overflow-wrap:anywhere}
+.track-label .pending-tag{display:block;font-size:11px;color:var(--muted);margin-top:4px}
 
 @media(max-width:900px){.order-layout{grid-template-columns:1fr}.order-aside{position:static}}
 @media(max-width:700px){.order-success{padding:28px 20px}.order-layout .panel{padding:18px}}

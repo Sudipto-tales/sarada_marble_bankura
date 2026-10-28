@@ -1,7 +1,7 @@
 <?php
 final class SettingsService
 {
-    private const KEYS=['tax_bps'=>'CHECKOUT_TAX_BPS','shipping_minor'=>'CHECKOUT_SHIPPING_MINOR','cod_enabled'=>'CHECKOUT_COD_ENABLED','razorpay_enabled'=>'CHECKOUT_RAZORPAY_ENABLED'];
+    private const KEYS=['tax_bps'=>'CHECKOUT_TAX_BPS','shipping_minor'=>'CHECKOUT_SHIPPING_MINOR','cod_enabled'=>'CHECKOUT_COD_ENABLED','razorpay_enabled'=>'CHECKOUT_RAZORPAY_ENABLED','advance_bps'=>'CHECKOUT_ADVANCE_BPS'];
     public function __construct(private PDO $pdo) {}
     public function get(string $key,string $default):string
     {
@@ -14,7 +14,7 @@ final class SettingsService
         // Shared current reads preserve authoritative settings without serializing all MySQL checkouts.
         $lock=$this->pdo->inTransaction()&&$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'
             ?($exclusive?' FOR UPDATE':' LOCK IN SHARE MODE'):'';
-        return CommerceDatabase::query($this->pdo,"SELECT skey,svalue FROM store_settings WHERE skey IN ('cod_enabled','razorpay_enabled','shipping_minor','tax_bps','cashback_cod_bps','cashback_cod_cap','cashback_razorpay_bps','cashback_razorpay_cap','cashback_simulation_bps','cashback_simulation_cap') ORDER BY skey".$lock)->fetchAll(PDO::FETCH_KEY_PAIR);
+        return CommerceDatabase::query($this->pdo,"SELECT skey,svalue FROM store_settings WHERE skey IN ('cod_enabled','razorpay_enabled','shipping_minor','tax_bps','advance_bps','cashback_cod_bps','cashback_cod_cap','cashback_razorpay_bps','cashback_razorpay_cap','cashback_simulation_bps','cashback_simulation_cap') ORDER BY skey".$lock)->fetchAll(PDO::FETCH_KEY_PAIR);
     }
     public const CASHBACK_METHODS=['cod','razorpay','simulation'];
     public function effective():array
@@ -27,6 +27,7 @@ final class SettingsService
             $cashback[$m]=['bps'=>(int)($rows["cashback_{$m}_bps"]??0),'cap_minor'=>(int)($rows["cashback_{$m}_cap"]??0)];
         return ['tax_bps'=>CommerceValues::integer($value('tax_bps','0'),0,10000,'tax_bps'),
             'shipping_minor'=>CommerceValues::integer($value('shipping_minor','0'),0,CommerceValues::MAX_MONEY,'shipping_minor'),
+            'advance_bps'=>CommerceValues::integer($value('advance_bps','0'),0,10000,'advance_bps'),
             'cod_enabled'=>filter_var($value('cod_enabled',false),FILTER_VALIDATE_BOOLEAN),
             'razorpay_enabled'=>filter_var($value('razorpay_enabled',false),FILTER_VALIDATE_BOOLEAN),
             'cashback'=>$cashback];
@@ -49,6 +50,7 @@ final class SettingsService
         CommerceAccess::requirePermission('admin.settings.edit',$actorId);$key=CommerceValues::key($operationKey);
         $values=['tax_bps'=>CommerceValues::integer($input['tax_bps']??null,0,10000,'tax_bps'),
             'shipping_minor'=>CommerceValues::decimal($input['shipping']??null,2,CommerceValues::MAX_MONEY,'shipping'),
+            'advance_bps'=>CommerceValues::integer($input['advance_bps']??0,0,10000,'advance_bps'),
             'cod_enabled'=>CommerceValues::flag($input['cod_enabled']??0,'cod_enabled'),
             'razorpay_enabled'=>CommerceValues::flag($input['razorpay_enabled']??0,'razorpay_enabled')];
         foreach(self::CASHBACK_METHODS as $m){

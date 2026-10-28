@@ -28,6 +28,8 @@ final class PaymentService
     }
     private function query(string $sql, array $args = []): PDOStatement { return CommerceDatabase::query($this->pdo, $sql, $args); }
     private function enabled(): void { OrderStates::payment('razorpay'); }
+    /** Amount collected online now: the committed advance for an advance order, else the full total (legacy NULL). */
+    private static function due(array $order): int { return (int)($order['amount_due_minor'] ?? $order['total_minor']); }
     private function client(): object
     {
         if ($this->pdo->inTransaction()) throw new LogicException('Payment HTTP requires a committed transaction.');
@@ -65,14 +67,14 @@ final class PaymentService
             // A durable claim prevents concurrent requests from creating two gateway orders.
             // Never retry an ambiguous HTTP creation: operator reconciliation is required after a crash/timeout.
             $this->query("INSERT INTO payments (order_id,provider,provider_order_id,amount_minor,currency,status,created_at,updated_at) VALUES (?,'razorpay',?,?,'INR','created',?,?)",
-                [$orderId,'pending:' . $orderId,$order['total_minor'],$now,$now]);
+                [$orderId,'pending:' . $orderId,self::due($order),$now,$now]);
             return ['payment'=>['id'=>(int)$this->pdo->lastInsertId()],'order'=>$order,'create'=>true];
         });
         if (!$claim['create']) return $this->checkoutData($userId, $orderId);
         $order = $claim['order'];
-        $remote = $this->client()->createOrder((int)$order['total_minor'], $order['order_number'], ['order_id'=>(string)$orderId]);
+        $remote = $this->client()->createOrder(self::due($order), $order['order_number'], ['order_id'=>(string)$orderId]);
         $providerId = $this->gatewayId($remote['id'] ?? '', 'order');
-        if (!is_int($remote['amount'] ?? null) || $remote['amount'] !== (int)$order['total_minor'] || ($remote['currency'] ?? null) !== 'INR')
+        if (!is_int($remote['amount'] ?? null) || $remote['amount'] !== self::due($order) || ($remote['currency'] ?? null) !== 'INR')
             throw new RequestRejected(422, 'payment_amount_mismatch', 'Payment amount or currency does not match.');
         CommerceDatabase::transaction($this->pdo, function () use ($claim, $providerId): void {
             $this->query('UPDATE payments SET provider_order_id=?,updated_at=? WHERE id=? AND provider_order_id=?',
@@ -174,11 +176,13 @@ final class PaymentService
             if ($payment['status'] !== 'captured') {
                 $order = $this->query('SELECT * FROM orders WHERE id=?' . $lock, [$payment['order_id']])->fetch();
                 $this->payable($order);
-                if ((int)$order['total_minor'] !== (int)$payment['amount_minor'] || $order['currency'] !== $payment['currency'])
+                if (self::due($order) !== (int)$payment['amount_minor'] || $order['currency'] !== $payment['currency'])
                     throw new RequestRejected(422, 'payment_amount_mismatch', 'Payment amount or currency does not match.');
                 $this->query('UPDATE payments SET status=?,provider_payment_id=?,updated_at=?,last_error_code=? WHERE id=?', [$status,$providerPaymentId,$now,$status==='failed'?'payment_declined':null,$paymentId]);
                 if ($status === 'captured') {
-                    $this->query("UPDATE orders SET payment_status='paid',updated_at=? WHERE id=?", [$now,$order['id']]);
+                    // An advance leaves a balance due on delivery; a full online payment settles the order.
+                    $paid = self::due($order) < (int)$order['total_minor'] ? 'advance_paid' : 'paid';
+                    $this->query("UPDATE orders SET payment_status=?,updated_at=? WHERE id=?", [$paid,$now,$order['id']]);
                     (new QueueService($this->pdo))->orderConfirmation((int)$order['id']);
                 }
             }

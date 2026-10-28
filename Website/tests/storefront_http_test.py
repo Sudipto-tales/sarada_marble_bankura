@@ -336,7 +336,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             fresh = next(f['inputs'] for f in Forms(guest.request('/account')[2]).forms if f['action']=='/account/addresses' and 'id' in f['inputs'])
             check(guest.request('/account/addresses/archive','POST',fresh)[0] == 303 and 'Updated Road' not in guest.request('/account')[2], 'Owned address archive removes it from active addresses.')
             check('Station Road' in guest.request(order_url)[2] and 'Updated Road' not in guest.request(order_url)[2], 'Existing order retains its immutable delivery snapshot after address edits/archive.')
-            check('Order timeline' in guest.request(order_url)[2], 'Order detail renders recorded transition history.')
+            check('Track your order' in guest.request(order_url)[2], 'Order detail renders recorded transition history.')
             extra_ids = run_fixture('extra')
             for selection_id in [product_id] + extra_ids[:3]:
                 check(guest.request('/compare','POST',{'csrf':token,'product_id':str(selection_id)})[0] == 303, 'Comparison accepts each of four real materials.')

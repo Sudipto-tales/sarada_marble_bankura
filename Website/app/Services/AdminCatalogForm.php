@@ -16,6 +16,8 @@ final class AdminCatalogForm
         $data['brand_id']=($post['brand_id']??'')===''?null:$read('brand_id',fn()=>CommerceValues::id($post['brand_id'],'brand_id'));
         $data['status']=$post['status']??'draft';if(!in_array($data['status'],['draft','active','archived'],true))$errors['status']='Select draft, active or archived.';
         $data['featured']=$read('featured',fn()=>CommerceValues::flag($post['featured']??0,'featured'));
+        // Advance payment: blank inherits (null), 0 forces full payment, a percent becomes basis points.
+        $data['advance_bps']=($post['advance_rate']??'')===''?null:$read('advance_rate',fn()=>CommerceValues::decimal($post['advance_rate'],2,10000,'advance_rate'));
         $rows=$post['variants']??null;$data['variants']=[];
         if(!is_array($rows)||count($rows)<1||count($rows)>20){$errors['variants']='Add between 1 and 20 variants.';return compact('data','errors');}
         if(($post['form_complete']??'')!=='1'||(string)count($rows)!==($post['variant_count']??''))$errors['variants']='The form was incomplete. Reload and try again; no variants were saved.';
@@ -43,6 +45,8 @@ final class AdminCatalogForm
     {
         foreach($product['variants'] as &$variant){
             foreach(['original_price'=>['original_price_minor',2],'price'=>['unit_price_minor',2],'increment'=>['qty_increment_milli',3],'coverage'=>['coverage_sqft_milli',3],'thickness'=>['thickness_mm_milli',3],'length'=>['length_mm_milli',3],'width'=>['width_mm_milli',3]] as $field=>[$source,$places])$variant[$field]=($variant[$source]??null)===null?'':AdminReadService::decimal($variant[$source],$places);
-        }unset($variant);return $product;
+        }unset($variant);
+        $product['advance_rate']=($product['advance_bps']??null)===null?'':AdminReadService::decimal($product['advance_bps'],2);
+        return $product;
     }
 }

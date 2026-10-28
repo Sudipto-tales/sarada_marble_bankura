@@ -125,6 +125,7 @@ class Admin extends StorefrontController
             $this->submitted(function()use($actor,$module){
                 $input=$_POST;if(($input['id']??'')==='')unset($input['id']);$input['enabled']=$input['enabled']??0;
                 if($module==='categories'&&array_key_exists('tax_rate',$input))$input['tax_bps']=$input['tax_rate']===''?null:CommerceValues::decimal($input['tax_rate'],2,10000,'tax_rate');
+                if($module==='categories'&&array_key_exists('advance_rate',$input))$input['advance_bps']=$input['advance_rate']===''?null:CommerceValues::decimal($input['advance_rate'],2,10000,'advance_rate');
                 $service=new ProductService($this->pdo);$method=$module==='categories'?'saveCategory':'saveBrand';
                 $service->$method($actor['id'],$input,CommerceValues::key($_POST['operation_key']??null));return 'admin/'.$module;
             },fn()=> $this->tablePage($module));
@@ -217,7 +218,7 @@ class Admin extends StorefrontController
     {
         CommerceAccess::requirePermission('admin.settings.view');
         $this->render('settings',['policy'=>OrderService::policy(),'payments'=>OrderStates::paymentModes(),'signup'=>Auth::registrationAvailable(),
-            'settings'=>(new SettingsService($this->pdo))->effective(),'values'=>$this->values]);
+            'settings'=>(new SettingsService($this->pdo))->effective(),'otp'=>OtpChannels::adminView($this->pdo),'values'=>$this->values]);
     }
     public function saveSettings():void
     {
@@ -225,6 +226,15 @@ class Admin extends StorefrontController
             $actor=CommerceAccess::requirePermission('admin.settings.edit');
             $this->submitted(function()use($actor):string {
                 (new SettingsService($this->pdo))->save($actor['id'],$_POST,CommerceValues::key($_POST['operation_key']??null));return 'admin/settings';
+            },fn()=> $this->settingsPage());
+        });
+    }
+    public function saveOtp():void
+    {
+        $this->handle(function():void {
+            $actor=CommerceAccess::requirePermission('admin.settings.edit');
+            $this->submitted(function()use($actor):string {
+                OtpChannels::save($this->pdo,$actor['id'],$_POST,CommerceValues::key($_POST['operation_key']??null));return 'admin/settings';
             },fn()=> $this->settingsPage());
         });
     }
@@ -305,6 +315,45 @@ class Admin extends StorefrontController
             }
             $page=CommerceValues::integer($_GET['page']??1,1,1000,'page');$reviews=$service->pending($actor['id'],$page);
             $this->render('reviews',compact('reviews','page'));
+        });
+    }
+    public function orderBalance(): void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.orders.edit');
+            $this->submitted(function()use($actor){
+                $id=CommerceValues::id($_POST['id']??null);
+                (new OrderService($this->pdo))->recordBalance($actor['id'],$id,CommerceValues::integer($_POST['revision']??null,1,PHP_INT_MAX,'revision'),CommerceValues::key($_POST['operation_key']??null));
+                return 'admin/order?id='.$id;
+            },fn()=> $this->orderPage());
+        });
+    }
+    public function staff(): void { $this->handle(fn()=> $this->staffPage()); }
+    private function staffPage(): void
+    {
+        $actor=$this->actor();CommerceAccess::requirePermission('admin.access.view');
+        $service=new StaffAccessService($this->pdo);
+        $this->render('staff',['roster'=>$service->roster($actor['id']),'roles'=>StaffAccessService::ROLES,
+            'isSuper'=>CommerceAccess::isSuperadmin($actor['id']),'values'=>$this->values]);
+    }
+    public function saveStaff(): void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.access.edit');
+            $this->submitted(function()use($actor){
+                (new StaffAccessService($this->pdo))->createStaff($actor['id'],$_POST,CommerceValues::key($_POST['operation_key']??null));
+                return 'admin/staff';
+            },fn()=> $this->staffPage());
+        });
+    }
+    public function staffRole(): void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.access.edit');
+            $this->submitted(function()use($actor){
+                (new StaffAccessService($this->pdo))->setRole($actor['id'],CommerceValues::id($_POST['user_id']??null),CommerceValues::text($_POST['role']??'',40,'role'),CommerceValues::key($_POST['operation_key']??null));
+                return 'admin/staff';
+            },fn()=> $this->staffPage());
         });
     }
 

@@ -27,7 +27,7 @@ p strong,p b,li strong,li b,.prose strong{font-weight:600;color:var(--ink)}
 .h-heading a:hover{color:var(--clay)}
 
 /* Trust / benefits strip. */
-.rf-trust{margin-top:25px;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:22px;background:var(--cream);border:1px solid var(--line);border-radius:14px}
+.rf-trust{margin:25px 0;display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:22px;background:var(--cream);border:1px solid var(--line);border-radius:14px}
 .rf-trust-item{display:flex;align-items:center;gap:14px}
 .rf-trust-icon{flex:0 0 auto;width:44px;height:44px;display:grid;place-items:center;border-radius:11px;background:#fff;border:1px solid var(--line)}
 .rf-trust-icon svg{width:22px;height:22px;fill:none;stroke:var(--deep);stroke-width:1.3}

@@ -11,9 +11,23 @@ class CustomerAccount extends StorefrontController
             $devices = $actor ? CustomerOtp::deviceListing($actor['id']) : [];
             $deviceTrusted = $actor ? CustomerOtp::trusted($actor['id']) : false;
             $pinSet = $actor ? CustomerOtp::pinAvailable($actor['id']) : false;
-            $pinLogin = !$actor && CustomerOtp::currentDevicePinAvailable();
-            $this->respond('app/page/storefront/account.php', compact('actor', 'addresses', 'devices', 'deviceTrusted', 'pinSet', 'pinLogin'));
+            $twoStep = $actor ? $this->twoStepState((int) $actor['id']) : null;
+            $channels = OtpChannels::available($this->pdo);
+            $this->respond('app/page/storefront/account.php', compact('actor', 'addresses', 'devices', 'deviceTrusted', 'pinSet', 'twoStep', 'channels'));
         });
+    }
+    /** The sign-in page: email/password plus the quick PIN form when this device is trusted. */
+    public function loginPage(): void
+    {
+        $this->handle(function (): void {
+            if (CommerceAccess::actor()) { $this->redirect('account'); return; }
+            $this->respond('app/page/storefront/login.php', ['pinLogin' => CustomerOtp::currentDevicePinAvailable()]);
+        });
+    }
+    private function twoStepState(int $userId): array
+    {
+        $row = CommerceDatabase::query($this->pdo, 'SELECT otp_enabled, otp_channel, otp_phone FROM users_tbl WHERE id = ?', [$userId])->fetch(PDO::FETCH_ASSOC) ?: [];
+        return ['enabled' => (int) ($row['otp_enabled'] ?? 0) === 1, 'channel' => (string) ($row['otp_channel'] ?? 'email'), 'phone' => (string) ($row['otp_phone'] ?? '')];
     }
     public function login(): void
     {
@@ -26,11 +40,17 @@ class CustomerAccount extends StorefrontController
             if ($result['throttled']) throw new RequestRejected(429, 'login_failed', 'Too many attempts. Try again in 15 minutes.');
             if (!$result['user']) throw new RequestRejected(401, 'login_failed', 'Invalid credentials or access unavailable.');
             $user = $result['user'];
-            // A verified login still passes a one-time code unless this device is already trusted.
-            if (CustomerOtp::loginRequired() && !CustomerOtp::trusted((int) $user['id'])) {
-                $_SESSION['pending_otp'] = ['user_id' => (int) $user['id'], 'purpose' => 'login', 'email' => $user['email']];
-                $sent = CustomerOtp::request((int) $user['id'], 'login', $user['email']);
-                $this->respond('app/page/storefront/otp_verify.php', ['purpose' => 'login', 'email' => $user['email'], 'sent' => $sent, 'offerTrust' => true]);
+            // A one-time code runs when the store forces it or the user turned on two-step, unless this
+            // device is already trusted. The code goes to the user's channel (email unless they chose otherwise).
+            $twoStep = CustomerOtp::loginRequired() || (int) ($user['otp_enabled'] ?? 0) === 1;
+            if ($twoStep && !CustomerOtp::trusted((int) $user['id'])) {
+                $available = OtpChannels::available($this->pdo);
+                $channel = (string) ($user['otp_channel'] ?? 'email');
+                if (empty($available[$channel])) $channel = 'email';
+                $phone = (string) ($user['otp_phone'] ?? '');
+                $_SESSION['pending_otp'] = ['user_id' => (int) $user['id'], 'purpose' => 'login', 'email' => $user['email'], 'channel' => $channel, 'phone' => $phone];
+                $sent = CustomerOtp::request((int) $user['id'], 'login', $user['email'], $channel, $phone);
+                $this->respond('app/page/storefront/otp_verify.php', ['purpose' => 'login', 'email' => $channel === 'email' ? $user['email'] : $phone, 'sent' => $sent, 'offerTrust' => true, 'channel' => $channel]);
                 return;
             }
             $this->completeLogin((int) $user['id']);
@@ -67,14 +87,43 @@ class CustomerAccount extends StorefrontController
             if (!CustomerOtp::verify($userId, $purpose, $code)) {
                 throw new RequestRejected(422, 'otp_invalid', 'That code is invalid or expired. Request a new one.');
             }
-            unset($_SESSION['pending_otp']);
             if ($purpose === 'register') {
+                unset($_SESSION['pending_otp']);
                 Auth::markVerified($userId);
                 $this->respond('app/page/storefront/message.php', ['title' => 'Email verified', 'message' => 'Your account is verified. You can now sign in.']);
                 return;
             }
+            if ($purpose === 'twostep') {
+                CommerceAccess::requireActor(); // only the signed-in owner enables their own second factor
+                $channel = (string) ($pending['channel'] ?? 'email');
+                Auth::setTwoFactor($userId, true, $channel, (string) ($pending['phone'] ?? ''));
+                unset($_SESSION['pending_otp']);
+                $this->respond('app/page/storefront/message.php', ['title' => 'Two-step verification on',
+                    'message' => 'Two-step verification is enabled. We will send a code to your ' . ($channel === 'email' ? 'email' : $channel) . ' each time you sign in on a new device.']);
+                return;
+            }
+            unset($_SESSION['pending_otp']);
             if (($_POST['trust_device'] ?? '') === '1') CustomerOtp::trustCurrentDevice($userId);
             $this->completeLogin($userId);
+        });
+    }
+    public function twoStep(): void
+    {
+        $this->handle(function (): void {
+            RequestSecurity::requireMutation();
+            $actor = CommerceAccess::requireActor();
+            if (($_POST['enable'] ?? '') !== '1') { Auth::setTwoFactor((int) $actor['id'], false); $this->redirect('account'); return; }
+            $channel = CommerceValues::text($_POST['channel'] ?? 'email', 16, 'channel');
+            if (empty(OtpChannels::available($this->pdo)[$channel])) throw new RequestRejected(422, 'channel_unavailable', 'That verification channel is not available.');
+            $phone = '';
+            if ($channel !== 'email') {
+                $phone = preg_replace('/\s+/', '', CommerceValues::text($_POST['phone'] ?? '', 32, 'phone'));
+                if (!preg_match('/\A\+?[0-9]{8,15}\z/', $phone)) throw new RequestRejected(422, 'invalid_phone', 'Enter a valid phone number with country code.');
+            }
+            $email = (string) $actor['email'];
+            $_SESSION['pending_otp'] = ['user_id' => (int) $actor['id'], 'purpose' => 'twostep', 'email' => $email, 'channel' => $channel, 'phone' => $phone];
+            $sent = CustomerOtp::request((int) $actor['id'], 'twostep', $email, $channel, $phone);
+            $this->respond('app/page/storefront/otp_verify.php', ['purpose' => 'twostep', 'email' => $channel === 'email' ? $email : $phone, 'sent' => $sent, 'offerTrust' => false, 'channel' => $channel]);
         });
     }
     public function resendOtp(): void
@@ -85,8 +134,10 @@ class CustomerAccount extends StorefrontController
             if (!is_array($pending) || !isset($pending['user_id'], $pending['purpose'], $pending['email'])) {
                 throw new RequestRejected(400, 'otp_context_missing', 'Your verification session expired. Please start again.');
             }
-            $sent = CustomerOtp::request((int) $pending['user_id'], (string) $pending['purpose'], (string) $pending['email']);
-            $this->respond('app/page/storefront/otp_verify.php', ['purpose' => $pending['purpose'], 'email' => $pending['email'], 'sent' => $sent, 'offerTrust' => $pending['purpose'] === 'login']);
+            $channel = (string) ($pending['channel'] ?? 'email');
+            $sent = CustomerOtp::request((int) $pending['user_id'], (string) $pending['purpose'], (string) $pending['email'], $channel, (string) ($pending['phone'] ?? ''));
+            $destination = $channel === 'email' ? (string) $pending['email'] : (string) ($pending['phone'] ?? '');
+            $this->respond('app/page/storefront/otp_verify.php', ['purpose' => $pending['purpose'], 'email' => $destination, 'sent' => $sent, 'offerTrust' => $pending['purpose'] === 'login', 'channel' => $channel]);
         });
     }
     public function logout(): void
@@ -178,13 +229,14 @@ class CustomerAccount extends StorefrontController
             $email = CommerceValues::text($_POST['email'] ?? '', 190, 'email');
             $result = Auth::register($first, $last, $first.' '.$last, $email, $password);
             if (!$result['status']) throw new RequestRejected(($result['code'] ?? '') === 'unavailable' ? 503 : 422, 'registration_failed', $result['message']);
-            // OTP mode: issue a 6-digit code and show the entry page. Link/queue modes keep their email.
-            if (CustomerOtp::enabled() && env('AUTH_VERIFICATION_TRANSPORT', 'disabled') === 'otp') {
+            // First-time verification is an emailed 6-digit code whenever OTP is available.
+            // Without OTP (no mail transport), registration falls back to the link/queue email below.
+            if (CustomerOtp::enabled()) {
                 $user = Auth::userByEmail($email);
                 if ($user) {
-                    $_SESSION['pending_otp'] = ['user_id' => (int) $user['id'], 'purpose' => 'register', 'email' => $user['email']];
+                    $_SESSION['pending_otp'] = ['user_id' => (int) $user['id'], 'purpose' => 'register', 'email' => $user['email'], 'channel' => 'email', 'phone' => ''];
                     $sent = CustomerOtp::request((int) $user['id'], 'register', $user['email']);
-                    $this->respond('app/page/storefront/otp_verify.php', ['purpose' => 'register', 'email' => $user['email'], 'sent' => $sent, 'offerTrust' => false]);
+                    $this->respond('app/page/storefront/otp_verify.php', ['purpose' => 'register', 'email' => $user['email'], 'sent' => $sent, 'offerTrust' => false, 'channel' => 'email']);
                     return;
                 }
             }
