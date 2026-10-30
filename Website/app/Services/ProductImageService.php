@@ -11,6 +11,33 @@ final class ProductImageService
     public function upload(int $actor,int $product,array $file,array $input,string $key): int
     {
         CommerceAccess::requirePermission('admin.products.edit',$actor);
+        $alt=CommerceValues::text($input['alt_text']??'',190,'alt_text');
+        $position=CommerceValues::integer($input['position']??0,0,1000,'position');
+        $variant=($input['variant_id']??'')===''?null:CommerceValues::id($input['variant_id'],'variant_id');
+        $stored=$this->store($file,'assets/products');
+        try{
+            return (new ProductService($this->pdo))->addImage($actor,$product,['path'=>$stored['path'],'mime'=>'image/png','width'=>$stored['width'],'height'=>$stored['height'], 'alt_text'=>$alt,'position'=>$position,'variant_id'=>$variant],$key);
+        }catch(Throwable $e){$this->discard($stored['path']);throw $e;}
+    }
+    /** Brand tile logo: same re-encode pipeline, stored beside product rasters under its own folder. */
+    public function brandLogo(int $actor,array $file): string
+    {
+        CommerceAccess::requirePermission('admin.products.edit',$actor);
+        return $this->store($file,'assets/brands')['path'];
+    }
+    /** Remove a generated raster this service wrote; unknown paths are ignored. */
+    public function discard(?string $path): void
+    {
+        if(!is_string($path)||!preg_match('#\Aassets/(products|brands)/[a-f0-9]{32}\.png\z#',$path))return;
+        $file=dirname(__DIR__,2).'/'.$path;
+        if(is_file($file)&&!is_link($file))@unlink($file);
+    }
+    /**
+     * Validate an uploaded raster, re-encode it to PNG and publish it under $folder.
+     * Returns the relative public path and the source pixel dimensions.
+     */
+    private function store(array $file,string $folder): array
+    {
         if(!self::available())throw new RequestRejected(503,'image_decoder_unavailable','Image uploads need the PHP GD extension. Ask the server operator to enable it.');
         if(($file['error']??null)!==UPLOAD_ERR_OK||!is_string($file['tmp_name']??null)||!is_uploaded_file($file['tmp_name']))CommerceValues::invalid('image_upload');
         $size=filesize($file['tmp_name']);
@@ -21,21 +48,20 @@ final class ProductImageService
         if(!isset($formats[$mime])||!in_array($extension,['jpg','jpeg','png','webp'],true)||($extension==='jpeg'?'jpg':$extension)!==$formats[$mime])CommerceValues::invalid('image_type');
         $dimensions=@getimagesize($file['tmp_name']);
         if(!$dimensions||$dimensions[0]<1||$dimensions[1]<1||$dimensions[0]>6000||$dimensions[1]>6000||$dimensions[0]*$dimensions[1]>12000000)CommerceValues::invalid('image_dimensions');
-        $alt=CommerceValues::text($input['alt_text']??'',190,'alt_text');
-        $position=CommerceValues::integer($input['position']??0,0,1000,'position');
-        $variant=($input['variant_id']??'')===''?null:CommerceValues::id($input['variant_id'],'variant_id');
         $bytes=file_get_contents($file['tmp_name']);$decoded=@imagecreatefromstring($bytes);
         if(!$decoded)CommerceValues::invalid('image_decode');
         $stage=tempnam(PrivateStorage::directory('image-staging'),'raster-');$public=null;
         try{
+            // Keep transparency: brand logos are usually PNGs cut out against the page background.
+            imagealphablending($decoded,false);imagesavealpha($decoded,true);
             if(!imagepng($decoded,$stage,6))throw new RuntimeException('Could not encode image.');
             chmod($stage,0600);
-            $name=bin2hex(random_bytes(16)).'.png';$relative='assets/products/'.$name;
-            $directory=dirname(__DIR__,2).'/assets/products';
+            $name=bin2hex(random_bytes(16)).'.png';$relative=$folder.'/'.$name;
+            $directory=dirname(__DIR__,2).'/'.$folder;
             if(is_link($directory)||(!is_dir($directory)&&!mkdir($directory,0755,true)))throw new RuntimeException('Image storage is unavailable.');
             $public=$directory.'/'.$name;
             if(!copy($stage,$public)||!chmod($public,0644))throw new RuntimeException('Image storage is unavailable.');
-            return (new ProductService($this->pdo))->addImage($actor,$product,['path'=>$relative,'mime'=>'image/png','width'=>$dimensions[0],'height'=>$dimensions[1], 'alt_text'=>$alt,'position'=>$position,'variant_id'=>$variant],$key);
+            return ['path'=>$relative,'width'=>$dimensions[0],'height'=>$dimensions[1]];
         }catch(Throwable $e){if($public&&is_file($public))unlink($public);throw $e;}
         finally{imagedestroy($decoded);if(is_file($stage))unlink($stage);}
     }

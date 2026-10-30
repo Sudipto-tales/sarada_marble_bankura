@@ -6,11 +6,11 @@ body[data-page=checkout] .page-intro h1{font-size:clamp(26px,3vw,34px);letter-sp
 .checkout-steps li{display:flex;align-items:center;gap:8px}
 .checkout-steps li::after{content:"";width:34px;height:2px;background:var(--line);margin-left:4px}
 .checkout-steps li:last-child::after{display:none}
-.checkout-steps li span{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;background:#eef1f3;color:var(--muted)}
+.checkout-steps li span{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;background:#eef1f3;color:var(--muted)}
 .checkout-steps li.current{color:var(--ink)}
 .checkout-steps li.current span{background:var(--teal);color:#fff}
 .checkout-steps li.done{color:var(--ink)}
-.checkout-steps li.done span{background:#e3f0ec;color:var(--teal)}
+.checkout-steps li.done span{background:#e3edf0;color:var(--teal)}
 
 .php-checkout.checkout-layout,.checkout-layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:30px;align-items:start}
 .checkout-main{display:grid;gap:18px;min-width:0}
@@ -26,10 +26,10 @@ body[data-page=checkout] .page-intro h1{font-size:clamp(26px,3vw,34px);letter-sp
 .php-pay-option{display:flex;align-items:center;gap:10px;border:1px solid #cadce2;border-radius:12px;padding:14px;cursor:pointer;margin:0;font-weight:500}
 .php-pay-option:has(input:checked){border-color:var(--teal);background:#f3f9fb}
 .php-pay-option input{width:auto;accent-color:var(--teal)}
-.php-cashback{margin-left:auto;color:#1f7a52;font-size:12px}
+.php-cashback{margin-left:auto;color:#1f7a52;font-size:13px}
 
 .php-address-card{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fbfdfd;margin-bottom:12px}
-.php-address-card .eyebrow{font-size:10px;letter-spacing:.12em;color:var(--teal)}
+.php-address-card .eyebrow{font-size:12.6px;letter-spacing:.12em;color:var(--teal)}
 .php-order-review p{font-size:13px;margin:6px 0}
 
 .checkout-summary{position:sticky;top:110px;display:grid;gap:16px;min-width:0}
@@ -39,7 +39,7 @@ body[data-page=checkout] .page-intro h1{font-size:clamp(26px,3vw,34px);letter-sp
 .summary-item{display:grid;grid-template-columns:48px 1fr auto;gap:12px;align-items:center}
 .summary-thumb{width:48px;height:48px;border-radius:10px;background:#eef3f4;color:var(--teal);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;text-transform:uppercase}
 .summary-item strong{display:block;font-size:13px;line-height:1.3}
-.summary-item small{display:block;font-size:11px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.summary-item small{display:block;font-size:12.8px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
 .summary-price{font-size:13px;font-weight:600;white-space:nowrap}
 .summary-totals{margin:16px 0 0;display:grid;gap:10px}
 .summary-totals>div{display:flex;justify-content:space-between;gap:12px;font-size:14px}
@@ -52,7 +52,7 @@ body[data-page=checkout] .page-intro h1{font-size:clamp(26px,3vw,34px);letter-sp
 .summary-total dd{color:var(--teal);font-weight:750;font-size:20px;letter-spacing:-.5px}
 
 .trust-badges{list-style:none;display:flex;justify-content:space-around;gap:10px;margin:0;padding:18px 10px;border:1px solid var(--line);border-radius:18px;background:#fbfdfd}
-.trust-badges li{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;font-size:11px;font-weight:600;color:var(--muted);flex:1}
+.trust-badges li{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;font-size:12.8px;font-weight:600;color:var(--muted);flex:1}
 .trust-badges svg{width:26px;height:26px;color:var(--teal)}
 
 @media(max-width:900px){.php-checkout.checkout-layout,.checkout-layout{grid-template-columns:1fr;gap:20px}.checkout-summary{position:static}}
@@ -70,12 +70,12 @@ html.js .no-js{display:none !important}
 .address-option input{margin-top:3px;width:auto;accent-color:var(--teal)}
 .address-card-inline{display:grid;gap:2px}
 .address-card-inline strong{font-size:13px}
-.address-card-inline small{font-size:11.5px;color:var(--muted)}
+.address-card-inline small{font-size:12.8px;color:var(--muted)}
 [data-add-toggle]{margin-top:12px;font-weight:600;color:var(--teal)}
 
 .address-form .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .address-form .field-grid .col-2{grid-column:1 / -1}
-.address-form label{display:block;font-size:12px;font-weight:600;margin:0}
+.address-form label{display:block;font-size:13px;font-weight:600;margin:0}
 .address-form input{width:100%;margin-top:6px;padding:11px 12px;border:1px solid #c8d9de;border-radius:10px;background:white;color:var(--ink);font:inherit}
 .address-form input[readonly]{background:#f3f6f7;color:var(--muted)}
 .checkbox{display:flex !important;align-items:center;gap:8px;margin-top:14px !important;font-weight:500 !important}
@@ -84,18 +84,22 @@ html.js .no-js{display:none !important}
 .coupon-row{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:14px}
 .coupon-row label{flex:1;min-width:160px;margin:0}
 .coupon-row input{width:100%;margin-top:6px;padding:11px 12px;border:1px solid #c8d9de;border-radius:10px;font:inherit}
-.coupon-row [data-coupon-msg]{flex-basis:100%;font-size:12px}
-.form-msg{font-size:12px;color:var(--teal)}.form-msg.error{color:#b4232a}
+.coupon-row [data-coupon-msg]{flex-basis:100%;font-size:13px}
+.form-msg{font-size:13px;color:var(--teal)}.form-msg.error{color:#b4232a}
 .form-row{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
 
-[data-place-hint]{margin-top:10px;font-size:12px}
+[data-place-hint]{margin-top:10px;font-size:13px}
 
 /* Compact, itemised summary (smaller than the reference's oversized total) */
-.summary-totals>div{font-size:12.5px}
+.summary-totals>div{font-size:13px}
 .summary-totals dt{color:var(--muted)}
 .summary-total{border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
 .summary-total dt{font-size:13px;font-weight:700;color:var(--ink)}
 .summary-total dd{font-size:15px;font-weight:750;letter-spacing:-.2px}
-.summary-note{font-size:11px;color:var(--muted);margin-top:14px;line-height:1.6}
+.summary-note{font-size:12.8px;color:var(--muted);margin-top:14px;line-height:1.6}
 
 @media(max-width:700px){.address-form .field-grid{grid-template-columns:1fr}.address-form .field-grid .col-2{grid-column:auto}}
+
+/* `.checkout-main label` above, and php.css's `main label`, both force block,
+   which collapsed this row and glued the cashback onto the method name. */
+.checkout-main label.php-pay-option{display:flex}

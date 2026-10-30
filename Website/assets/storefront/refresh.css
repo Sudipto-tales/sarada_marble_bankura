@@ -14,11 +14,11 @@ p strong,p b,li strong,li b,.prose strong{font-weight:600;color:var(--ink)}
 
 /* Smoother, lifted interactions (additive: transform/shadow don't reflow). */
 .button{border-radius:8px;transition:transform .15s ease,box-shadow .15s ease,background .15s ease}
-.button:hover{transform:translateY(-1px);box-shadow:0 6px 18px #49553f24}
+.button:hover{transform:translateY(-1px);box-shadow:0 6px 18px #3f525524}
 .button.light{box-shadow:0 1px 2px #292d2910}
 .stone-card,.h-promo,.h-collection,.h-bestsellers article,.h-services>a,.h-facts a{transition:transform .18s ease,box-shadow .18s ease}
 .stone-card:hover,.h-collection:hover,.h-bestsellers article:hover,.h-services>a:hover,.h-facts a:hover{transform:translateY(-3px);box-shadow:0 10px 30px #292d2914}
-.h-promo:hover{box-shadow:0 14px 34px #141a1326}
+.h-promo:hover{box-shadow:0 14px 34px #0c192126}
 
 /* Section headings gain a small brand accent for a cleaner catalogue feel. */
 .h-heading h2{position:relative;padding-left:14px}
@@ -32,15 +32,15 @@ p strong,p b,li strong,li b,.prose strong{font-weight:600;color:var(--ink)}
 .rf-trust-icon{flex:0 0 auto;width:44px;height:44px;display:grid;place-items:center;border-radius:11px;background:#fff;border:1px solid var(--line)}
 .rf-trust-icon svg{width:22px;height:22px;fill:none;stroke:var(--deep);stroke-width:1.3}
 .rf-trust-item strong{display:block;font-size:13px}
-.rf-trust-item small{display:block;color:var(--muted);font-size:11px;line-height:1.5;margin-top:3px}
+.rf-trust-item small{display:block;color:var(--muted);font-size:12.8px;line-height:1.5;margin-top:3px}
 
 /* Call-to-action band. */
-.rf-cta{margin-top:25px;display:flex;flex-wrap:wrap;align-items:center;gap:24px;justify-content:space-between;padding:34px;border-radius:18px;color:#fffdf8;background:radial-gradient(ellipse at 85% 20%,#8a9a6555,transparent 55%),linear-gradient(120deg,#49553f,#172019)}
+.rf-cta{margin-top:25px;display:flex;flex-wrap:wrap;align-items:center;gap:24px;justify-content:space-between;padding:34px;border-radius:18px;color:#fbfcfc;background:radial-gradient(ellipse at 85% 20%,#65949a55,transparent 55%),linear-gradient(120deg,#3f5255,#0f1f28)}
 .rf-cta-copy{max-width:560px}
 .rf-cta-copy h2{margin:12px 0 8px;font-size:26px;letter-spacing:-.6px}
-.rf-cta-copy p{color:#e6e9dd;font-size:13px;line-height:1.7}
+.rf-cta-copy p{color:#dde7e9;font-size:13px;line-height:1.7}
 .rf-cta-actions{display:flex;gap:12px;flex-wrap:wrap}
-.rf-cta .button.light{background:#fffdf8;color:#2b3327}
+.rf-cta .button.light{background:#fbfcfc;color:#193241}
 
 /* Form & account pages (register, login, account, address, checkout…):
    softer panels and inputs with a brand focus, matching the refreshed cards. */
@@ -54,12 +54,12 @@ p strong,p b,li strong,li b,.prose strong{font-weight:600;color:var(--ink)}
 /* Checkout: payment methods (COD, online…) as selectable cards. */
 .php-pay-options{border:0;padding:0;margin:18px 0;display:grid;gap:10px}
 .php-pay-options legend{font-weight:700;padding:0;margin-bottom:4px}
-.php-pay-option{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fffdf8;cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease}
+.php-pay-option{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fbfcfc;cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease}
 .php-pay-option:hover{border-color:var(--sage)}
 .php-pay-option:has(input:checked){border-color:var(--deep);box-shadow:inset 0 0 0 1px var(--deep)}
 .php-pay-option input{accent-color:var(--deep);width:17px;height:17px;flex:0 0 auto}
 .php-pay-name{font-weight:650}
-.php-cashback{margin-left:auto;font-size:11px;color:var(--clay);white-space:nowrap}
+.php-cashback{margin-left:auto;font-size:12.8px;color:var(--clay);white-space:nowrap}
 
 /* Product, cart & wishlist: unify radius and carry the refreshed hover feel. */
 .gallery-main{border-radius:14px}
@@ -74,7 +74,7 @@ p strong,p b,li strong,li b,.prose strong{font-weight:600;color:var(--ink)}
 /* Product card: heart over image (fills red in place, no redirect), sale badge,
    underlined title/explore links, compact outline "Add" beside a filled "Buy now". */
 .save-stone-form{margin:0;padding:0}
-.save-stone{position:absolute;top:16px;right:16px;display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:#fffdf8ee;box-shadow:0 1px 5px #292d2924;color:var(--deep);cursor:pointer;z-index:2;transition:transform .15s ease,color .15s ease}
+.save-stone{position:absolute;top:16px;right:16px;display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:#fbfcfcee;box-shadow:0 1px 5px #292d2924;color:var(--deep);cursor:pointer;z-index:2;transition:transform .15s ease,color .15s ease}
 .save-stone svg{width:17px;height:17px}
 .save-stone:hover{transform:scale(1.08)}
 .save-stone.saved,.save-stone[aria-pressed=true]{color:#d92d4b}
@@ -82,15 +82,15 @@ p strong,p b,li strong,li b,.prose strong{font-weight:600;color:var(--ink)}
 .badge-sale{background:var(--clay);color:#fff;font-weight:700}
 .stone-price{align-items:baseline}
 .stone-price strong{font-size:14px}
-.stone-price del{color:var(--muted);font-weight:400;font-size:11px}
+.stone-price del{color:var(--muted);font-weight:400;font-size:12.8px}
 .stone-card h3 a{text-decoration:none}
 .card-bottom a{text-decoration:none;color:var(--deep)}
 .card-cta{display:flex;gap:8px;margin-top:12px}
 .card-cta form{margin:0;padding:0}
-.card-cta .card-add{flex:0 0 auto;gap:6px;padding:8px 12px;font-size:11px}
+.card-cta .card-add{flex:0 0 auto;gap:6px;padding:8px 12px;font-size:12.8px}
 .card-cta .card-add svg{width:15px;height:15px}
-.card-cta .card-buy{flex:1;padding:8px 12px;font-size:12px;font-weight:650}
-.card-cta .quick-add-unavailable{flex:1;align-self:center;font-size:11px;color:var(--muted)}
+.card-cta .card-buy{flex:1;padding:8px 12px;font-size:13px;font-weight:650}
+.card-cta .quick-add-unavailable{flex:1;align-self:center;font-size:12.8px;color:var(--muted)}
 
 @media(prefers-reduced-motion:reduce){.gallery-thumbs button:hover{transform:none}.php-bag-item:hover .bag-photo img{transform:none}.save-stone:hover{transform:none}}
 @media(prefers-reduced-motion:reduce){.button,.stone-card,.h-promo,.h-collection,.h-bestsellers article,.h-services>a,.h-facts a{transition:none}.button:hover,.stone-card:hover,.h-collection:hover,.h-bestsellers article:hover,.h-services>a:hover,.h-facts a:hover,.h-promo:hover{transform:none}}
@@ -99,7 +99,7 @@ p strong,p b,li strong,li b,.prose strong{font-weight:600;color:var(--ink)}
 header .search{position:relative;width:260px;padding:5px 5px 5px 14px;border-radius:999px;border:1px solid rgba(15,23,42,.08);background:linear-gradient(180deg,#fff,#f3f5f6);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 1px 2px rgba(15,23,42,.05);transition:box-shadow .2s,border-color .2s,background .2s}
 header .search:hover{border-color:rgba(14,108,134,.25)}
 header .search:focus-within{border-color:var(--teal);background:#fff;box-shadow:0 0 0 4px rgba(43,184,204,.15),0 8px 22px rgba(15,23,42,.08)}
-header .search input{font-size:11px;-webkit-appearance:none;appearance:none}
+header .search input{font-size:12.8px;-webkit-appearance:none;appearance:none}
 header .search input:hover,header .search input:focus,header .search input:focus-visible,header .search button:focus-visible{outline:none;box-shadow:none}
 header .search button{width:36px;height:36px;border-radius:999px;background:linear-gradient(180deg,var(--bright),var(--teal));box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 2px 6px rgba(14,108,134,.35);transition:filter .2s}
 header .search button:hover{filter:brightness(1.07)}
@@ -107,14 +107,280 @@ header .search button:hover{filter:brightness(1.07)}
 @media(max-width:650px){header .search{width:100%;padding-left:12px}.search-suggest{left:0;right:0;width:auto}}
 .search-group{padding:2px 0}
 .search-group+.search-group{border-top:1px solid var(--line)}
-.search-group-head{font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);font-weight:700;padding:6px 10px 4px}
+.search-group-head{font-size:12.2px;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);font-weight:700;padding:6px 10px 4px}
 .search-hit{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px}
 .search-hit:hover,.search-hit:focus-visible{background:var(--cream)}
-.search-hit img,.search-thumb-blank{width:44px;height:44px;border-radius:7px;flex-shrink:0;object-fit:cover;background:#f0efeb}
+.search-hit img,.search-thumb-blank{width:44px;height:44px;border-radius:7px;flex-shrink:0;object-fit:cover;background:#ebeff0}
 .search-hit-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
-.search-hit-name{font-size:12px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.search-hit-meta{font-size:10px;color:var(--muted)}
-.search-price{font-size:11px;font-weight:700;color:var(--teal);white-space:nowrap}
-.search-all{display:block;text-align:center;padding:10px;font-size:11px;font-weight:700;color:var(--teal);border-top:1px solid var(--line);margin-top:4px}
+.search-hit-name{font-size:13px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.search-hit-meta{font-size:12.6px;color:var(--muted)}
+.search-price{font-size:12.8px;font-weight:700;color:var(--teal);white-space:nowrap}
+.search-all{display:block;text-align:center;padding:10px;font-size:12.8px;font-weight:700;color:var(--teal);border-top:1px solid var(--line);margin-top:4px}
 .search-all:hover{background:var(--cream)}
-.search-empty{padding:16px 12px;font-size:11px;color:var(--muted);text-align:center}
+.search-empty{padding:16px 12px;font-size:12.8px;color:var(--muted);text-align:center}
+
+/* ==========================================================================
+   Polished Slab — the storefront's finish layer: one type scale, one
+   container, glossy navy chrome and the motion that belongs with it. Loaded
+   last so it settles every page at once instead of each sheet carrying its
+   own treatment. Palette is the logo's: navy structure, teal actions, cyan
+   accents. Everything here is colour, shadow or transform, so it cannot
+   reflow the layouts underneath it.
+   ========================================================================== */
+
+/* --- Type scale. Only unclassed headings are set here; pages that tuned
+   their own sizes keep them, their selectors being more specific. --- */
+body{font-size:var(--fs-base);line-height:1.6}
+h1,h2,h3,h4{font-family:var(--font-head);line-height:1.18;text-wrap:balance}
+h1{font-size:var(--fs-2xl);letter-spacing:-.03em}
+h2{font-size:var(--fs-xl);letter-spacing:-.02em}
+h3{font-size:var(--fs-lg);letter-spacing:-.012em;line-height:1.3}
+p{line-height:1.65}
+main p:not([class]){max-width:68ch}
+.eyebrow{letter-spacing:.14em;font-weight:700;color:var(--teal)}
+small,.note{line-height:1.55}
+
+/* --- One container. Fifteen competing .wrap width rules across five sheets
+   are why the page margin jumped between pages; this is the one that wins. --- */
+.wrap,main#main.wrap,body[data-page=home] main#main.wrap,
+body>footer .wrap,body[data-page=home]>footer .wrap{
+  width:100%;max-width:var(--shell);margin-inline:auto;
+  padding-left:max(var(--gutter),env(safe-area-inset-left,0px));
+  padding-right:max(var(--gutter),env(safe-area-inset-right,0px))}
+
+/* --- Card grids reflow on width instead of on breakpoints, which retires the
+   three different column counts each of these used to switch between. --- */
+.stone-grid,.collection-layout .stone-grid{grid-template-columns:repeat(auto-fill,minmax(min(212px,100%),1fr));gap:20px}
+.h-collections,.store-tools-grid,.h-services{grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr))}
+.footer-grid,body>footer .footer-grid{grid-template-columns:repeat(auto-fill,minmax(min(190px,100%),1fr))}
+
+/* --- Glossy navy chrome --- */
+.utility,body[data-page=home] .utility{background:#061b29;border-bottom:0;color:#9fc3d0}
+.utility a{color:var(--sage)}
+header,body[data-page=home] header{
+  background:linear-gradient(180deg,#0d3b53,#082c40);
+  border-bottom:1px solid #ffffff14;color:#eaf7f8;
+  box-shadow:inset 0 1px 0 #ffffff1f,0 10px 30px #04192657}
+header nav a{color:#c8e3ea;transition:color .2s}
+header nav a:hover,header nav a[aria-current=page]{color:#fff}
+header nav a[aria-current=page]{position:relative}
+header nav a[aria-current=page]::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--bright),var(--teal))}
+header .icon{color:#dceef3}
+header .icon b{background:linear-gradient(180deg,var(--bright),var(--teal));color:#04202b;box-shadow:0 2px 6px #04192666}
+.brand img{filter:drop-shadow(0 2px 6px #0418264d)}
+
+/* --- Hero: one slow specular pass, the way light rakes a polished slab. --- */
+.h-hero,.hero{position:relative;overflow:hidden}
+.h-hero::after,.hero::after{content:"";position:absolute;top:-60%;left:-35%;width:38%;height:220%;
+  pointer-events:none;z-index:1;transform:rotate(14deg);
+  background:linear-gradient(90deg,transparent,#ffffff14 45%,#ffffff26 50%,#ffffff14 55%,transparent);
+  animation:slab-sweep 9s ease-in-out infinite}
+@keyframes slab-sweep{0%{left:-35%}55%{left:105%}100%{left:105%}}
+/* z-index 1 slips the sweep above the hero artwork and below the copy (2) and
+   the benefits row (3). Do not give the hero's children position/z-index here:
+   .h-hero-bottom is absolutely positioned and loses its placement. */
+
+/* --- Controls: gradient fill with an inset top highlight, lifting on hover. --- */
+/* Gradient stops chosen so white passes 4.5:1 across the whole fill: the
+   lighter stop is 4.6:1, the darker 7.6:1. */
+.button{border-radius:9px;background:linear-gradient(180deg,#0a8190,#065c67);color:#fff;
+  box-shadow:inset 0 1px 0 #ffffff33,0 2px 6px #06374026;
+  transition:transform .16s ease,box-shadow .16s ease,filter .16s ease}
+.button:hover{transform:translateY(-2px);filter:brightness(1.07);box-shadow:inset 0 1px 0 #ffffff40,0 10px 24px #0637403d}
+.button:active{transform:translateY(0)}
+.button.light,.button.secondary{background:linear-gradient(180deg,#fff,#eef5f7);color:var(--ink);
+  box-shadow:inset 0 1px 0 #fff,inset 0 0 0 1px var(--line),0 2px 6px #06374014}
+.button.light:hover,.button.secondary:hover{filter:none;box-shadow:inset 0 1px 0 #fff,inset 0 0 0 1px var(--teal),0 8px 20px #0637401f}
+
+/* --- Product card: lifts, and a gloss streak crosses the stone on hover. --- */
+.stone-card{background:#fff;border-radius:14px;
+  box-shadow:inset 0 1px 0 #fff,0 1px 2px #06374014,0 8px 22px #0637400f;
+  transition:transform .22s cubic-bezier(.2,.7,.3,1),box-shadow .22s}
+.stone-card:hover{transform:translateY(-5px);box-shadow:0 18px 40px #0637402b}
+.stone-image{position:relative;overflow:hidden}
+.stone-image img{transition:transform .5s cubic-bezier(.2,.7,.3,1)}
+.stone-card:hover .stone-image img{transform:scale(1.06)}
+.stone-image::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(104deg,transparent 38%,#ffffff00 44%,#ffffffa6 50%,#ffffff00 56%,transparent 62%);
+  transform:translateX(-120%);transition:transform .75s ease}
+.stone-card:hover .stone-image::after{transform:translateX(120%)}
+.stone-card .stone-price strong{font-family:var(--font-head);font-weight:700;color:var(--teal)}
+.stone-card .stone-price .price-unset{font-family:var(--font-body);font-size:var(--fs-sm);font-weight:600;color:var(--muted)}
+/* Badges rank by how much they should interrupt: a price cut is the loudest,
+   "featured" is quiet navy glass, and being out of stock is not an accent at
+   all -- it used to share the featured badge's colour and read as a promotion. */
+.badge,.stone-card .badge{border-radius:999px;background:#082c40cc;color:#eaf7f8;box-shadow:0 2px 8px #0418264d;backdrop-filter:blur(6px)}
+.badge-sale,.stone-card .badge-sale{background:linear-gradient(180deg,var(--bright),var(--teal));color:#04202b;font-weight:700}
+.badge-out,.stone-card .badge-out{background:#ffffffe6;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line);backdrop-filter:blur(6px)}
+
+/* 16px is the size below which iOS zooms the page in on focus. */
+@media(max-width:650px){
+  input,select,textarea,header .search input{font-size:16px}
+  .utility-inner{font-size:11px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .h-hero::after,.hero::after{animation:none;opacity:0}
+  .stone-card,.button,.stone-image img{transition:none}
+  .stone-card:hover,.button:hover{transform:none}
+  .stone-card:hover .stone-image img{transform:none}
+  .stone-image::after{display:none}
+}
+
+/* --- Contrast corrections --------------------------------------------------
+   php.css sets `main a{color:var(--clay)}`, which also catches links styled as
+   buttons: "Sign in" rendered as cyan text on a teal fill, near-invisible. And
+   clay on the page background is 3.1:1, under the 4.5:1 AA needs for body text;
+   the brand teal is 4.8:1 and still reads as the accent. --- */
+/* Only plain inline links take the accent. An anchor wrapping a heading, an
+   image or an icon is a card or a tile -- often on a dark band -- and keeps
+   whatever colour it inherits, which is what it had before this rule existed. */
+body[data-page] main a:not(.button):not(:has(strong,p,h2,h3,h4,img,svg)){color:var(--teal)}
+body[data-page] main a:not(.button):not(:has(strong,p,h2,h3,h4,img,svg)):hover{color:#0a6572}
+/* The dark bands carry light links; the accent would sit at ~2:1 on them. */
+body[data-page] main .h-hero a:not(.button),body[data-page] main [class*=h-promo] a:not(.button),
+body[data-page] main .h-featured-spotlight a:not(.button),body[data-page] main .h-bestsellers a:not(.button),
+body[data-page] main .rf-cta a:not(.button),body[data-page] main .php-account-intro a:not(.button),
+body[data-page] main .page-banner a:not(.button){color:#eaf7f8}
+
+/* A blanket `button:disabled{opacity:.5}` left "Place order" white-on-pale at
+   2.0:1. A disabled control still has to be readable, so it gets its own flat
+   treatment instead of being faded out. */
+.button:disabled,.button[aria-disabled=true]{opacity:1;background:#dfe9ec;color:#4d6673;
+  box-shadow:inset 0 0 0 1px #c9d9de;transform:none;filter:none;cursor:not-allowed}
+
+/* Wishlist: each grid cell holds the card plus a sibling remove form, which
+   otherwise left a bare trash icon floating under the card. */
+.stone-grid>div:has(>.php-remove){display:flex;flex-direction:column}
+.stone-grid>div>.stone-card{flex:1}
+.php-remove{margin:8px 0 0;padding:0;display:flex}
+.php-remove .text-button{display:inline-flex;align-items:center;gap:7px;width:100%;justify-content:center;
+  padding:9px;border-radius:9px;font-size:var(--fs-xs);font-weight:600;color:var(--muted);
+  transition:color .15s ease,background .15s ease}
+.php-remove .text-button svg{width:15px;height:15px}
+.php-remove .text-button:hover{color:#b4232a;background:#fdf2f2}
+
+/* ===== Flat header, locale row and right-hand mobile drawer ===================== */
+/* The navy gradient chrome is dropped: the bar now sits on the page colour so the
+   sticky header still hides content scrolling beneath it. */
+header,body[data-page=home] header{background:var(--cream);color:var(--ink);
+  border-bottom:1px solid var(--line);box-shadow:none;backdrop-filter:none}
+header nav a{color:var(--ink)}
+header nav a:hover,header nav a[aria-current=page]{color:var(--clay)}
+header .icon{color:var(--ink)}
+.brand img{filter:none}
+
+.navigation{flex-wrap:wrap}
+.navigation .brand{order:0}
+.navigation .mobile-toggle{display:none;order:1}
+/* width/justify-content are reset explicitly: several breakpoints give `nav` a
+   full-width centred row, which would push the rest of the bar onto a second line. */
+#site-nav{order:2;position:static;display:flex;width:auto;flex-wrap:nowrap;justify-content:flex-start;
+  background:none;padding:0;box-shadow:none}
+.navigation .search{order:3;flex:1 1 170px;width:auto;min-width:0;max-width:280px}
+.navigation .header-locale{order:4;margin-left:auto;display:flex;align-items:center;gap:9px}
+.navigation .header-actions{order:5;margin-left:0}
+#site-drawer,#site-drawer .drawer-panel{display:contents}
+.drawer-scrim,.drawer-close{display:none}
+.header-actions .icon em{display:none}
+
+.locale-address{display:inline-flex;align-items:center;gap:7px;min-width:0;max-width:200px;
+  padding:5px 11px;border-radius:999px;border:1px solid var(--line);text-decoration:none;color:inherit;
+  transition:border-color .2s,background .2s}
+.locale-address:hover{border-color:var(--teal);background:#fff}
+.locale-address svg{width:17px;height:17px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.5}
+.locale-address span{display:grid;min-width:0}
+.locale-address b{font-size:9.8px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.locale-address small{font-size:12.4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.locale-lang{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12.4px;color:inherit;
+  padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer;
+  transition:border-color .2s,color .2s}
+.locale-lang:hover{border-color:var(--teal);color:var(--teal)}
+.locale-lang svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.5}
+.locale-lang b{font-size:11.8px;font-weight:700;letter-spacing:.04em}
+.locale-lang:focus-visible{outline:2px solid var(--teal);outline-offset:1px}
+
+/* Between the drawer breakpoint and a roomy desktop the bar has to stay on one line. */
+@media(min-width:1001px) and (max-width:1240px){
+  .navigation{gap:16px}
+  .navigation .search{flex:1 1 120px;max-width:220px}
+  .locale-address{max-width:160px;padding:5px 9px}
+  .locale-lang{padding:6px 5px;font-size:12px}
+  .header-actions{gap:9px}
+}
+
+@media(max-width:1000px){
+  /* The header bar owns its own gutter: `.wrap` resolves to several different
+     widths across the page stylesheets, so it cannot be relied on here. */
+  .navigation{width:100%;max-width:none;height:auto;row-gap:10px;padding:10px 14px;align-items:center}
+  .navigation .brand{margin-right:auto}
+  .navigation .mobile-toggle{display:block;margin-left:auto;order:1}
+  .navigation .search,body[data-page=home] .navigation .search{order:2;flex:0 0 100%;width:100%;max-width:none;margin:0}
+  .navigation .header-locale{order:3;flex:1 1 100%;max-width:100%;min-width:0;margin-left:0;gap:10px}
+  .locale-address{flex:1 1 0;min-width:0;max-width:none;padding:7px 12px}
+  .locale-lang{flex:0 1 auto;min-width:0;max-width:40%}
+
+  /* Drawer: a full-viewport grid whose left cell is the scrim and right cell the panel. */
+  #site-drawer{position:fixed;inset:0;z-index:60;display:grid;
+    grid-template-columns:1fr min(320px,86vw);visibility:hidden}
+  #site-drawer.php-nav-open{visibility:visible}
+  #site-drawer .drawer-scrim{display:block;border:0;padding:0;cursor:pointer;
+    background:#0f1f2899;opacity:0;transition:opacity .28s ease}
+  #site-drawer.php-nav-open .drawer-scrim{opacity:1}
+  /* Block layout, so the `order` values other breakpoints set on nav cannot reshuffle the drawer. */
+  #site-drawer .drawer-panel{display:block;overflow-y:auto;padding:16px 18px 28px;
+    background:var(--cream);box-shadow:-14px 0 34px #0f1f2826;
+    transform:translateX(100%);transition:transform .28s ease}
+  #site-drawer.php-nav-open .drawer-panel{transform:none}
+  #site-drawer .drawer-close{display:block;margin:0 -6px 8px auto;width:34px;height:34px;
+    border:0;background:none;color:var(--ink)}
+  #site-drawer .drawer-close svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6}
+  #site-drawer #site-nav{display:block;padding:0;background:none;box-shadow:none;position:static;width:auto}
+  #site-drawer #site-nav a,#site-drawer .header-actions .icon{display:flex;align-items:center;gap:12px;
+    width:auto;height:auto;justify-content:flex-start;font-size:14px;padding:13px 2px;
+    border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}
+  #site-drawer #site-nav a[aria-current=page]{color:var(--clay);font-weight:600}
+  #site-drawer #site-nav a[aria-current=page]::after{display:none}
+  #site-drawer .header-actions{display:block;margin:0;gap:0}
+  #site-drawer .header-actions .icon em{display:block;font-style:normal;order:1}
+  #site-drawer .header-actions svg{width:20px;height:20px;flex-shrink:0}
+  #site-drawer .header-actions .icon b{position:static;order:2;margin-left:auto;
+    min-width:21px;height:21px;display:grid;place-items:center;border-radius:999px;font-size:11.4px}
+  body.drawer-open{overflow:hidden}
+}
+
+/* ===== Home cards keep one size whatever the copy runs to ======================= */
+.h-product-row,.h-six,.h-featured-row{grid-auto-rows:1fr}
+.h-product{display:flex;flex-direction:column;height:100%}
+.h-product-bottom{margin-top:auto}
+
+/* ===== Room-tour video modal =================================================== */
+/* max-width, not just width: the shared `dialog` rule caps every dialog at 560px. */
+#video-dialog{width:min(920px,94vw);max-width:min(920px,94vw);padding:0;border:0;border-radius:12px;background:#0b1419;overflow:visible}
+#video-dialog::backdrop{background:#0f1f28cc}
+#video-dialog .video-frame{aspect-ratio:16/9;width:100%;border-radius:12px;overflow:hidden;background:#000}
+#video-dialog iframe{display:block;width:100%;height:100%;border:0}
+#video-dialog [data-close-video]{position:absolute;top:-14px;right:-14px;width:34px;height:34px;
+  border:0;border-radius:999px;background:var(--cream);color:var(--ink);display:grid;place-items:center;
+  box-shadow:0 4px 14px #0f1f2866;cursor:pointer}
+#video-dialog [data-close-video] svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7}
+@media(max-width:650px){#video-dialog{width:96vw;max-width:96vw}#video-dialog [data-close-video]{top:-42px;right:0}}
+
+/* ===== Stacked panels need air between them ==================================== */
+main#main>.panel,main#main>.grid,main#main>.php-account-links{margin-top:20px}
+
+/* ===== Account cards: icon beside a stacked title + description ================ */
+.php-account-links{grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr))}
+.php-account-links a.panel{display:flex;align-items:flex-start;gap:14px;padding:20px;
+  transition:border-color .2s,box-shadow .2s,transform .2s}
+.php-account-links a.panel:hover{border-color:var(--teal);box-shadow:0 6px 18px #0f1f281a;transform:translateY(-1px)}
+.php-card-icon{display:grid;place-items:center;flex-shrink:0;width:42px;height:42px;border-radius:10px;
+  background:var(--ice,#e8f1f4);color:var(--deep)}
+.php-card-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.5}
+.php-card-text{display:block;min-width:0}
+.php-card-text b{display:block;font-size:14px;font-weight:650;color:var(--ink);letter-spacing:-.2px}
+.php-card-text small{display:block;margin-top:5px;font-size:12.4px;line-height:1.5;color:var(--muted)}
+
+/* ===== Section headings carry their own icon =================================== */
+.php-section-head{display:flex;align-items:center;gap:10px}
+.php-section-head svg{width:21px;height:21px;flex-shrink:0;fill:none;stroke:var(--teal);stroke-width:1.5}

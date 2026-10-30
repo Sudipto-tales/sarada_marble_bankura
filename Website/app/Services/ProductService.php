@@ -195,14 +195,21 @@ final class ProductService
         CommerceAccess::requirePermission('admin.products.edit',$actorId); $key=CommerceValues::key($key);
         $id=isset($input['id'])?CommerceValues::id($input['id']):null; $slug=CommerceValues::slug($input['slug']??null);
         $name=CommerceValues::text($input['name']??null,190,'name'); $enabled=CommerceValues::flag($input['enabled']??1,'enabled');
+        // A logo is only rewritten when the caller uploaded one or asked to clear it; otherwise it is left alone.
+        $logo=array_key_exists('logo_path',$input)?$input['logo_path']:false;
+        if ($logo!==false && $logo!==null && !preg_match('#\Aassets/brands/[a-f0-9]{32}\.png\z#',(string)$logo)) CommerceValues::invalid('logo_path');
         try {
-            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$key):int {
+            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$logo,$key):int {
                 CommerceAccess::requirePermission('admin.products.edit',$actorId);
                 if ($id && !$this->query('SELECT id FROM brands WHERE id=?'.CommerceDatabase::lock($this->pdo),[$id])->fetchColumn()) throw new RequestRejected(404,'not_found','Brand not found.');
-                if ($id) $this->query('UPDATE brands SET slug=?,name=?,enabled=? WHERE id=?',[$slug,$name,$enabled,$id]);
-                else { $this->query('INSERT INTO brands (slug,name,enabled) VALUES (?,?,?)',[$slug,$name,$enabled]); $id=(int)$this->pdo->lastInsertId(); }
+                if ($id) {
+                    $this->query('UPDATE brands SET slug=?,name=?,enabled=? WHERE id=?',[$slug,$name,$enabled,$id]);
+                    if ($logo!==false) $this->query('UPDATE brands SET logo_path=? WHERE id=?',[$logo,$id]);
+                } else {
+                    $this->query('INSERT INTO brands (slug,name,enabled,logo_path) VALUES (?,?,?,?)',[$slug,$name,$enabled,$logo===false?null:$logo]); $id=(int)$this->pdo->lastInsertId();
+                }
                 self::advanceVersion($this->pdo);
-                StaffAudit::record($this->pdo,$actorId,'brand.save','brand',$id,$key,['name'=>$name,'slug'=>$slug,'enabled'=>$enabled]);
+                StaffAudit::record($this->pdo,$actorId,'brand.save','brand',$id,$key,['name'=>$name,'slug'=>$slug,'enabled'=>$enabled,'logo'=>$logo===false?'unchanged':($logo===null?'cleared':'replaced')]);
                 return $id;
             });
         } catch (Throwable $e) { if (CommerceDatabase::uniqueConflict($e)) throw new RequestRejected(409,'catalog_conflict','Brand slug already exists.'); throw $e; }
@@ -248,11 +255,19 @@ final class ProductService
         $variants=$this->query("SELECT v.*,r.original_price_minor,i.on_hand_milli,i.reserved_milli,(i.on_hand_milli-i.reserved_milli) AS available_milli
             FROM product_variants v LEFT JOIN variant_reference_prices r ON r.variant_id=v.id LEFT JOIN inventory i ON i.variant_id=v.id WHERE v.product_id IN ($marks)".($staff?'':' AND v.enabled=1').' ORDER BY v.product_id,v.id',$ids)->fetchAll();
         $images=$this->query("SELECT * FROM product_images WHERE product_id IN ($marks) ORDER BY product_id,position,id",$ids)->fetchAll();
-        $variantGroups=[]; $imageGroups=[];
+        // One roll-up for the whole page so cards can show a rating without a query each.
+        $ratings=$this->query("SELECT r.product_id,COUNT(*) AS review_count,SUM(COALESCE(r.rating_tenths,r.rating*10)) AS sum_tenths
+            FROM product_reviews r JOIN users_tbl u ON u.id=r.user_id
+            WHERE r.product_id IN ($marks) AND r.status='approved' AND u.status=1 AND u.email_verify=1 GROUP BY r.product_id",$ids)->fetchAll();
+        $variantGroups=[]; $imageGroups=[]; $ratingGroups=[];
         foreach ($variants as $variant) $variantGroups[$variant['product_id']][]=$variant;
         foreach ($images as $image) $imageGroups[$image['product_id']][]=$image;
+        foreach ($ratings as $rating) $ratingGroups[$rating['product_id']]=$rating;
         foreach ($products as &$product) {
             $product['variants']=$variantGroups[$product['id']]??[]; $product['images']=$imageGroups[$product['id']]??[];
+            $rating=$ratingGroups[$product['id']]??null;
+            $product['review_count']=$rating?(int)$rating['review_count']:0;
+            $product['rating_tenths']=$rating&&(int)$rating['review_count']>0?CommerceValues::round((int)$rating['sum_tenths'],(int)$rating['review_count']):null;
             $prices=array_column(array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled']),'unit_price_minor');
             $product['min_price_minor']=$prices?min($prices):null;
             $product['in_stock']=(bool)array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled'] && $row['available_milli']!==null && (int)$row['available_milli']>=(int)$row['qty_increment_milli']);

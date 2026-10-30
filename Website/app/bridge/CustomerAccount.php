@@ -13,7 +13,12 @@ class CustomerAccount extends StorefrontController
             $pinSet = $actor ? CustomerOtp::pinAvailable($actor['id']) : false;
             $twoStep = $actor ? $this->twoStepState((int) $actor['id']) : null;
             $channels = OtpChannels::available($this->pdo);
-            $this->respond('app/page/storefront/account.php', compact('actor', 'addresses', 'devices', 'deviceTrusted', 'pinSet', 'twoStep', 'channels'));
+            $profile = $actor
+                ? (CommerceDatabase::query($this->pdo, 'SELECT firstname, lastname, email, otp_phone FROM users_tbl WHERE id = ?', [$actor['id']])->fetch(PDO::FETCH_ASSOC) ?: [])
+                : [];
+            $notice = $_SESSION['account_notice'] ?? null;
+            unset($_SESSION['account_notice']);
+            $this->respond('app/page/storefront/account.php', compact('actor', 'addresses', 'devices', 'deviceTrusted', 'pinSet', 'twoStep', 'channels', 'profile', 'notice'));
         });
     }
     /** The sign-in page: email/password plus the quick PIN form when this device is trusted. */
@@ -96,7 +101,8 @@ class CustomerAccount extends StorefrontController
             if ($purpose === 'twostep') {
                 CommerceAccess::requireActor(); // only the signed-in owner enables their own second factor
                 $channel = (string) ($pending['channel'] ?? 'email');
-                Auth::setTwoFactor($userId, true, $channel, (string) ($pending['phone'] ?? ''));
+                // Email codes need no number, and the stored one is the account's profile phone, so leave it.
+                Auth::setTwoFactor($userId, true, $channel, $channel === 'email' ? null : (string) ($pending['phone'] ?? ''));
                 unset($_SESSION['pending_otp']);
                 $this->respond('app/page/storefront/message.php', ['title' => 'Two-step verification on',
                     'message' => 'Two-step verification is enabled. We will send a code to your ' . ($channel === 'email' ? 'email' : $channel) . ' each time you sign in on a new device.']);
@@ -144,7 +150,7 @@ class CustomerAccount extends StorefrontController
     {
         $this->handle(function (): void {
             RequestSecurity::requireMutation(); Auth::logout();
-            unset($_SESSION['checkout_keys'], $_SESSION['cart_merge_excluded'], $_SESSION['pending_buy_now'], $_SESSION['pending_otp']);
+            unset($_SESSION['checkout_keys'], $_SESSION['cart_merge_excluded'], $_SESSION['pending_buy_now'], $_SESSION['pending_otp'], $_SESSION['pending_profile']);
             $this->redirect('account');
         });
     }
@@ -179,9 +185,86 @@ class CustomerAccount extends StorefrontController
             CustomerOtp::revokeAll((int) $actor['id']);
             CustomerOtp::clearDeviceCookie();
             Auth::logout();
-            unset($_SESSION['checkout_keys'], $_SESSION['cart_merge_excluded'], $_SESSION['pending_buy_now'], $_SESSION['pending_otp']);
+            unset($_SESSION['checkout_keys'], $_SESSION['cart_merge_excluded'], $_SESSION['pending_buy_now'], $_SESSION['pending_otp'], $_SESSION['pending_profile']);
             $this->respond('app/page/storefront/message.php',
                 ['title' => 'Account deleted', 'message' => 'Your account has been closed and you have been signed out. Past orders are retained for billing records.']);
+        });
+    }
+    /**
+     * Manage profile: the name saves straight away, but a changed email or phone is held in the
+     * session until a one-time code sent to that new destination is entered.
+     */
+    public function updateProfile(): void
+    {
+        $this->handle(function (): void {
+            RequestSecurity::requireMutation();
+            $actor = CommerceAccess::requireActor();
+            $current = CommerceDatabase::query($this->pdo, 'SELECT firstname, lastname, email, otp_phone FROM users_tbl WHERE id = ?', [$actor['id']])->fetch(PDO::FETCH_ASSOC);
+            if (!$current) throw new RequestRejected(404, 'not_found', 'Account not found.');
+            $profile = Auth::normaliseProfile(
+                CommerceValues::text($_POST['firstname'] ?? '', 100, 'firstname'),
+                CommerceValues::text($_POST['lastname'] ?? '', 100, 'lastname', true),
+                CommerceValues::text($_POST['email'] ?? '', 190, 'email'),
+                CommerceValues::text($_POST['phone'] ?? '', 32, 'phone', true));
+            if (isset($profile['error'])) throw new RequestRejected(422, 'invalid_profile', $profile['error']);
+            if (Auth::emailTaken($profile['email'], (int) $actor['id'])) {
+                throw new RequestRejected(409, 'email_taken', 'That email address is already registered to another account.');
+            }
+            $emailChanged = strcasecmp($profile['email'], (string) $current['email']) !== 0;
+            $phoneChanged = $profile['phone'] !== (string) ($current['otp_phone'] ?? '');
+            if (!$emailChanged && !$phoneChanged) {
+                if (!Auth::saveProfile((int) $actor['id'], $profile, true)) {
+                    throw new RequestRejected(409, 'email_taken', 'That email address is already registered to another account.');
+                }
+                $_SESSION['account_notice'] = 'Your name was updated.';
+                $this->redirect('account');
+                return;
+            }
+            if (!CustomerOtp::enabled()) throw new RequestRejected(503, 'unavailable', 'Contact changes need verification, which is currently unavailable.');
+            // Send the code to whatever the shopper is changing to, so they prove they hold it. A new
+            // phone can only receive one when WhatsApp/SMS is configured; otherwise the existing,
+            // already-verified email carries the confirmation.
+            [$channel, $destination] = $this->profileChannel($profile, $emailChanged, $phoneChanged, (string) $current['email']);
+            $_SESSION['pending_profile'] = $profile + ['user_id' => (int) $actor['id'], 'email_changed' => $emailChanged];
+            $_SESSION['pending_otp'] = ['user_id' => (int) $actor['id'], 'purpose' => 'profile',
+                'email' => $channel === 'email' ? $destination : (string) $current['email'], 'channel' => $channel, 'phone' => $channel === 'email' ? '' : $destination];
+            $sent = CustomerOtp::request((int) $actor['id'], 'profile', (string) $_SESSION['pending_otp']['email'], $channel, (string) $_SESSION['pending_otp']['phone']);
+            $this->respond('app/page/storefront/otp_verify.php',
+                ['purpose' => 'profile', 'email' => $destination, 'sent' => $sent, 'offerTrust' => false, 'channel' => $channel]);
+        });
+    }
+    /** Where a profile confirmation code goes: the new phone when we can text it, else the new/old email. */
+    private function profileChannel(array $profile, bool $emailChanged, bool $phoneChanged, string $currentEmail): array
+    {
+        if ($phoneChanged && $profile['phone'] !== '' && !$emailChanged) {
+            $available = OtpChannels::available($this->pdo);
+            foreach (['whatsapp', 'sms'] as $channel) if (!empty($available[$channel])) return [$channel, $profile['phone']];
+        }
+        return ['email', $emailChanged ? $profile['email'] : $currentEmail];
+    }
+    public function confirmProfile(): void
+    {
+        $this->handle(function (): void {
+            RequestSecurity::requireMutation();
+            $actor = CommerceAccess::requireActor();
+            $pending = $_SESSION['pending_profile'] ?? null;
+            if (!is_array($pending) || (int) ($pending['user_id'] ?? 0) !== (int) $actor['id']) {
+                throw new RequestRejected(400, 'otp_context_missing', 'Your verification session expired. Please start again.');
+            }
+            $code = CommerceValues::text($_POST['code'] ?? '', 6, 'code');
+            if (!CustomerOtp::verify((int) $actor['id'], 'profile', $code)) {
+                throw new RequestRejected(422, 'otp_invalid', 'That code is invalid or expired. Request a new one.');
+            }
+            // Re-check the address at write time: another signup may have claimed it while the code was out.
+            if (Auth::emailTaken($pending['email'], (int) $actor['id'])
+                || !Auth::saveProfile((int) $actor['id'], $pending, true)) {
+                unset($_SESSION['pending_profile'], $_SESSION['pending_otp']);
+                throw new RequestRejected(409, 'email_taken', 'That email address is already registered to another account.');
+            }
+            $changed = !empty($pending['email_changed']);
+            unset($_SESSION['pending_profile'], $_SESSION['pending_otp']);
+            $_SESSION['account_notice'] = $changed ? 'Your email address was updated and verified.' : 'Your contact details were updated.';
+            $this->redirect('account');
         });
     }
     public function address(): void

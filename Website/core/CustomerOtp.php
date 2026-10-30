@@ -9,7 +9,7 @@ require_once __DIR__ . '/PrivateStorage.php';
  */
 final class CustomerOtp
 {
-    private const PURPOSES = ['register', 'login', 'reset', 'delete', 'twostep'];
+    private const PURPOSES = ['register', 'login', 'reset', 'delete', 'twostep', 'profile'];
     private const DEVICE_COOKIE = 'trusted_device';
     private const REQUEST_WINDOW = 3600; // max 5 requests/guesses per hour per email+purpose
     private const GUESS_LIMIT = 5;        // wrong-code guesses before a code is locked
@@ -100,7 +100,8 @@ final class CustomerOtp
     private static function deliver(string $email, string $purpose, string $code, int $expires, string $channel = 'email', ?string $phone = null): void
     {
         $action = ['register' => 'verify your account', 'login' => 'sign in', 'reset' => 'reset your password',
-            'delete' => 'confirm account deletion', 'twostep' => 'turn on two-step verification'][$purpose];
+            'delete' => 'confirm account deletion', 'twostep' => 'turn on two-step verification',
+            'profile' => 'confirm your new contact details'][$purpose];
         if ($channel === 'whatsapp' || $channel === 'sms') {
             $creds = OtpChannels::credentials(self::connection(), $channel);
             if ($creds === null || !is_string($phone) || $phone === '') throw new RuntimeException('OTP delivery is unavailable.');

@@ -3,12 +3,43 @@
   'use strict';
   document.documentElement.classList.add('js');
   const toggle = document.querySelector('.mobile-toggle');
-  const nav = document.querySelector('#site-nav');
-  if (toggle && nav) {
-    toggle.addEventListener('click', () => {
-      const open = toggle.getAttribute('aria-expanded') !== 'true';
+  const drawer = document.querySelector('#site-drawer');
+  if (toggle && drawer) {
+    const setDrawer = open => {
       toggle.setAttribute('aria-expanded', String(open));
-      nav.classList.toggle('php-nav-open', open);
+      drawer.classList.toggle('php-nav-open', open);
+      document.body.classList.toggle('drawer-open', open);
+      if (!open) toggle.focus();
+    };
+    toggle.addEventListener('click', () => setDrawer(toggle.getAttribute('aria-expanded') !== 'true'));
+    drawer.addEventListener('click', event => { if (event.target.closest('[data-close-drawer]')) setDrawer(false); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && drawer.classList.contains('php-nav-open')) setDrawer(false); });
+  }
+  // One button, cycling through the offered codes: en -> bn -> hi -> en.
+  document.querySelector('[data-language]')?.addEventListener('click', event => {
+    const codes = event.currentTarget.dataset.codes.split(',');
+    const next = codes[(codes.indexOf(document.documentElement.lang) + 1) % codes.length];
+    document.cookie = `lang=${encodeURIComponent(next)};path=/;max-age=31536000;samesite=lax`;
+    location.reload();
+  });
+  const videoDialog = document.querySelector('#video-dialog');
+  if (videoDialog) {
+    const frame = videoDialog.querySelector('.video-frame');
+    document.querySelectorAll('[data-video]').forEach(trigger => trigger.addEventListener('click', event => {
+      event.preventDefault();
+      frame.innerHTML = '';
+      const player = document.createElement('iframe');
+      player.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoDialog.dataset.videoId)}?autoplay=1&rel=0`;
+      player.title = 'Visualize your room';
+      player.allow = 'accelerometer; autoplay; encrypted-media; picture-in-picture; fullscreen';
+      player.allowFullscreen = true;
+      frame.append(player);
+      videoDialog.showModal();
+    }));
+    // Dropping the iframe is what actually stops playback.
+    videoDialog.addEventListener('close', () => { frame.innerHTML = ''; });
+    videoDialog.addEventListener('click', event => {
+      if (event.target === videoDialog || event.target.closest('[data-close-video]')) videoDialog.close();
     });
   }
   const surfaces = document.querySelector('#calculator-surfaces');
@@ -89,7 +120,12 @@
       action.value = saved ? 'remove' : 'add';
       button.classList.toggle('saved', saved);
       button.setAttribute('aria-pressed', String(saved));
-      if (badge) badge.textContent = String(Math.max(0, (parseInt(badge.textContent,10)||0) + (saved ? 1 : -1)));
+      if (badge) {
+        const next = Math.max(0, (parseInt(badge.textContent, 10) || 0) + (saved ? 1 : -1));
+        badge.textContent = String(next);
+        badge.classList.toggle('is-zero', next < 1);
+        badge.setAttribute('aria-hidden', next < 1 ? 'true' : 'false');
+      }
       fetch(form.action, { method:'POST', body:new FormData(form) }).catch(() => {}).finally(() => { delete button.dataset.busy; });
     });
   });
@@ -170,4 +206,19 @@
   function setOpen(open) { form.hidden=!open; button.setAttribute('aria-expanded',String(open)); button.textContent=open?'Hide filters −':'Show filters +'; }
   function resize() { button.hidden=!mobile.matches; setOpen(!mobile.matches); }
   button.addEventListener('click',()=>setOpen(form.hidden)); mobile.addEventListener('change',resize); resize();
+})();
+
+/* Account "Manage profile": open the editor in a modal. Without JS the dialog stays closed, so the
+   button is revealed only here and the form is reachable by its own route for anyone who posts it. */
+(() => {
+  'use strict';
+  const dialog = document.querySelector('#profile-dialog');
+  const open = document.querySelector('[data-open-profile]');
+  if (!dialog || !open) return;
+  open.addEventListener('click', () => {
+    dialog.showModal();
+    const first = dialog.querySelector('input[name=firstname]');
+    if (first) first.focus();
+  });
+  dialog.querySelectorAll('[data-close-profile]').forEach(b => b.addEventListener('click', () => dialog.close()));
 })();
