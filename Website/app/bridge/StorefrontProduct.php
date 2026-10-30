@@ -7,11 +7,12 @@ class StorefrontProduct extends StorefrontController
         $this->handle(function (): void {
             $catalog = new CatalogReadService($this->pdo);
             $products = $catalog->listing(['per_page' => 50]);
-            $categories = (new ProductService($this->pdo))->taxonomies()['categories'];
+            $productService = new ProductService($this->pdo);
+            $categories = array_values(array_filter($productService->taxonomies()['categories'], static fn(array $c): bool => $c['parent_id'] === null));
             $categoryCards = [];
-            foreach (array_slice($categories, 0, 8) as $category) {
+            foreach ($categories as $category) {
                 $preview = $catalog->listing(['category'=>$category['slug'], 'per_page'=>1]);
-                $categoryCards[] = $category + ['material_count'=>$preview['total'], 'preview'=>$preview['items'][0]['images'][0]['path'] ?? null];
+                $categoryCards[] = $category + ['material_count'=>$preview['total'], 'preview'=>$productService->categoryImage($category['slug'])];
             }
             $testimonial = null;
             foreach (array_slice($products['items'], 0, 8) as $material) {
@@ -38,10 +39,11 @@ class StorefrontProduct extends StorefrontController
         $this->handle(function (): void {
             $catalog = new CatalogReadService($this->pdo);
             $products = $catalog->listing(['per_page' => 50]);
+            $productService = new ProductService($this->pdo);
             $categoryCards = [];
-            foreach (array_slice((new ProductService($this->pdo))->taxonomies()['categories'], 0, 4) as $category) {
+            foreach (array_slice(array_values(array_filter($productService->taxonomies()['categories'], static fn(array $c): bool => $c['parent_id'] === null)), 0, 4) as $category) {
                 $preview = $catalog->listing(['category' => $category['slug'], 'per_page' => 1]);
-                $categoryCards[] = $category + ['material_count' => $preview['total'], 'preview' => $preview['items'][0]['images'][0]['path'] ?? null];
+                $categoryCards[] = $category + ['material_count' => $preview['total'], 'preview' => $productService->categoryImage($category['slug'])];
             }
             $this->respond('app/page/storefront/offers.php', compact('products', 'categoryCards'));
         });
@@ -75,12 +77,14 @@ class StorefrontProduct extends StorefrontController
             $brands = (new ProductService($this->pdo))->taxonomies()['brands'];
             $detailService = new ProductDetailService($this->pdo);
             $details = $detailService->get((int)$product['id']);
-            $delivery = isset($_GET['postal_code']) ? $detailService->delivery($details, CommerceValues::text($_GET['postal_code'], 6, 'postal_code')) : null;
+            $delivery = isset($_GET['postal_code']) ? (new DeliveryService($this->pdo))->forProduct($details, CommerceValues::text($_GET['postal_code'], 6, 'postal_code')) : null;
             $actor = CommerceAccess::actor(); $reviewService = new ReviewService($this->pdo);
             $reviews = $reviewService->publicPage((int)$product['id'], 1, $actor['id'] ?? null);
             $own = $actor ? $reviewService->own($actor['id'], (int)$product['id']) : null;
             $companion = $details['companion_product_id'] ? ((new ProductService($this->pdo))->selection([$details['companion_product_id']])[0] ?? null) : null;
-            $this->respond('app/page/storefront/product_detail.php', compact('product', 'cart', 'related', 'brands', 'details', 'delivery', 'reviews', 'companion', 'actor', 'own'));
+            // Advance (booking) rate to advertise on the page: product override, else category, else store default.
+            $advanceBps = (int)($settings = (new SettingsService($this->pdo))->effective())['advance_bps'];
+            $this->respond('app/page/storefront/product_detail.php', compact('product', 'cart', 'related', 'brands', 'details', 'delivery', 'reviews', 'companion', 'actor', 'own', 'advanceBps'));
         });
     }
     public function reviews(string $slug): void
@@ -122,6 +126,17 @@ class StorefrontProduct extends StorefrontController
             RequestSecurity::requireMutation();$actor=CommerceAccess::requireActor();
             $result=(new ReviewService($this->pdo))->react($actor['id'],(string)($_POST['target_type']??''),CommerceValues::id($_POST['target_id']??0,'target_id'));
             echo json_encode(['ok'=>true]+$result+['request_id'=>bin2hex(random_bytes(16))],JSON_THROW_ON_ERROR);
+        },true);
+    }
+    /** Read-only PIN serviceability for the product page (progressive enhancement over the GET form). */
+    public function deliveryCheck(string $slug): void
+    {
+        $this->handle(function()use($slug):void {
+            $pin=CommerceValues::text($_GET['postal_code']??'',6,'postal_code');
+            $product=(new ProductService($this->pdo))->detail($slug);
+            $details=(new ProductDetailService($this->pdo))->get((int)$product['id']);
+            $result=(new DeliveryService($this->pdo))->forProduct($details,$pin);
+            echo json_encode(['ok'=>true,'delivery'=>$result,'request_id'=>bin2hex(random_bytes(16))],JSON_THROW_ON_ERROR);
         },true);
     }
     private function wantsJson(): bool { return str_contains($_SERVER['HTTP_X_REQUESTED_WITH']??'','XMLHttpRequest'); }

@@ -58,7 +58,7 @@ $webhook = static function (array $entity, string $id, string $event = 'payment.
 
 $first = $newOrder();
 $check($first['payment_status'] === 'awaiting_payment', 'Online placement awaits payment.');
-$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_confirmation'")->fetchColumn() === 0, 'Online placement defers confirmation.');
+$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_payment_received'")->fetchColumn() === 0, 'Online placement defers the payment acknowledgement.');
 $check((int)$pdo->query('SELECT on_hand_milli FROM inventory WHERE variant_id=' . $variant)->fetchColumn() === 99000, 'Online placement consumes stock before payment.');
 $fake->onCreate = fn() => CommerceTest::rejects(fn() => $service->beginOnline($buyer,$first['id']), 503, 'An overlapping creation cannot create a second gateway order.');
 $data = $service->beginOnline($buyer, $first['id']); $fake->onCreate = null;
@@ -88,8 +88,10 @@ $pdo->exec('DROP TRIGGER payment_queue_failure');
 $check($snapshot() === $before, 'Queue failure rolls back payment, order and event ledger together.');
 $result = $service->confirmCallback($buyer,$data['provider_order_id'],'pay_Test1',$signature($data,'pay_Test1'));
 $check($result['id'] === $first['id'] && $pdo->query('SELECT payment_status FROM orders WHERE id=' . $first['id'])->fetchColumn() === 'paid', 'Valid callback marks the owned order paid.');
+$check($pdo->query('SELECT status FROM orders WHERE id=' . $first['id'])->fetchColumn() === 'awaiting_verification', 'Capture enters the phone-verification gate, not confirmed.');
 $check($pdo->query('SELECT status FROM payments WHERE order_id=' . $first['id'])->fetchColumn() === 'captured', 'Valid callback captures the payment.');
-$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_confirmation'")->fetchColumn() === 1, 'Capture enqueues one confirmation.');
+$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_payment_received'")->fetchColumn() === 1, 'Capture enqueues one payment acknowledgement.');
+$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='verify_window'")->fetchColumn() === 1, 'Capture schedules one verification-window timer.');
 $before = $snapshot();
 $service->confirmCallback($buyer,$data['provider_order_id'],'pay_Test1',$signature($data,'pay_Test1'));
 $check($snapshot() === $before, 'Callback replay makes no second paid write or job.');
@@ -113,11 +115,11 @@ $service->handleWebhook($body,hash_hmac('sha256',$body,'disposable-webhook-secre
 $check($snapshot() === $before, 'Replayed webhook is a no-op with no second paid write or confirmation.');
 $webhook($entity,'evt_order_paid','order.paid');
 $webhook($remote($data2,'pay_FailedAttempt','failed'),'evt_late_failure','payment.failed');
-$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_confirmation'")->fetchColumn() === 2, 'Distinct capture event and late failure cannot duplicate confirmation or downgrade paid.');
+$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_payment_received'")->fetchColumn() === 2, 'Distinct capture event and late failure cannot duplicate the acknowledgement or downgrade paid.');
 $pdo->exec('DROP TRIGGER payment_paid_guard');
 $fake->remote = $entity;
 $service->confirmCallback($buyer,$data2['provider_order_id'],'pay_Test2',$signature($data2,'pay_Test2'));
-$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_confirmation'")->fetchColumn() === 2, 'Webhook followed by callback still has one confirmation per order.');
+$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_payment_received'")->fetchColumn() === 2, 'Webhook followed by callback still has one acknowledgement per order.');
 
 $third = $newOrder(); $data3 = $service->beginOnline($buyer,$third['id']);
 $fake->remote = $remote($data3,'pay_Test3','failed');
@@ -258,8 +260,8 @@ $results = CommerceTest::race([$input,$input],$fixture);
 $check(array_column($results,'status') === [200,200], 'Identical concurrent webhook deliveries both succeed.');
 $check((int)$pdo->query('SELECT COUNT(*) FROM payment_test_paid_writes WHERE order_id=' . $raceOrder['id'])->fetchColumn() === 1,
     'Identical concurrent webhooks write paid only once.');
-$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_confirmation' AND dedupe_key='order:" . $raceOrder['id'] . ":confirmation:v1'")->fetchColumn() === 1,
-    'Identical concurrent webhooks enqueue one confirmation.');
+$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_payment_received' AND dedupe_key='order:" . $raceOrder['id'] . ":payment_received:v1'")->fetchColumn() === 1,
+    'Identical concurrent webhooks enqueue one acknowledgement.');
 $mixedOrder = $newOrder(); $mixedData = $service->beginOnline($buyer,$mixedOrder['id']);
 $mixedRemote = $remote($mixedData,'pay_MixedRace');
 $results = CommerceTest::race([
@@ -270,8 +272,8 @@ $check(array_column($results,'status') === [200,200], 'Concurrent callback and w
 $check((int)$pdo->query('SELECT COUNT(*) FROM payment_test_paid_writes WHERE order_id=' . $mixedOrder['id'])->fetchColumn() === 1
     && $pdo->query('SELECT status FROM payments WHERE order_id=' . $mixedOrder['id'])->fetchColumn() === 'captured',
     'Concurrent callback and webhook capture and write paid once.');
-$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_confirmation' AND dedupe_key='order:" . $mixedOrder['id'] . ":confirmation:v1'")->fetchColumn() === 1,
-    'Concurrent callback and webhook enqueue exactly one confirmation.');
+$check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_payment_received' AND dedupe_key='order:" . $mixedOrder['id'] . ":payment_received:v1'")->fetchColumn() === 1,
+    'Concurrent callback and webhook enqueue exactly one acknowledgement.');
 $pdo->exec('DROP TRIGGER payment_count_paid'); $pdo->exec('DROP TABLE payment_test_paid_writes');
 
 $_ENV['CHECKOUT_RAZORPAY_ENABLED'] = 'false'; $before = $snapshot();

@@ -19,7 +19,13 @@ $storeIcons =  [
     'toilet' => '<path d="M6 3h11v9H6zM3 12h18c0 5-5 6-5 6l1 4H8l1-4s-6-1-6-6Z"/>',
     'tools' => '<path d="m4 20 12-12M14 3a5 5 0 0 0 7 7l-5-1-1-5M3 17l4 4M3 3l5 5m-2-5 15 15-3 3L3 6Z"/>',
     'trash' => '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+    'box' => '<path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"/><path d="M3 7l9 5 9-5M12 12v10"/>',
+    'check' => '<path d="M4 12l5 5L20 6"/>',
+    'pin' => '<path d="M12 21s7-6.3 7-11a7 7 0 0 0-14 0c0 4.7 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/>',
+    'home' => '<path d="M3 11l9-7 9 7M5 10v10h14V10"/>',
     'close' => '<path d="M6 6l12 12M18 6 6 18"/>',
+    'lock' => '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v3"/>',
+    'globe' => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/>',
     'compare' => '<path d="M7 7h13l-3-3m3 3-3 3M17 17H4l3-3m-3 3 3 3"/>',
     'instagram' => '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r="1"/>',
     'facebook' => '<path d="M14 9V7a2 2 0 0 1 2-2h2V2h-3a5 5 0 0 0-5 5v2H7v3h3v9h4v-9h3l1-3h-4Z"/>',
@@ -27,3 +33,16 @@ $storeIcons =  [
     'whatsapp' => '<path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.3A9 9 0 1 0 12 3Z"/><path d="M8.5 7.7c.2-.1.5 0 .6.2l.8 1.4c.1.2.1.4 0 .6l-.5.8c.5 1 1.3 1.8 2.3 2.3l.8-.5c.2-.1.4-.1.6 0l1.4.8c.2.1.3.4.2.6-.3.9-1.2 1.5-2.1 1.4a7 7 0 0 1-6-6c-.1-.9.5-1.8 1.4-2.1Z"/>',
 ];
 $icon = static fn(string $name): string => '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($storeIcons[$name] ?? $storeIcons['slab']) . '</svg>';
+
+/**
+ * Rating rail: five star shapes cut out of a hard-stopped gradient, so a fractional score fills
+ * exactly its share of the row. `$tenths` is the rating in tenths (0–50), matching the review tables.
+ * `$variant` adds a size modifier class (`sm`, `lg`, `input`).
+ */
+$stars = static function ($tenths, string $variant = ''): string {
+    $tenths = max(0, min(50, (int)$tenths));
+    $classes = 'stars' . ($variant === '' ? '' : ' stars-' . $variant);
+    return '<span class="' . $classes . '" style="--fill:' . ($tenths * 2) . '%" role="img"'
+        . ' aria-label="Rated ' . number_format($tenths / 10, 1) . ' out of 5">'
+        . '<i aria-hidden="true"></i></span>';
+};

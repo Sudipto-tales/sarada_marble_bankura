@@ -33,10 +33,12 @@ class CommerceIdentity extends Migration
         }
         $this->verify();
         $insert = $mysql ? 'INSERT IGNORE' : 'INSERT OR IGNORE';
-        $roles = ['customer' => [], 'admin' => array_keys(self::PERMISSIONS),
+        // Only superadmin owns staff-access management; admin runs everything else operationally.
+        $roles = ['customer' => [], 'superadmin' => array_keys(self::PERMISSIONS),
+            'admin' => array_values(array_filter(array_keys(self::PERMISSIONS), static fn(string $key): bool => !str_starts_with($key, 'admin.access.'))),
             'catalog_manager' => ['admin.products.view', 'admin.products.edit', 'admin.inventory.view', 'admin.pricing.view'],
             'operations' => ['admin.inventory.view', 'admin.inventory.adjust', 'admin.orders.view', 'admin.orders.edit', 'admin.customers.view'],
-            'viewer' => array_values(array_filter(array_keys(self::PERMISSIONS), static fn(string $key): bool => str_ends_with($key, '.view')))];
+            'viewer' => array_values(array_filter(array_keys(self::PERMISSIONS), static fn(string $key): bool => str_ends_with($key, '.view') && !str_starts_with($key, 'admin.access.')))];
         foreach (self::PERMISSIONS as $key => $description) {
             $this->pdo->prepare("$insert INTO permissions (permission_key, description) VALUES (?, ?)")->execute([$key, $description]);
         }

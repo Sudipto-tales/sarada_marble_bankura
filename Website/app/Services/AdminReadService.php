@@ -43,7 +43,7 @@ final class AdminReadService
             'inventory'=>['inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id','v.id,p.name,v.sku,v.sell_unit,i.on_hand_milli AS on_hand,i.reserved_milli AS reserved,(i.on_hand_milli-i.reserved_milli) AS available',
                 ['p.name','v.sku','v.sell_unit','i.on_hand_milli','i.reserved_milli','available'],['p.name','v.sku']],
             'orders'=>['orders o JOIN users_tbl u ON u.id=o.user_id','o.id,o.order_number,u.name AS customer,o.status,o.total_minor AS total,o.payment_status,o.created_at AS created',
-                ['o.order_number','u.name','o.status','o.total_minor','o.payment_status','o.created_at'],['o.order_number','u.name','u.email']],
+                ['o.order_number','u.name','o.status','o.total_minor','o.payment_status','o.created_at'],['o.order_number','u.name','u.email','o.status','o.payment_status']],
             'customers'=>['users_tbl p','p.id,p.name,p.email,p.status,p.email_verify',['p.name','p.email','p.status','p.email_verify'],['p.name','p.email']],
             'enquiries'=>['store_visit_enquiries p LEFT JOIN products pr ON pr.id=p.product_id','p.id,p.customer_name,p.contact,pr.name AS product_name,p.note,p.created_at AS created',
                 ['p.customer_name','p.contact','pr.name','p.note','p.created_at'],['p.customer_name','p.contact','pr.name','p.note']],

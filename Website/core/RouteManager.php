@@ -194,7 +194,20 @@ final class RouteManager
             return;
         }
         header('Content-Type: text/html; charset=utf-8');
-        echo '<!doctype html><html lang="en"><meta charset="utf-8"><title>' . $status . '</title><h1>'
-            . $status . '</h1><p>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p></html>';
+        // Styled inline rather than through the storefront template: this also
+        // serves admin and developer misses, and must render when nothing booted.
+        echo '<!doctype html><html lang="en"><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            . '<meta name="theme-color" content="#082c40"><title>' . $status . '</title>'
+            . '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;'
+            . 'padding:max(24px,env(safe-area-inset-left,0px));background:#082c40;color:#eaf7f8;'
+            . 'font:400 15px/1.6 Inter,system-ui,-apple-system,Segoe UI,sans-serif;text-align:center}'
+            . 'main{max-width:34rem}b{display:block;font-size:clamp(56px,14vw,96px);line-height:1;'
+            . 'letter-spacing:-.04em;color:#2bb8cc}p{margin:14px 0 26px;color:#9fc3d0}'
+            . 'a{display:inline-block;padding:12px 24px;border-radius:9px;color:#fff;text-decoration:none;'
+            . 'font-weight:600;background:linear-gradient(180deg,#0a93a2,#076f7c);'
+            . 'box-shadow:inset 0 1px 0 #ffffff33,0 4px 14px #04192657}</style>'
+            . '<main><b>' . $status . '</b><p>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8')
+            . '</p><a href="/">Back to the shop</a></main></html>';
     }
 }

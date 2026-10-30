@@ -47,7 +47,15 @@ jobs:
           for test in tests/*Test.php; do php "$test"; done
           php tests/FoundationTest.php --mysql
           php tests/DemoSeederTest.php --mysql
+          # Money/stock paths must be proven on MySQL, not only SQLite (ADV-BOOK-01 / DLV-PIN-01).
+          php tests/OrderPlacementTest.php --mysql
+          php tests/PaymentServiceTest.php --mysql
+          php tests/BookingVerificationTest.php --mysql
+          php tests/RefundTest.php --mysql
+          php tests/ReservationExpiryTest.php --mysql
+          php tests/DeliveryServiceTest.php --mysql
           python3 tests/storefront_http_test.py
+          python3 tests/admin_http_test.py
   deploy:
     needs: validate
     if: github.ref == 'refs/heads/main'

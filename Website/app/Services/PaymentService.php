@@ -28,6 +28,8 @@ final class PaymentService
     }
     private function query(string $sql, array $args = []): PDOStatement { return CommerceDatabase::query($this->pdo, $sql, $args); }
     private function enabled(): void { OrderStates::payment('razorpay'); }
+    /** Amount collected online now: the committed advance for an advance order, else the full total (legacy NULL). */
+    private static function due(array $order): int { return (int)($order['amount_due_minor'] ?? $order['total_minor']); }
     private function client(): object
     {
         if ($this->pdo->inTransaction()) throw new LogicException('Payment HTTP requires a committed transaction.');
@@ -39,6 +41,31 @@ final class PaymentService
         $value = (string)env($key, '');
         if ($value === '') throw new RuntimeException('Payment configuration is unavailable.');
         return $value;
+    }
+
+    /** Transport for the refund worker, which runs between transactions (no lock held). Test seam reused. */
+    public static function refundClient(): object
+    {
+        if (PHP_SAPI === 'cli' && self::$clientFactory !== null) return (self::$clientFactory)();
+        $keyId = (string)env('RAZORPAY_KEY_ID', ''); $keySecret = (string)env('RAZORPAY_KEY_SECRET', '');
+        if ($keyId === '' || $keySecret === '') throw new RuntimeException('Payment configuration is unavailable.');
+        return new RazorpayClient($keyId, $keySecret);
+    }
+
+    /** Records one durable refund for an order's captured payment and enqueues its worker. The caller owns
+        the open transaction so the refund is atomic with the cancellation that triggered it; one refund per
+        order (deduped on a stable key). No-op when nothing was captured. */
+    public static function enqueueRefund(PDO $pdo, array $order, string $reason): void
+    {
+        if (!$pdo->inTransaction()) throw new LogicException('Refund enqueue requires the business transaction.');
+        $lock = CommerceDatabase::lock($pdo); $now = CommerceDatabase::clock($pdo);
+        $payment = CommerceDatabase::query($pdo, "SELECT * FROM payments WHERE order_id=? AND provider='razorpay' AND status='captured' ORDER BY id LIMIT 1" . $lock, [$order['id']])->fetch();
+        if (!$payment || $payment['provider_payment_id'] === null) return;
+        $dedupe = 'order:' . $order['id'] . ':refund';
+        if (CommerceDatabase::query($pdo, 'SELECT id FROM payment_refunds WHERE idempotency_key=?' . $lock, [$dedupe])->fetchColumn()) return;
+        CommerceDatabase::query($pdo, "INSERT INTO payment_refunds (payment_id,order_id,amount_minor,currency,status,reason,idempotency_key,attempts,created_at,updated_at) VALUES (?,?,?,?,'pending',?,?,0,?,?)",
+            [(int)$payment['id'], (int)$order['id'], (int)$payment['amount_minor'], $payment['currency'], CommerceValues::text($reason, 190, 'reason', true), $dedupe, $now, $now]);
+        (new QueueService($pdo))->paymentRefund((int)$pdo->lastInsertId());
     }
     private function gatewayId(string $value, string $prefix): string
     {
@@ -65,14 +92,14 @@ final class PaymentService
             // A durable claim prevents concurrent requests from creating two gateway orders.
             // Never retry an ambiguous HTTP creation: operator reconciliation is required after a crash/timeout.
             $this->query("INSERT INTO payments (order_id,provider,provider_order_id,amount_minor,currency,status,created_at,updated_at) VALUES (?,'razorpay',?,?,'INR','created',?,?)",
-                [$orderId,'pending:' . $orderId,$order['total_minor'],$now,$now]);
+                [$orderId,'pending:' . $orderId,self::due($order),$now,$now]);
             return ['payment'=>['id'=>(int)$this->pdo->lastInsertId()],'order'=>$order,'create'=>true];
         });
         if (!$claim['create']) return $this->checkoutData($userId, $orderId);
         $order = $claim['order'];
-        $remote = $this->client()->createOrder((int)$order['total_minor'], $order['order_number'], ['order_id'=>(string)$orderId]);
+        $remote = $this->client()->createOrder(self::due($order), $order['order_number'], ['order_id'=>(string)$orderId]);
         $providerId = $this->gatewayId($remote['id'] ?? '', 'order');
-        if (!is_int($remote['amount'] ?? null) || $remote['amount'] !== (int)$order['total_minor'] || ($remote['currency'] ?? null) !== 'INR')
+        if (!is_int($remote['amount'] ?? null) || $remote['amount'] !== self::due($order) || ($remote['currency'] ?? null) !== 'INR')
             throw new RequestRejected(422, 'payment_amount_mismatch', 'Payment amount or currency does not match.');
         CommerceDatabase::transaction($this->pdo, function () use ($claim, $providerId): void {
             $this->query('UPDATE payments SET provider_order_id=?,updated_at=? WHERE id=? AND provider_order_id=?',
@@ -174,12 +201,25 @@ final class PaymentService
             if ($payment['status'] !== 'captured') {
                 $order = $this->query('SELECT * FROM orders WHERE id=?' . $lock, [$payment['order_id']])->fetch();
                 $this->payable($order);
-                if ((int)$order['total_minor'] !== (int)$payment['amount_minor'] || $order['currency'] !== $payment['currency'])
+                if (self::due($order) !== (int)$payment['amount_minor'] || $order['currency'] !== $payment['currency'])
                     throw new RequestRejected(422, 'payment_amount_mismatch', 'Payment amount or currency does not match.');
                 $this->query('UPDATE payments SET status=?,provider_payment_id=?,updated_at=?,last_error_code=? WHERE id=?', [$status,$providerPaymentId,$now,$status==='failed'?'payment_declined':null,$paymentId]);
                 if ($status === 'captured') {
-                    $this->query("UPDATE orders SET payment_status='paid',updated_at=? WHERE id=?", [$now,$order['id']]);
-                    (new QueueService($this->pdo))->orderConfirmation((int)$order['id']);
+                    // An advance leaves a balance due on delivery; a full online payment settles the balance.
+                    $paid = self::due($order) < (int)$order['total_minor'] ? 'advance_paid' : 'paid';
+                    // Capture never confirms the order: it enters the phone-verification gate. The shop
+                    // confirms by call, or the verify_window timer auto-confirms after the admin-set hours.
+                    $settings = (new SettingsService($this->pdo))->effective();
+                    $deadline = $settings['verify_autoconfirm_hours'] > 0 ? $now + $settings['verify_autoconfirm_hours'] * 3600 : null;
+                    if ($order['status'] === 'placed') {
+                        $this->query("UPDATE orders SET payment_status=?,status='awaiting_verification',verify_deadline_at=?,payment_deadline_at=NULL,revision=revision+1,updated_at=? WHERE id=?", [$paid,$deadline,$now,$order['id']]);
+                        $this->query("INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,'placed','awaiting_verification',?,?,?,?)",
+                            [$order['id'],(int)$order['user_id'],'Payment received; awaiting verification call','autogate:'.$order['id'],$now]);
+                        if ($deadline !== null) (new QueueService($this->pdo))->verifyWindow((int)$order['id'], $deadline);
+                    } else {
+                        $this->query("UPDATE orders SET payment_status=?,updated_at=? WHERE id=?", [$paid,$now,$order['id']]);
+                    }
+                    (new QueueService($this->pdo))->orderPaymentReceived((int)$order['id']);
                 }
             }
             $this->query("UPDATE payment_events SET status='processed' WHERE id=?", [$event['id']]);

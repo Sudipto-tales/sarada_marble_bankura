@@ -86,11 +86,12 @@ CommerceTest::rejects(fn()=>$orders->cancel($admin,$placed['id'],2,'cancel:origi
 CommerceTest::rejects(fn()=>$orders->cancel($admin,$placed['id'],2,'cancel:another:key'),409,'Second key cannot restock cancelled order.');
 $check((int)$pdo->query("SELECT COUNT(*) FROM inventory_movements WHERE business_key='cancel:".$placed['id']."'")->fetchColumn()===2,'Exactly one cancel movement per variant.');
 CommerceDatabase::transaction($pdo,fn()=>$inventory->release($otherHold['id'],'user:'.$b));
-$confirmed=$orders->transition($admin,$heldOrder['id'],'confirmed',1,'transition:confirmed:key');$before=$state();
-$check($orders->transition($admin,$heldOrder['id'],'confirmed',1,'transition:confirmed:key')===$confirmed&&$state()===$before,'Non-stock status transition is idempotent.');
-$orders->transition($admin,$heldOrder['id'],'processing',2,'transition:processing:key');$orders->transition($admin,$heldOrder['id'],'shipped',3,'transition:shipped:key');
-CommerceTest::rejects(fn()=>$orders->cancel($admin,$heldOrder['id'],4,'cancel:shipped:denied'),409,'Shipped orders cannot be cancelled.');
-$orders->transition($admin,$heldOrder['id'],'outForDelivery',4,'transition:out:key');$orders->transition($admin,$heldOrder['id'],'delivered',5,'transition:delivered:key');
+$orders->transition($admin,$heldOrder['id'],'awaiting_verification',1,'transition:verify:key');
+$confirmed=$orders->transition($admin,$heldOrder['id'],'confirmed',2,'transition:confirmed:key');$before=$state();
+$check($orders->transition($admin,$heldOrder['id'],'confirmed',2,'transition:confirmed:key')===$confirmed&&$state()===$before,'Non-stock status transition is idempotent.');
+$orders->transition($admin,$heldOrder['id'],'processing',3,'transition:processing:key');$orders->transition($admin,$heldOrder['id'],'shipped',4,'transition:shipped:key');
+CommerceTest::rejects(fn()=>$orders->cancel($admin,$heldOrder['id'],5,'cancel:shipped:denied'),409,'Shipped orders cannot be cancelled.');
+$orders->transition($admin,$heldOrder['id'],'outForDelivery',5,'transition:out:key');$orders->transition($admin,$heldOrder['id'],'delivered',6,'transition:delivered:key');
 $reviewProduct=(int)$pdo->query('SELECT product_id FROM order_items WHERE order_id='.(int)$heldOrder['id'].' LIMIT 1')->fetchColumn();
 $pdo->prepare("INSERT INTO product_reviews (product_id,user_id,rating,title,body,created_at,updated_at) VALUES (?,?,5,'Verified','Delivered material review.',1,1)")->execute([$reviewProduct,$a]);
 (new ReviewService($pdo))->moderate($admin,(int)$pdo->lastInsertId(),'approved',1,'review:moderate:key');

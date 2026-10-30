@@ -3,7 +3,6 @@ $title = $product['name']; $page = 'product';
 $pageStyles = ['product-detail.css']; $pageScripts = ['product-detail.js'];
 require __DIR__ . '/header.php';
 $csrf = RequestSecurity::csrfToken();
-$stars = static fn($t): string => '<span class="stars"><i style="width:' . max(0, min(100, (int)$t * 2)) . '%">★★★★★</i>★★★★★</span>';
 $available = static fn(array $v): bool => $v['available_milli'] !== null && (int)$v['available_milli'] >= (int)$v['qty_increment_milli'];
 $first = current(array_filter($product['variants'], $available)) ?: $product['variants'][0];
 $hasPreview = (bool)array_filter($product['images'], static fn(array $image): bool => $image['variant_id'] === null || in_array((int)$image['variant_id'], array_map('intval', array_column($product['variants'], 'id')), true));
@@ -19,7 +18,7 @@ $hasPreview = (bool)array_filter($product['images'], static fn(array $image): bo
     <p class="note php-stone-note">Every slab has its own character. Inspect the actual stone for colour and veining before selection.</p>
   </div>
   <div class="detail-copy">
-    <div class="pdp-badges"><span class="pdp-chip"><?= $e($product['category_name']) ?></span><?php if ($product['featured']): ?><span class="pdp-chip">Featured selection</span><?php endif; ?><span class="pdp-chip <?= $product['in_stock'] ? 'pdp-stock' : '' ?>"><?= $product['in_stock'] ? 'In stock' : 'Currently unavailable' ?></span></div>
+    <div class="pdp-badges"><span class="pdp-chip"><?= $e($product['category_name']) ?></span><?php if ($product['featured']): ?><span class="pdp-chip">Featured selection</span><?php endif; ?><span class="pdp-chip <?= $product['in_stock'] ? 'pdp-stock' : '' ?>"><?= $product['in_stock'] ? 'In stock' : 'Out of stock' ?></span></div>
     <?php if ($product['brand_name']): ?><a class="pdp-brand" href="<?= $u('shop') ?>?brand=<?= $e($product['brand_slug']) ?>"><?= $e($product['brand_name']) ?> ↗</a><?php endif; ?>
     <h1><?= $e($product['name']) ?></h1>
     <p class="pdp-subtitle"><?= $e(implode(' · ', array_unique(array_filter(array_column($product['variants'], 'finish'))))) ?></p>
@@ -27,7 +26,9 @@ $hasPreview = (bool)array_filter($product['images'], static fn(array $image): bo
     <?php $firstOrig = $first['original_price_minor'] !== null && (int)$first['original_price_minor'] > (int)$first['unit_price_minor'] ? (int)$first['original_price_minor'] : null; ?>
     <div class="pdp-price"><strong data-selected-price><?= $m($first['unit_price_minor']) ?></strong><del data-selected-original<?= $firstOrig ? '' : ' hidden' ?>><?= $firstOrig ? $m($firstOrig) : '' ?></del><span data-selected-unit>per <?= $e($first['sell_unit']) ?></span></div>
     <p class="note">Material price. Review delivery charges and taxes at checkout.</p>
-    <div class="php-card-actions"><?php $saved = in_array((int)$product['id'], $navWishlist ?? [], true); ?><form method="post" action="<?= $u('wishlist') ?>" data-wishlist><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="product_id" value="<?= $e($product['id']) ?>"><input type="hidden" name="action" value="<?= $saved ? 'remove' : 'add' ?>"><button class="text-button save-heart<?= $saved ? ' saved' : '' ?>" aria-pressed="<?= $saved ? 'true' : 'false' ?>"><?= $icon('heart') ?></button></form><form method="post" action="<?= $u('compare') ?>"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="product_id" value="<?= $e($product['id']) ?>"><button class="text-button" aria-label="Compare material"><?= $icon('compare') ?></button></form></div>
+    <div class="php-card-actions"><?php $saved = in_array((int)$product['id'], $navWishlist ?? [], true); ?><form method="post" action="<?= $u('wishlist') ?>" data-wishlist><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="product_id" value="<?= $e($product['id']) ?>"><input type="hidden" name="action" value="<?= $saved ? 'remove' : 'add' ?>"><button class="text-button save-heart<?= $saved ? ' saved' : '' ?>" aria-pressed="<?= $saved ? 'true' : 'false' ?>"><?= $icon('heart') ?></button></form><?php /* Compare hidden storefront-wide:
+<form method="post" action="<?= $u('compare') ?>"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="product_id" value="<?= $e($product['id']) ?>"><button class="text-button" aria-label="Compare material"><?= $icon('compare') ?></button></form>
+*/ ?></div>
     <div id="purchase" class="pdp-purchase">
       <h2>Choose your finish &amp; quantity</h2>
       <div class="pdp-variant-picker" hidden><label for="variant-picker">Variant</label><select id="variant-picker"><?php foreach ($product['variants'] as $variant): ?><option value="<?= $e($variant['id']) ?>" <?= (int)$variant['id'] === (int)$first['id'] ? 'selected' : '' ?>><?= $e(($variant['finish'] ?: $variant['sku']) . ' · ' . $variant['sell_unit']) ?> — <?= $m($variant['unit_price_minor']) ?><?= $available($variant) ? '' : ' · Unavailable' ?></option><?php endforeach; ?></select></div>
@@ -67,7 +68,24 @@ $hasPreview = (bool)array_filter($product['images'], static fn(array $image): bo
     <div data-variant-content="<?= $e($variant['id']) ?>"><h3><?= $e($variant['finish'] ?: $variant['sku']) ?></h3><dl class="pdp-specs"><?php foreach ($specs as $label => $value): if ($value === null || $value === '') continue; ?><div><dt><?= $e($label) ?></dt><dd><?= $e($value) ?></dd></div><?php endforeach; ?></dl></div>
     <?php endforeach; ?>
   </section>
-  <section id="delivery" class="pdp-section" role="tabpanel" aria-labelledby="tab-delivery"><span class="eyebrow">Plan your order</span><h2>Delivery &amp; selection</h2><p>Review your delivery address, available payment options and shipping charges during checkout. Contact the store to confirm site access, unloading arrangements and delivery timing before ordering.</p><p class="note">Natural colour and vein patterns vary between slabs. Confirm the exact material and finish for your project.</p></section>
+  <section id="delivery" class="pdp-section" role="tabpanel" aria-labelledby="tab-delivery"><span class="eyebrow">Plan your order</span><h2>Delivery &amp; selection</h2>
+    <?php if (!empty($advanceBps)): ?><p class="pdp-advance-note"><?= $e(number_format($advanceBps / 100, $advanceBps % 100 ? 2 : 0)) ?>% booking: pay just <?= $e(number_format($advanceBps / 100, $advanceBps % 100 ? 2 : 0)) ?>% now to reserve this material and the balance when it is delivered. Smaller orders are payable in full &mdash; the exact amount is shown at checkout.</p><?php endif; ?>
+    <div class="pdp-pincode" data-delivery-check="<?= $u('product/' . $product['slug'] . '/delivery') ?>">
+      <h3>Check delivery to your PIN code</h3>
+      <form class="pdp-pincode-form" method="get" action="<?= $u('product/' . $product['slug']) ?>#delivery" data-delivery-form>
+        <label class="field"><span class="sr-only">6-digit PIN code</span>
+          <input type="text" name="postal_code" inputmode="numeric" pattern="[1-9][0-9]{5}" maxlength="6" placeholder="e.g. 722101" value="<?= $e($_GET['postal_code'] ?? '') ?>" required aria-describedby="delivery-result">
+        </label>
+        <button type="submit" class="button">Check</button>
+      </form>
+      <p id="delivery-result" class="pdp-delivery-result<?= $delivery ? ' is-' . $e($delivery['status']) : '' ?>" role="status" aria-live="polite" data-delivery-result><?php
+        if ($delivery) {
+            echo $e($delivery['message']);
+            if (($delivery['status'] ?? '') === 'available' && !empty($delivery['shipping_minor'])) echo ' Delivery charge: ' . $e(StorefrontController::money($delivery['shipping_minor'])) . '.';
+        }
+      ?></p>
+    </div>
+    <p>Review your delivery address, available payment options and shipping charges during checkout. Contact the store to confirm site access, unloading arrangements and delivery timing before ordering.</p><p class="note">Natural colour and vein patterns vary between slabs. Confirm the exact material and finish for your project.</p></section>
   <section id="reviews" class="pdp-section pdp-reviews" role="tabpanel" aria-labelledby="tab-reviews" data-reviews data-review-action="<?= $u('product/' . $product['slug'] . '/reviews') ?>" data-reply-action="<?= $u('review/reply') ?>" data-react-action="<?= $u('review/react') ?>" data-auth="<?= $actor ? '1' : '0' ?>">
     <span class="eyebrow">Customer voices</span><h2>Ratings &amp; reviews</h2>
     <?php if ($actor): $rv = (int)(($own['rating_tenths'] ?? null) ?: (($own['rating'] ?? 0) * 10)) ?: 50; ?>
@@ -77,7 +95,7 @@ $hasPreview = (bool)array_filter($product['images'], static fn(array $image): bo
       <div class="rating-field"><span>Your rating</span>
         <div class="star-input" data-star-input>
           <input type="hidden" name="rating" value="<?= number_format($rv / 10, 1) ?>">
-          <span class="stars input"><i style="width:<?= $rv * 2 ?>%">★★★★★</i>★★★★★</span>
+          <?= $stars($rv, 'input') ?>
           <span class="star-hit"><?php for ($i = 1; $i <= 10; $i++): ?><button type="button" data-star="<?= number_format($i / 2, 1) ?>" aria-label="<?= number_format($i / 2, 1) ?> stars"></button><?php endfor; ?></span>
         </div>
       </div>
@@ -93,7 +111,7 @@ $hasPreview = (bool)array_filter($product['images'], static fn(array $image): bo
   </section>
 </div>
 <?php if ($related): ?><section id="similar-products" class="pdp-discovery"><div class="section-head"><div><span class="eyebrow">Keep exploring</span><h2>Similar products</h2><p class="note">More available materials in <?= $e($product['category_name']) ?>.</p></div><a class="text-button" href="<?= $u('category/' . $product['category_slug']) ?>">View collection ↗</a></div><div class="stone-grid"><?php $detailProduct = $product; foreach ($related as $product) require __DIR__ . '/product_card.php'; $product = $detailProduct; ?></div></section><?php endif; ?>
-<?php if ($brands): ?><section class="pdp-discovery"><div class="section-head"><div><span class="eyebrow">Find your collection</span><h2>Shop by brands</h2></div></div><div class="pdp-brands"><?php foreach (array_slice($brands, 0, 12) as $brand): ?><a href="<?= $u('shop') ?>?brand=<?= $e($brand['slug']) ?>"><span><?= $e($brand['name']) ?></span><span aria-hidden="true">↗</span></a><?php endforeach; ?></div></section><?php endif; ?>
+<?php if ($brands): ?><section class="pdp-discovery"><div class="section-head"><div><span class="eyebrow">Find your collection</span><h2>Shop by brands</h2></div></div><div class="pdp-brands"><?php foreach (array_slice($brands, 0, 12) as $brand): ?><a href="<?= $u('shop') ?>?brand=<?= $e($brand['slug']) ?>"><span class="brand-logo"><?php if (!empty($brand['logo_path'])): ?><img src="<?= $u($brand['logo_path']) ?>" alt="<?= $e($brand['name']) ?>" loading="lazy"><?php else: /* no logo uploaded yet: a monogram keeps the tiles the same shape */ ?><span class="brand-monogram" aria-hidden="true"><?= $e(mb_strtoupper(mb_substr($brand['name'], 0, 1))) ?></span><?php endif; ?></span><span class="brand-name"><?= $e($brand['name']) ?></span><span class="brand-go" aria-hidden="true">↗</span></a><?php endforeach; ?></div></section><?php endif; ?>
 <div class="pdp-mobile-buy" aria-label="Purchase shortcuts"><div><strong data-selected-price><?= $m($first['unit_price_minor']) ?></strong><small data-selected-unit>per <?= $e($first['sell_unit']) ?></small></div><a href="#purchase" class="pdp-options">Options</a><button class="button" data-mobile-purchase form="purchase-<?= $e($first['id']) ?>" <?= $available($first) ? '' : 'disabled' ?>><?= $available($first) ? 'Add to cart' : 'Out of stock' ?></button></div>
 <?php if ($product['images']): ?><dialog id="product-lightbox" aria-label="Full product photograph"><div class="pdp-lightbox-toolbar"><button type="button" data-photo-previous aria-label="Previous photograph">←</button><span data-photo-count></span><button type="button" data-photo-next aria-label="Next photograph">→</button><button type="button" data-photo-close aria-label="Close photograph">Close ×</button></div><img alt=""></dialog><?php endif; ?>
 <dialog id="enquiry-dialog" aria-labelledby="enquiry-title"><div class="dialog-head"><h2 id="enquiry-title">Store visit enquiry</h2><button class="icon" type="button" data-enquiry-close aria-label="Close enquiry"><?= $icon('close') ?></button></div><form id="enquiry-form" method="post" action="<?= $u('enquiry') ?>" data-base="<?= $u() ?>"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="product_id" value="<?= $e($product['id']) ?>"><label>Your name<input name="name" required maxlength="100" autocomplete="name"></label><label>Contact number<input name="contact" type="tel" required maxlength="20" autocomplete="tel" inputmode="tel" placeholder="e.g. +91 98765 43210"></label><label>Note (optional)<textarea name="note" maxlength="500" rows="3" placeholder="Which material, preferred day/time for your visit…"></textarea></label><p class="note">We will contact you to arrange a showroom visit for <?= $e($product['name']) ?>.</p><button class="button">Send enquiry ↗</button><p id="enquiry-status" role="status"></p></form></dialog>
