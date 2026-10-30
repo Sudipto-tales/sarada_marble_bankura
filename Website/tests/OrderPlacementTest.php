@@ -86,7 +86,7 @@ CommerceTest::rejects(fn()=>$orders->cancel($admin,$placed['id'],2,'cancel:origi
 CommerceTest::rejects(fn()=>$orders->cancel($admin,$placed['id'],2,'cancel:another:key'),409,'Second key cannot restock cancelled order.');
 $check((int)$pdo->query("SELECT COUNT(*) FROM inventory_movements WHERE business_key='cancel:".$placed['id']."'")->fetchColumn()===2,'Exactly one cancel movement per variant.');
 CommerceDatabase::transaction($pdo,fn()=>$inventory->release($otherHold['id'],'user:'.$b));
-$orders->transition($admin,$heldOrder['id'],'awaiting_verification',1,'transition:verify:key');
+$orders->transition($admin,$heldOrder['id'],'awaiting_verify',1,'transition:verify:key');
 $confirmed=$orders->transition($admin,$heldOrder['id'],'confirmed',2,'transition:confirmed:key');$before=$state();
 $check($orders->transition($admin,$heldOrder['id'],'confirmed',2,'transition:confirmed:key')===$confirmed&&$state()===$before,'Non-stock status transition is idempotent.');
 $orders->transition($admin,$heldOrder['id'],'processing',3,'transition:processing:key');$orders->transition($admin,$heldOrder['id'],'shipped',4,'transition:shipped:key');

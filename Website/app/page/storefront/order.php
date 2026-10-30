@@ -8,12 +8,12 @@ $awaiting = $order['payment_mode'] === 'razorpay' && $order['payment_status'] ==
 $status = static fn($s): string => ucfirst(str_replace('_', ' ', (string)$s));
 $tax = (int)($order['tax_minor'] ?? 0); $cgst = intdiv($tax, 2);
 // Package-tracker steps: canonical journey + real timestamps/reasons from order history.
-$trackMeta = ['placed' => ['Order placed', 'box'], 'awaiting_verification' => ['Verifying order', 'shield'], 'confirmed' => ['Confirmed', 'check'], 'processing' => ['Preparing order', 'tools'], 'shipped' => ['Shipped', 'truck'], 'outForDelivery' => ['Out for delivery', 'pin'], 'delivered' => ['Delivered', 'home']];
+$trackMeta = ['placed' => ['Order placed', 'box'], 'awaiting_verify' => ['Verifying order', 'shield'], 'confirmed' => ['Confirmed', 'check'], 'processing' => ['Preparing order', 'tools'], 'shipped' => ['Shipped', 'truck'], 'outForDelivery' => ['Out for delivery', 'pin'], 'delivered' => ['Delivered', 'home']];
 $trackSeq = array_keys($trackMeta);
 $trackHist = [];
 foreach ($order['history'] as $ev) $trackHist[$ev['to_status']] = $ev;
 $cancelled = $order['status'] === 'cancelled';
-$verifying = !$cancelled && in_array($order['status'], ['placed', 'awaiting_verification'], true);
+$verifying = !$cancelled && in_array($order['status'], ['placed', 'awaiting_verify'], true);
 $due = (int)($order['amount_due_minor'] ?? $order['total_minor']); $balance = (int)$order['total_minor'] - $due;
 $reachedIdx = -1;
 foreach ($trackSeq as $i => $s) if (isset($trackHist[$s])) $reachedIdx = $i;

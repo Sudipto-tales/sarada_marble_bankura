@@ -33,12 +33,12 @@ final class BookingWindowJob
                 $ack(); return;
             }
             // verify_window
-            if ($order['status'] !== 'awaiting_verification') { $ack(); return; }
+            if ($order['status'] !== 'awaiting_verify') { $ack(); return; }
             $deadline = $order['verify_deadline_at'] === null ? null : (int)$order['verify_deadline_at'];
             if ($deadline === null) { $ack(); return; }
             if ($now < $deadline) throw new JobExecutionException('verify_window_open');
             CommerceDatabase::query($pdo, "UPDATE orders SET status='confirmed',verify_outcome='auto',verified_at=?,verify_deadline_at=NULL,revision=revision+1,updated_at=? WHERE id=?", [$now, $now, $orderId]);
-            CommerceDatabase::query($pdo, "INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,'awaiting_verification','confirmed',?,?,?,?)",
+            CommerceDatabase::query($pdo, "INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,'awaiting_verify','confirmed',?,?,?,?)",
                 [$orderId, (int)$order['user_id'], 'Auto-confirmed: no verification call within the window', 'autoconfirm:' . $orderId, $now]);
             (new QueueService($pdo))->orderStatus($orderId, 'confirmed');
             $ack();

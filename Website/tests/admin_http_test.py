@@ -164,7 +164,7 @@ if(($argv[1]??'')==='inspect'){
   check(admin.request('/admin/stock','POST',{**stock,'quantity':'-100','reason':'Too low'})[0]==409,'Inventory cannot become negative')
   check(viewer.request('/admin/stock','POST',{**stock,'quantity':'1','reason':'Denied'})[0]==403,'Viewer stock mutation denied')
   order=run('order');oid=str(order['id'])
-  gate=fields(admin.request('/admin/order?id='+oid)[2],'/admin/order');gate.update(target='awaiting_verification',reason='Verifying by call');check(admin.request('/admin/order','POST',gate)[0]==303,'Order enters verification gate')
+  gate=fields(admin.request('/admin/order?id='+oid)[2],'/admin/order');gate.update(target='awaiting_verify',reason='Verifying by call');check(admin.request('/admin/order','POST',gate)[0]==303,'Order enters verification gate')
   data=fields(admin.request('/admin/order?id='+oid)[2],'/admin/order');data.update(target='confirmed',reason='Verified order');check(admin.request('/admin/order','POST',data)[0]==303,'Order transition persists')
   check(admin.request('/admin/order','POST',data)[0]==303,'Order transition retry idempotent')
   status,_,body=customer.request('/order/'+oid);check(status==200 and 'Confirmed' in body and 'Verified order' in body,'Admin confirmation reaches customer order timeline')

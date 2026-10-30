@@ -36,10 +36,10 @@ $edit = array_merge($input, ['id'=>$product['id'], 'advance_bps'=>3000]); $edit[
 $products->save($admin, $edit, $product['revision'], 'advtest:product:edit');
 $check((int)$pdo->query('SELECT advance_bps FROM products WHERE id='.(int)$product['id'])->fetchColumn()===3000, 'Saved product advance rate persists.');
 
-// Verification gate: placed must pass through awaiting_verification before confirmed.
+// Verification gate: placed must pass through awaiting_verify before confirmed.
 $placed = $order('razorpay', 'advtest:verify');
 CommerceTest::rejects(fn()=>$orders->transition($admin, $placed['id'], 'confirmed', 1, 'advtest:skip'), 409, 'Order cannot skip verification.');
-$orders->transition($admin, $placed['id'], 'awaiting_verification', 1, 'advtest:toverify');
+$orders->transition($admin, $placed['id'], 'awaiting_verify', 1, 'advtest:toverify');
 $confirmed = $orders->transition($admin, $placed['id'], 'confirmed', 2, 'advtest:confirm');
 $check($confirmed['status']==='confirmed', 'Order confirms after verification.');
 

@@ -88,7 +88,7 @@ $pdo->exec('DROP TRIGGER payment_queue_failure');
 $check($snapshot() === $before, 'Queue failure rolls back payment, order and event ledger together.');
 $result = $service->confirmCallback($buyer,$data['provider_order_id'],'pay_Test1',$signature($data,'pay_Test1'));
 $check($result['id'] === $first['id'] && $pdo->query('SELECT payment_status FROM orders WHERE id=' . $first['id'])->fetchColumn() === 'paid', 'Valid callback marks the owned order paid.');
-$check($pdo->query('SELECT status FROM orders WHERE id=' . $first['id'])->fetchColumn() === 'awaiting_verification', 'Capture enters the phone-verification gate, not confirmed.');
+$check($pdo->query('SELECT status FROM orders WHERE id=' . $first['id'])->fetchColumn() === 'awaiting_verify', 'Capture enters the phone-verification gate, not confirmed.');
 $check($pdo->query('SELECT status FROM payments WHERE order_id=' . $first['id'])->fetchColumn() === 'captured', 'Valid callback captures the payment.');
 $check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='order_payment_received'")->fetchColumn() === 1, 'Capture enqueues one payment acknowledgement.');
 $check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='verify_window'")->fetchColumn() === 1, 'Capture schedules one verification-window timer.');

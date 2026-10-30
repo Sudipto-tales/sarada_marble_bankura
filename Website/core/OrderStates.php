@@ -2,8 +2,8 @@
 
 final class OrderStates
 {
-    public const NEXT=['placed'=>'awaiting_verification','awaiting_verification'=>'confirmed','confirmed'=>'processing','processing'=>'shipped','shipped'=>'outForDelivery','outForDelivery'=>'delivered'];
-    public const CANCELLABLE=['placed','awaiting_verification','confirmed','processing'];
+    public const NEXT=['placed'=>'awaiting_verify','awaiting_verify'=>'confirmed','confirmed'=>'processing','processing'=>'shipped','shipped'=>'outForDelivery','outForDelivery'=>'delivered'];
+    public const CANCELLABLE=['placed','awaiting_verify','confirmed','processing'];
     public static function validate(string $from,string $to):void
     {
         if((self::NEXT[$from]??null)===$to||($to==='cancelled'&&in_array($from,self::CANCELLABLE,true))) return;

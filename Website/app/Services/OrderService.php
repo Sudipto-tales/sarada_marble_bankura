@@ -231,7 +231,7 @@ final class OrderService
                 (new QueueService($this->pdo))->orderCancelled($id);
             }
             // The verification gate is an internal step; the storefront shows its own notice, so no customer email.
-            elseif ($target !== 'awaiting_verification') (new QueueService($this->pdo))->orderStatus($id,$target);
+            elseif ($target !== 'awaiting_verify') (new QueueService($this->pdo))->orderStatus($id,$target);
             return ['id' => $id, 'status' => $target, 'revision' => $expectedRevision + 1];
         });
     }
@@ -291,22 +291,22 @@ final class OrderService
             if ($this->query('SELECT id FROM admin_activity_log WHERE operation_key=?' . $lock, [$key])->fetchColumn())
                 return ['id' => $id, 'status' => $order['status'], 'revision' => (int)$order['revision']];
             if ((int)$order['revision'] !== $expectedRevision) throw new RequestRejected(409, 'revision_conflict', 'Order changed. Refresh and retry.');
-            if ($order['status'] !== 'awaiting_verification') throw new RequestRejected(409, 'verify_unavailable', 'This order is not awaiting verification.');
+            if ($order['status'] !== 'awaiting_verify') throw new RequestRejected(409, 'verify_unavailable', 'This order is not awaiting verification.');
             $now = CommerceDatabase::clock($this->pdo); $next = $expectedRevision + 1;
             if ($outcome === 'unreachable') {
                 $this->query('UPDATE orders SET verify_attempts=verify_attempts+1,verify_outcome=?,verify_note=?,verified_by=?,verified_at=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?',
                     ['unreachable', $note, $actorId, $now, $now, $id, $expectedRevision]);
                 StaffAudit::record($this->pdo, $actorId, 'order.verify', 'order', $id, $key, ['outcome' => 'unreachable', 'revision' => $next]);
-                return ['id' => $id, 'status' => 'awaiting_verification', 'revision' => $next];
+                return ['id' => $id, 'status' => 'awaiting_verify', 'revision' => $next];
             }
             $target = $outcome === 'reached' ? 'confirmed' : 'cancelled';
-            OrderStates::validate('awaiting_verification', $target);
+            OrderStates::validate('awaiting_verify', $target);
             if ($target === 'cancelled') (new InventoryService($this->pdo))->restockOrder($id, $actorId);
             $this->query('UPDATE orders SET status=?,verify_outcome=?,verify_note=?,verified_by=?,verified_at=?,verify_deadline_at=NULL,revision=revision+1,updated_at=? WHERE id=? AND revision=?',
                 [$target, $outcome, $note, $actorId, $now, $now, $id, $expectedRevision]);
             $reason = $outcome === 'reached' ? 'Confirmed after verification call' : 'Rejected at verification call';
             $this->query('INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,?,?,?,?,?,?)',
-                [$id, 'awaiting_verification', $target, $actorId, $reason, $key, $now]);
+                [$id, 'awaiting_verify', $target, $actorId, $reason, $key, $now]);
             StaffAudit::record($this->pdo, $actorId, 'order.verify', 'order', $id, $key, ['outcome' => $outcome, 'status' => $target, 'revision' => $next]);
             if ($target === 'cancelled') {
                 if (in_array($order['payment_status'], ['advance_paid','paid'], true)) PaymentService::enqueueRefund($this->pdo, $order, 'Order rejected at verification');

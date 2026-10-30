@@ -50,7 +50,7 @@ $check((int)$big['amount_due_minor'] === 120000 && (int)$big['total_minor'] === 
 // --- Capture enters the verification gate (not confirmed) ---
 $capture($big);
 $row = $orderRow($big['id']);
-$check($row['status'] === 'awaiting_verification' && $row['payment_status'] === 'advance_paid' && $row['verify_deadline_at'] !== null, 'Advance capture enters the verification gate with a deadline.');
+$check($row['status'] === 'awaiting_verify' && $row['payment_status'] === 'advance_paid' && $row['verify_deadline_at'] !== null, 'Advance capture enters the verification gate with a deadline.');
 $check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE type='verify_window' AND dedupe_key='order:" . $big['id'] . ":verify_window:v1'")->fetchColumn() === 1, 'Capture schedules exactly one verify-window timer.');
 $rev = (int)$row['revision'];
 
@@ -62,7 +62,7 @@ CommerceTest::rejects(fn() => $orders->confirmByCall($admin, (int)$big['id'], 'r
 // --- Unreachable logs an attempt and keeps the order pending ---
 $orders->confirmByCall($admin, (int)$big['id'], 'unreachable', 'No answer', $rev, 'book:verify:attempt1');
 $row = $orderRow($big['id']);
-$check($row['status'] === 'awaiting_verification' && (int)$row['verify_attempts'] === 1 && $row['verify_outcome'] === 'unreachable', 'An unreachable call logs an attempt and leaves the order pending.');
+$check($row['status'] === 'awaiting_verify' && (int)$row['verify_attempts'] === 1 && $row['verify_outcome'] === 'unreachable', 'An unreachable call logs an attempt and leaves the order pending.');
 
 // --- Reached confirms the order and emails the customer ---
 $out = $orders->confirmByCall($admin, (int)$big['id'], 'reached', 'Spoke to buyer', (int)$row['revision'], 'book:verify:reached');

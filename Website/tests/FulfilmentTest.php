@@ -14,7 +14,7 @@ $order=$orders->place($buyer,$cart['id'],$cart['revision'],$address['id'],'cod',
 $files=static fn()=>glob(CommerceTest::$temp.'/private/test-mail/*.json')?:[];
 $worker->run(['emails'],10,30);
 $check(count($files())===1&&$pdo->query("SELECT status FROM notification_deliveries WHERE delivery_key='order_confirmation:$id:v1'")->fetchColumn()==='sent','Existing confirmation still delivers through the queued worker.');
-$orders->transition($admin,$id,'awaiting_verification',1,'fulfil:transition:verify');
+$orders->transition($admin,$id,'awaiting_verify',1,'fulfil:transition:verify');
 $revision=2;
 foreach(['confirmed','processing','shipped'] as $status){
     $orders->transition($admin,$id,$status,$revision++,'fulfil:transition:'.$status);
@@ -40,7 +40,7 @@ $check(count($files())===$before,'Replaying transition or deleted successful not
 CommerceTest::rejects(fn()=>CommerceDatabase::transaction($pdo,fn()=>$producer->orderStatus($id,'unknown')),422,'Unknown status jobs are rejected.');
 
 $cart=$carts->change('user:'.$buyer,$variant,1000,0);$second=$orders->place($buyer,$cart['id'],$cart['revision'],$address['id'],'cod','fulfil:place:second');
-$orders->transition($admin,$second['id'],'awaiting_verification',1,'fulfil:second:verify');
+$orders->transition($admin,$second['id'],'awaiting_verify',1,'fulfil:second:verify');
 $mysql=$pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql';
 $snapshot=static function()use($pdo):array{$out=[];foreach(['orders','order_status_history','admin_activity_log','jobs'] as $table)$out[$table]=$pdo->query('SELECT * FROM '.$table.' ORDER BY id')->fetchAll();return $out;};
 $before=$snapshot();

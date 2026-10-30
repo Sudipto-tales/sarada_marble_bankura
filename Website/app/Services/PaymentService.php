@@ -212,8 +212,8 @@ final class PaymentService
                     $settings = (new SettingsService($this->pdo))->effective();
                     $deadline = $settings['verify_autoconfirm_hours'] > 0 ? $now + $settings['verify_autoconfirm_hours'] * 3600 : null;
                     if ($order['status'] === 'placed') {
-                        $this->query("UPDATE orders SET payment_status=?,status='awaiting_verification',verify_deadline_at=?,payment_deadline_at=NULL,revision=revision+1,updated_at=? WHERE id=?", [$paid,$deadline,$now,$order['id']]);
-                        $this->query("INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,'placed','awaiting_verification',?,?,?,?)",
+                        $this->query("UPDATE orders SET payment_status=?,status='awaiting_verify',verify_deadline_at=?,payment_deadline_at=NULL,revision=revision+1,updated_at=? WHERE id=?", [$paid,$deadline,$now,$order['id']]);
+                        $this->query("INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,'placed','awaiting_verify',?,?,?,?)",
                             [$order['id'],(int)$order['user_id'],'Payment received; awaiting verification call','autogate:'.$order['id'],$now]);
                         if ($deadline !== null) (new QueueService($this->pdo))->verifyWindow((int)$order['id'], $deadline);
                     } else {
