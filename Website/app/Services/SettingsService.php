@@ -1,7 +1,8 @@
 <?php
 final class SettingsService
 {
-    private const KEYS=['tax_bps'=>'CHECKOUT_TAX_BPS','shipping_minor'=>'CHECKOUT_SHIPPING_MINOR','cod_enabled'=>'CHECKOUT_COD_ENABLED','razorpay_enabled'=>'CHECKOUT_RAZORPAY_ENABLED','advance_bps'=>'CHECKOUT_ADVANCE_BPS'];
+    private const KEYS=['tax_bps'=>'CHECKOUT_TAX_BPS','shipping_minor'=>'CHECKOUT_SHIPPING_MINOR','cod_enabled'=>'CHECKOUT_COD_ENABLED','razorpay_enabled'=>'CHECKOUT_RAZORPAY_ENABLED','advance_bps'=>'CHECKOUT_ADVANCE_BPS',
+        'advance_min_order_minor'=>'CHECKOUT_ADVANCE_MIN_MINOR','verify_autoconfirm_hours'=>'CHECKOUT_VERIFY_AUTOCONFIRM_HOURS','payment_window_hours'=>'CHECKOUT_PAYMENT_WINDOW_HOURS','delivery_strict'=>'CHECKOUT_DELIVERY_STRICT'];
     public function __construct(private PDO $pdo) {}
     public function get(string $key,string $default):string
     {
@@ -14,7 +15,7 @@ final class SettingsService
         // Shared current reads preserve authoritative settings without serializing all MySQL checkouts.
         $lock=$this->pdo->inTransaction()&&$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'
             ?($exclusive?' FOR UPDATE':' LOCK IN SHARE MODE'):'';
-        return CommerceDatabase::query($this->pdo,"SELECT skey,svalue FROM store_settings WHERE skey IN ('cod_enabled','razorpay_enabled','shipping_minor','tax_bps','advance_bps','cashback_cod_bps','cashback_cod_cap','cashback_razorpay_bps','cashback_razorpay_cap','cashback_simulation_bps','cashback_simulation_cap') ORDER BY skey".$lock)->fetchAll(PDO::FETCH_KEY_PAIR);
+        return CommerceDatabase::query($this->pdo,"SELECT skey,svalue FROM store_settings WHERE skey IN ('cod_enabled','razorpay_enabled','shipping_minor','tax_bps','advance_bps','advance_min_order_minor','verify_autoconfirm_hours','payment_window_hours','delivery_strict','cashback_cod_bps','cashback_cod_cap','cashback_razorpay_bps','cashback_razorpay_cap','cashback_simulation_bps','cashback_simulation_cap') ORDER BY skey".$lock)->fetchAll(PDO::FETCH_KEY_PAIR);
     }
     public const CASHBACK_METHODS=['cod','razorpay','simulation'];
     public function effective():array
@@ -28,6 +29,12 @@ final class SettingsService
         return ['tax_bps'=>CommerceValues::integer($value('tax_bps','0'),0,10000,'tax_bps'),
             'shipping_minor'=>CommerceValues::integer($value('shipping_minor','0'),0,CommerceValues::MAX_MONEY,'shipping_minor'),
             'advance_bps'=>CommerceValues::integer($value('advance_bps','0'),0,10000,'advance_bps'),
+            // Below this order total the advance is waived and the buyer pays in full upfront. 0 = no minimum.
+            'advance_min_order_minor'=>CommerceValues::integer($value('advance_min_order_minor','0'),0,CommerceValues::MAX_MONEY,'advance_min_order_minor'),
+            // Admin-set hours for the two booking timers; 0 disables that timer.
+            'verify_autoconfirm_hours'=>CommerceValues::integer($value('verify_autoconfirm_hours','48'),0,8760,'verify_autoconfirm_hours'),
+            'payment_window_hours'=>CommerceValues::integer($value('payment_window_hours','48'),0,8760,'payment_window_hours'),
+            'delivery_strict'=>filter_var($value('delivery_strict',false),FILTER_VALIDATE_BOOLEAN),
             'cod_enabled'=>filter_var($value('cod_enabled',false),FILTER_VALIDATE_BOOLEAN),
             'razorpay_enabled'=>filter_var($value('razorpay_enabled',false),FILTER_VALIDATE_BOOLEAN),
             'cashback'=>$cashback];
@@ -51,6 +58,10 @@ final class SettingsService
         $values=['tax_bps'=>CommerceValues::integer($input['tax_bps']??null,0,10000,'tax_bps'),
             'shipping_minor'=>CommerceValues::decimal($input['shipping']??null,2,CommerceValues::MAX_MONEY,'shipping'),
             'advance_bps'=>CommerceValues::integer($input['advance_bps']??0,0,10000,'advance_bps'),
+            'advance_min_order_minor'=>CommerceValues::decimal(($input['advance_min_order']??'')===''?'0':$input['advance_min_order'],2,CommerceValues::MAX_MONEY,'advance_min_order'),
+            'verify_autoconfirm_hours'=>CommerceValues::integer($input['verify_autoconfirm_hours']??48,0,8760,'verify_autoconfirm_hours'),
+            'payment_window_hours'=>CommerceValues::integer($input['payment_window_hours']??48,0,8760,'payment_window_hours'),
+            'delivery_strict'=>CommerceValues::flag($input['delivery_strict']??0,'delivery_strict'),
             'cod_enabled'=>CommerceValues::flag($input['cod_enabled']??0,'cod_enabled'),
             'razorpay_enabled'=>CommerceValues::flag($input['razorpay_enabled']??0,'razorpay_enabled')];
         foreach(self::CASHBACK_METHODS as $m){

@@ -1,0 +1,313 @@
+/* Storefront UI layer — loaded after every page stylesheet so one set of rules wins for the
+   shared controls (fields, dropdowns, header badges, rating rails, brand tiles) that earlier
+   layers each styled slightly differently. Keeps the Stone Atelier palette and tokens. */
+
+:root{
+  --field-line:#c9d9de;
+  --field-line-hover:#9fbcc5;
+  --field-bg:#fff;
+  --field-radius:10px;
+  --star-track:#d6e0e4;
+  --star-fill:var(--gold);
+}
+
+/* ---------------------------------------------------------------------------
+   1. Text fields and dropdowns
+   One border, one radius and one focus treatment across the filter panel,
+   checkout, the account forms and every dialog. Dropdowns lose the native
+   control so the chevron matches the rest of the storefront on every platform.
+   --------------------------------------------------------------------------- */
+body[data-page] main input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),
+body[data-page] main select,
+body[data-page] main textarea,
+body[data-page] dialog input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]),
+body[data-page] dialog select,
+body[data-page] dialog textarea{
+  font:inherit;color:var(--ink);
+  background:var(--field-bg);
+  border:1px solid var(--field-line);
+  border-radius:var(--field-radius);
+  padding:11px 13px;
+  box-shadow:0 1px 2px #0a2a3a0a;
+  transition:border-color .15s ease,box-shadow .15s ease,background-color .15s ease;
+}
+body[data-page] main textarea,body[data-page] dialog textarea{line-height:1.6;resize:vertical;min-height:88px}
+body[data-page] main input::placeholder,body[data-page] dialog input::placeholder,
+body[data-page] main textarea::placeholder,body[data-page] dialog textarea::placeholder{color:#8da7b1}
+
+body[data-page] main input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):hover,
+body[data-page] main select:hover,body[data-page] main textarea:hover,
+body[data-page] dialog input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):hover,
+body[data-page] dialog select:hover,body[data-page] dialog textarea:hover{border-color:var(--field-line-hover)}
+
+/* A tinted ring instead of the thick offset outline: it reads as part of the field. */
+body[data-page] main input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):focus,
+body[data-page] main select:focus,body[data-page] main textarea:focus,
+body[data-page] dialog input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):focus,
+body[data-page] dialog select:focus,body[data-page] dialog textarea:focus{
+  outline:0;border-color:var(--teal);background:#fff;
+  box-shadow:0 0 0 3px #087e8b29;
+}
+/* Keyboard users still get the high-contrast ring the rest of the site uses. */
+body[data-page] main input:focus-visible,body[data-page] main select:focus-visible,body[data-page] main textarea:focus-visible,
+body[data-page] dialog input:focus-visible,body[data-page] dialog select:focus-visible,body[data-page] dialog textarea:focus-visible{
+  outline:2px solid var(--clay);outline-offset:2px;
+}
+body[data-page] main input[aria-invalid=true],body[data-page] main select[aria-invalid=true],
+body[data-page] main input:not(:placeholder-shown):invalid{border-color:#c2545a}
+body[data-page] main input[readonly],body[data-page] main input:disabled,
+body[data-page] main select:disabled{background:#eef3f5;color:var(--muted);cursor:not-allowed;box-shadow:none}
+
+/* Dropdowns: native control removed, chevron drawn in the brand ink. */
+body[data-page] main select,body[data-page] dialog select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  padding-right:38px;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23082c40' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3.5 6 4.5 4.5L12.5 6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 13px center;
+  background-size:15px 15px;
+}
+body[data-page] main select::-ms-expand{display:none}
+body[data-page] main select:focus{background-color:#fff}
+
+/* Search fields keep the rounded pill the header already uses. */
+body[data-page] main input[type=search]{border-radius:999px;padding-left:16px}
+/* Numeric steppers in the bag/quantity widgets keep their own compact chrome. */
+body[data-page] main .cart-qty input,body[data-page] main .php-quantity input,
+body[data-page] main .pdp-qty input,body[data-page] main .quantity input{
+  border:0;background:transparent;box-shadow:none;border-radius:0;padding:12px 8px;text-align:center;
+}
+body[data-page] main .cart-qty input:focus,body[data-page] main .pdp-qty input:focus{box-shadow:none}
+/* Labels stack their control; keep the gap consistent now that margins differ per layer. */
+body[data-page] main label>input:not([type=hidden]):not([type=checkbox]):not([type=radio]),
+body[data-page] main label>select,body[data-page] main label>textarea,
+body[data-page] dialog label>input:not([type=hidden]):not([type=checkbox]):not([type=radio]),
+body[data-page] dialog label>select,body[data-page] dialog label>textarea{display:block;width:100%;margin-top:7px}
+body[data-page] main .php-filters label,body[data-page] dialog label{display:block;font-size:13px;font-weight:600;color:var(--deep)}
+body[data-page] main input[type=checkbox],body[data-page] main input[type=radio]{
+  width:17px;height:17px;accent-color:var(--teal);margin:0 8px 0 0;vertical-align:-2px;
+}
+
+/* ---------------------------------------------------------------------------
+   2. Header count badges
+   A small pill that sits on the icon's shoulder, ringed in the header colour so
+   it stays legible over the glyph. An empty bag or shortlist shows nothing.
+   --------------------------------------------------------------------------- */
+header .header-actions .icon b{
+  position:absolute;top:-6px;right:-9px;
+  min-width:17px;height:17px;padding:0 4px;
+  display:grid;place-items:center;
+  background:var(--teal);color:#fff;
+  font-size:10.5px;font-weight:700;line-height:1;letter-spacing:0;
+  font-variant-numeric:tabular-nums;
+  border-radius:999px;border:2px solid #fbfcfc;
+  box-shadow:0 1px 3px #06192633;
+}
+header .header-actions .icon b.is-zero{display:none}
+header .header-actions .icon:hover b{background:var(--clay)}
+@media(max-width:650px){
+  header .header-actions .icon b{top:-5px;right:-7px;min-width:16px;height:16px;font-size:10px;border-width:1.5px}
+}
+/* In the mobile drawer the icons sit in a list, so the count reads inline instead. */
+#site-drawer .header-actions .icon b{
+  position:static;margin-left:auto;border:0;box-shadow:none;background:var(--ice);color:var(--deep);
+}
+
+/* ---------------------------------------------------------------------------
+   3. Rating rail
+   Five star shapes masked out of a two-layer fill, so a 3.5 shows exactly three
+   and a half. No text glyphs, so it renders identically on every platform.
+   --------------------------------------------------------------------------- */
+.stars{
+  --star-size:15px;
+  --fill:0%;
+  display:inline-block;vertical-align:-2px;position:relative;
+  width:calc(var(--star-size) * 5.5);height:var(--star-size);
+  background:var(--star-track);
+  -webkit-mask-image:var(--star-shape);mask-image:var(--star-shape);
+  -webkit-mask-size:20% 100%;mask-size:20% 100%;
+  -webkit-mask-repeat:repeat-x;mask-repeat:repeat-x;
+  flex-shrink:0;
+}
+.stars>i{position:absolute;inset:0 auto 0 0;width:var(--fill);background:var(--star-fill);display:block}
+.stars{
+  --star-shape:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 20'%3E%3Cpath d='M10 0.8 12.43 6.65 18.75 7.16 13.94 11.28 15.41 17.44 10 14.14 4.59 17.44 6.06 11.28 1.25 7.16 7.57 6.65Z'/%3E%3C/svg%3E");
+}
+.stars-sm{--star-size:13px}
+.stars-lg{--star-size:20px}
+.stars-input{--star-size:30px}
+
+/* The half-star picker overlays its hit targets on the same rail. */
+.star-input{position:relative;display:inline-block;line-height:0}
+.star-input .star-hit{position:absolute;inset:0;display:flex}
+.star-input .star-hit button{flex:1;height:100%;min-width:0;padding:0;background:none;border:0;cursor:pointer}
+.star-input:hover .stars>i,.star-input:focus-within .stars>i{background:var(--clay)}
+
+/* Review summary and list keep the rail on its own line at the sizes they used. */
+.review-score .stars{--star-size:20px;display:block;margin:9px 0 6px;width:calc(var(--star-size) * 5.5)}
+.review-rating{display:flex;align-items:center;gap:8px}
+.review-rating b{font-size:13px;color:var(--muted);font-weight:600}
+.pdp-rating-inline{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.pdp-rating-inline .stars{--star-size:17px}
+
+/* Home testimonial: the rail replaces the old run of glyphs, so it needs no auto margin. */
+.h-review-stars{margin-left:auto;display:inline-flex;align-items:center}
+
+/* ---------------------------------------------------------------------------
+   4. Product card rating
+   Shown only when a material actually has published reviews; the price block
+   already falls back to "Price on request" when a variant carries no amount.
+   --------------------------------------------------------------------------- */
+.stone-rating{
+  display:inline-flex;align-items:center;gap:7px;margin:2px 0 6px;
+  text-decoration:none;font-size:12.6px;color:var(--muted);
+}
+.stone-rating b{color:var(--deep);font-weight:700}
+.stone-rating small{font-size:11.8px}
+.stone-rating:hover b{color:var(--teal)}
+.h-product .stone-rating{margin:0 0 6px;font-size:11.8px}
+.h-product .stone-rating .stars{--star-size:12px}
+.price-unset{color:var(--muted);font-weight:600}
+
+/* ---------------------------------------------------------------------------
+   5. Discover promos — "Your room." and "Every square foot."
+   These two cards sat in fixed 145px/148px grid rows while their heading, copy
+   and button need more, so the button was clipped by the card's overflow.
+   The rows now grow to their content and the button is pinned to the bottom.
+   --------------------------------------------------------------------------- */
+body[data-page=home] .h-promos{grid-template-rows:auto auto;align-items:stretch}
+body[data-page=home] .h-promo{display:flex;flex-direction:column;min-height:145px}
+body[data-page=home] .h-promo>div:first-child{display:flex;flex-direction:column;align-items:flex-start;height:100%}
+body[data-page=home] .h-promo .button{margin-top:auto;align-self:flex-start;white-space:nowrap}
+body[data-page=home] .h-promo-main,body[data-page=home] .h-promo-offer{grid-row:span 2}
+body[data-page=home] .h-promo-room,body[data-page=home] .h-promo-calc{min-height:152px}
+/* The room photo is decorative; keep it clear of the copy column. */
+body[data-page=home] .h-promo-room>img{width:52%;mask-image:linear-gradient(90deg,transparent,#000 55%)}
+body[data-page=home] .h-promo-room h2,body[data-page=home] .h-promo-calc h2{max-width:none}
+body[data-page=home] .h-promo-room>div:first-child,body[data-page=home] .h-promo-calc>div:first-child{max-width:62%}
+
+@media(max-width:900px){
+  body[data-page=home] .h-promos{grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto}
+  body[data-page=home] .h-promo-main,body[data-page=home] .h-promo-offer{grid-row:span 2}
+  body[data-page=home] .h-promo-room,body[data-page=home] .h-promo-calc{grid-row:3}
+}
+@media(max-width:650px){
+  body[data-page=home] .h-promos{grid-template-rows:auto auto}
+  body[data-page=home] .h-promo-main,body[data-page=home] .h-promo-offer{grid-row:1;min-height:245px}
+  body[data-page=home] .h-promo-room,body[data-page=home] .h-promo-calc{grid-row:2;min-height:168px}
+  body[data-page=home] .h-promo-room>div:first-child,body[data-page=home] .h-promo-calc>div:first-child{max-width:100%}
+  body[data-page=home] .h-promo-room h2,body[data-page=home] .h-promo-calc h2{max-width:none;font-size:16px}
+  body[data-page=home] .h-promo-room p,body[data-page=home] .h-promo-calc p{margin-top:6px}
+  body[data-page=home] .h-promo .button{margin-top:12px;font-size:11.6px;padding:8px 11px}
+  /* At this width the art would sit under the button, so it stays a faint backdrop. */
+  body[data-page=home] .h-promo-room>img{width:100%;opacity:.22;mask-image:none}
+}
+
+/* ---------------------------------------------------------------------------
+   6. App banner phone mock-up
+   The two phones are a fixed-size composition. Below the desktop layout the
+   column they sat in was narrower than the rotated frames, so they were cut off
+   and their contents overflowed. The stage now scales as one piece.
+   --------------------------------------------------------------------------- */
+body[data-page=home] .h-phone{overflow:hidden}
+body[data-page=home] .h-phone>*{flex-shrink:0}
+body[data-page=home] .h-phone strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;width:100%}
+/* The screen is narrow, so the supporting lines wrap to two rather than truncating on the first word. */
+body[data-page=home] .h-phone small,body[data-page=home] .h-phone span,body[data-page=home] .h-phone b{
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  text-align:center;width:100%;line-height:1.25;overflow-wrap:anywhere;
+}
+body[data-page=home] .h-phone small{color:var(--muted)}
+body[data-page=home] .h-phone .h-phone-product{flex:1;min-height:0;object-fit:cover}
+body[data-page=home] .h-phone-back>span{white-space:normal}
+
+@media(max-width:900px){
+  /* Give the composition its own full-width band instead of a cramped side column. */
+  body[data-page=home] .h-app-banner{grid-template-columns:1fr 1fr;padding:20px 22px;gap:18px}
+  body[data-page=home] .h-phone-stage{grid-column:1/-1;grid-row:1;height:210px;width:100%}
+  body[data-page=home] .h-phone{left:50%;margin-left:-6px;top:4px}
+  body[data-page=home] .h-phone-back{left:50%;margin-left:-104px;top:18px}
+  body[data-page=home] .h-app-copy{grid-column:1/-1}
+  body[data-page=home] .h-app-features{grid-column:1/-1;grid-template-columns:1fr 1fr}
+}
+@media(max-width:650px){
+  body[data-page=home] .h-app-banner{grid-template-columns:1fr;padding:18px 16px;gap:16px}
+  body[data-page=home] .h-phone-stage{height:196px;overflow:visible}
+  body[data-page=home] .h-phone{
+    width:108px;height:184px;border-width:3px;border-radius:16px;padding:7px 6px;gap:4px;
+    left:50%;margin-left:0;top:4px;
+  }
+  body[data-page=home] .h-phone:before{left:50%;margin-left:-14px;width:28px;height:3px}
+  body[data-page=home] .h-phone-back{left:50%;margin-left:-112px;top:20px}
+  body[data-page=home] .h-phone .h-phone-logo{height:20px}
+  body[data-page=home] .h-phone .h-phone-product{height:auto;min-height:48px}
+  body[data-page=home] .h-phone strong{font-size:10.5px}
+  body[data-page=home] .h-phone small,body[data-page=home] .h-phone span,body[data-page=home] .h-phone b{font-size:9.5px}
+  body[data-page=home] .h-phone-back>span{margin-top:0;position:absolute;left:0;right:0;bottom:12px;font-size:9.5px;padding:6px 4px;text-align:center}
+  body[data-page=home] .h-app-features{grid-template-columns:1fr}
+}
+
+/* ---------------------------------------------------------------------------
+   7. Footer social links
+   Each network lights up in its own colour on hover/focus, with white artwork
+   so the icon stays readable against the brand fill.
+   --------------------------------------------------------------------------- */
+.footer-social a{
+  transition:background-color .18s ease,border-color .18s ease,color .18s ease,transform .18s ease;
+}
+.footer-social a:hover,.footer-social a:focus-visible{
+  color:#fff;border-color:transparent;transform:translateY(-2px);
+}
+.footer-social a[data-social=instagram]:hover,.footer-social a[data-social=instagram]:focus-visible{
+  background:radial-gradient(circle at 30% 107%,#fdf497 0%,#fd5949 45%,#d6249f 60%,#285aeb 90%);
+}
+.footer-social a[data-social=facebook]:hover,.footer-social a[data-social=facebook]:focus-visible{background:#1877f2}
+.footer-social a[data-social=youtube]:hover,.footer-social a[data-social=youtube]:focus-visible{background:#ff0000}
+.footer-social a[data-social=whatsapp]:hover,.footer-social a[data-social=whatsapp]:focus-visible{background:#25d366}
+@media(prefers-reduced-motion:reduce){.footer-social a:hover,.footer-social a:focus-visible{transform:none}}
+
+/* ---------------------------------------------------------------------------
+   8. Shop by brands
+   Tiles lead with the supplier's logo; brands without one keep the row even
+   with a monogram rather than collapsing to a bare line of text.
+   --------------------------------------------------------------------------- */
+.pdp-brands{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(232px,100%),1fr));gap:14px}
+.pdp-brands a{
+  display:flex;align-items:center;gap:14px;
+  background:#fff;border:1px solid var(--line);border-radius:14px;
+  padding:16px 18px;min-width:0;text-decoration:none;
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease;
+}
+.pdp-brands a:hover{border-color:var(--sage);box-shadow:0 10px 24px #0a2a3a14;transform:translateY(-2px)}
+.pdp-brands .brand-logo{
+  flex:0 0 auto;width:62px;height:44px;display:grid;place-items:center;
+  background:#f6fafb;border-radius:9px;overflow:hidden;
+}
+.pdp-brands .brand-logo img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;mix-blend-mode:multiply}
+.pdp-brands .brand-monogram{
+  font-family:var(--font-head);font-size:20px;font-weight:700;color:var(--teal);line-height:1;
+}
+.pdp-brands .brand-name{
+  flex:1;min-width:0;font-size:14.5px;font-weight:650;color:var(--ink);line-height:1.35;
+  /* Long supplier names wrap to a second line rather than being cut mid-word. */
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;
+}
+.pdp-brands .brand-go{flex:0 0 auto;color:var(--muted);font-size:14px}
+.pdp-brands a:hover .brand-go{color:var(--teal)}
+@media(prefers-reduced-motion:reduce){.pdp-brands a:hover{transform:none}}
+
+/* ---------------------------------------------------------------------------
+   9. Manage profile dialog
+   --------------------------------------------------------------------------- */
+.php-account-toolbar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#profile-dialog{width:min(480px,calc(100% - 32px));border:0;border-radius:16px;padding:22px 24px 24px;box-shadow:0 24px 60px #06192636}
+#profile-dialog::backdrop{background:#06192699}
+#profile-dialog .dialog-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:6px}
+#profile-dialog .dialog-head h2{font-size:21px;margin:0}
+#profile-dialog .dialog-head .icon{border:0;background:transparent;cursor:pointer;padding:4px;color:var(--muted)}
+#profile-dialog .dialog-head .icon svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7}
+.php-profile-form{display:grid;gap:14px;margin-top:12px}
+.php-profile-names{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.php-profile-form .note{margin:0;font-size:12.4px;color:var(--muted);line-height:1.6}
+.php-profile-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
+@media(max-width:520px){.php-profile-names{grid-template-columns:1fr}}

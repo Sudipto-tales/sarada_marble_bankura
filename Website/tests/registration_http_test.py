@@ -70,10 +70,10 @@ with tempfile.TemporaryDirectory(prefix='sarada-signup-ui-') as directory:
             check(parsed.path=='/auth/verify_email' and len(parse_qs(parsed.query)['token'][0])==64,'Delivered link targets the real PHP verification route.')
             check(request(parsed.path+'?'+parsed.query)[0]==200,'Valid proof verifies customer.')
             check(request(parsed.path+'?'+parsed.query)[0]==422,'Consumed verification proof cannot be replayed.')
-            _,_,body=request('/account')
+            _,_,body=request('/account/login')
             csrf=re.search(r'name="csrf" value="([a-f0-9]+)"',body)[1]
             status,headers,_=request('/account',{'csrf':csrf,'email':fields['email'],'password':fields['password']})
-            check(status==303 and headers['Location']=='/cart','Verified account signs in normally.')
+            check(status==303 and headers['Location'] in ('/cart','/'),'Verified account signs in normally.')
             check('UI Customer' in request('/account')[2],'Account dashboard reflects the verified identity.')
             check(request('/admin/products')[0]==403,'Browser signup cannot grant an admin role.')
             check(request('/orders')[0]==200,'New verified customer can open empty owned order history.')

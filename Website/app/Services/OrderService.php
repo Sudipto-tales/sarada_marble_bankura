@@ -124,7 +124,7 @@ final class OrderService
             $total=CommerceValues::sum([$subtotal-$discount,$policy['shipping_minor'],$tax]);if($total>CommerceValues::MAX_MONEY)CommerceValues::invalid('total');
             // Advance payment: resolve each line's rate (product > category > store default); a 0 rate — or none
             // configured — means that line is paid in full now. Advance only engages for online payment.
-            $advanceGlobal=(new SettingsService($this->pdo))->effective()['advance_bps'];$advanceBps=[];$advanceDue=0;
+            $storeSettings=(new SettingsService($this->pdo))->effective();$advanceGlobal=$storeSettings['advance_bps'];$advanceBps=[];$advanceDue=0;
             foreach($rows as $vid=>$row){
                 $lineTotal=CommerceValues::sum([$subtotals[$vid]-$lineDiscount[$vid],$taxParts[$vid]]);
                 $productAdv=$this->query('SELECT advance_bps FROM products WHERE id=?',[$row['variant']['product_id']])->fetchColumn();
@@ -135,7 +135,15 @@ final class OrderService
                 $contribution=$bps>0?CommerceValues::round(CommerceValues::multiply($lineTotal,$bps),10000):$lineTotal;
                 $advanceDue+=max(0,min($contribution,$lineTotal));
             }
-            $amountDue=($paymentMode==='razorpay'&&$advanceDue>0&&$advanceDue<$total)?$advanceDue:$total;
+            // Below the admin-set minimum order value the advance is waived: the buyer pays in full upfront.
+            $advanceMin=$storeSettings['advance_min_order_minor'];
+            $amountDue=($paymentMode==='razorpay'&&$advanceDue>0&&$advanceDue<$total&&$total>=$advanceMin)?$advanceDue:$total;
+            // Bind serviceability: in strict delivery mode the chosen address PIN must fall in a configured zone.
+            if($storeSettings['delivery_strict']){
+                $pin=(string)($address['postal_code']??'');
+                if(!DeliveryService::validPin($pin)||!(new DeliveryService($this->pdo))->resolve($pin))
+                    throw new RequestRejected(422,'delivery_unavailable','We do not deliver to this PIN code yet. Please contact the store.');
+            }
             if ($expectedQuote !== null) {
                 $current = self::quote(['items' => array_map(static fn($vid, $row) => ['variant_id' => $vid,
                     'qty_milli' => $row['quantity'], 'unit_price_minor' => $row['variant']['unit_price_minor']], array_keys($rows), array_values($rows))],$couponPreview);
@@ -157,6 +165,12 @@ final class OrderService
             $this->query("INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,NULL,'placed',?,'Order accepted',?,?)",[$orderId,$userId,'place:'.$request['id'],$now]);
             $producer=new QueueService($this->pdo);
             if($paymentMode!=='razorpay')$producer->orderConfirmation($orderId);
+            // An unpaid online order is auto-cancelled if the advance is not captured within the admin-set window.
+            elseif($storeSettings['payment_window_hours']>0){
+                $paymentDeadline=$now+$storeSettings['payment_window_hours']*3600;
+                $this->query('UPDATE orders SET payment_deadline_at=? WHERE id=?',[$paymentDeadline,$orderId]);
+                $producer->paymentWindow($orderId,$paymentDeadline);
+            }
             $producer->purchase($orderId);
             $this->query("UPDATE carts SET status='checked_out',revision=revision+1 WHERE id=?",[$cartId]);
             $result=['id'=>$orderId,'order_number'=>$number,'status'=>'placed','revision'=>1,'currency'=>'INR','subtotal_minor'=>$subtotal,'discount_minor'=>$discount,'shipping_minor'=>$policy['shipping_minor'],'tax_minor'=>$tax,'total_minor'=>$total,'amount_due_minor'=>$amountDue,'payment_mode'=>$paymentMode,'payment_status'=>$paymentStatus];
@@ -211,7 +225,11 @@ final class OrderService
             $this->query('INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,?,?,?,?,?,?)',
                 [$id, $order['status'], $target, $actorId, $reason, $key, $now]);
             StaffAudit::record($this->pdo, $actorId, 'order.transition', 'order', $id, $key, ['status' => $target, 'revision' => $expectedRevision + 1, 'reason' => $reason]);
-            if ($target === 'cancelled') (new QueueService($this->pdo))->orderCancelled($id);
+            if ($target === 'cancelled') {
+                // Refund any captured advance/full payment when a paid order is cancelled.
+                if (in_array($order['payment_status'], ['advance_paid','paid'], true)) PaymentService::enqueueRefund($this->pdo, $order, 'Order cancelled');
+                (new QueueService($this->pdo))->orderCancelled($id);
+            }
             // The verification gate is an internal step; the storefront shows its own notice, so no customer email.
             elseif ($target !== 'awaiting_verification') (new QueueService($this->pdo))->orderStatus($id,$target);
             return ['id' => $id, 'status' => $target, 'revision' => $expectedRevision + 1];
@@ -251,6 +269,50 @@ final class OrderService
             $this->query("UPDATE orders SET payment_status='paid', revision=revision+1, updated_at=? WHERE id=? AND revision=?", [$now, $id, $expectedRevision]);
             StaffAudit::record($this->pdo, $actorId, 'order.balance', 'order', $id, $key, ['payment_status' => 'paid', 'revision' => $expectedRevision + 1]);
             return ['id' => $id, 'payment_status' => 'paid', 'revision' => $expectedRevision + 1];
+        });
+    }
+
+    /** Records the shop's verification phone call on an order in the gate. 'reached' confirms it, 'rejected'
+        cancels it (restocking and refunding any captured payment), 'unreachable' logs a failed attempt and
+        leaves the order pending. Idempotent on the operation key, like transitions. */
+    public function confirmByCall(int $actorId, int $id, string $outcome, ?string $note, int $expectedRevision, string $key): array
+    {
+        CommerceAccess::requirePermission('admin.orders.edit', $actorId);
+        $id = CommerceValues::id($id); $key = CommerceValues::key($key);
+        if (!in_array($outcome, ['reached','unreachable','rejected'], true)) CommerceValues::invalid('verify_outcome');
+        $note = ($note ?? '') === '' ? null : CommerceValues::text($note, 500, 'verify_note');
+        $expectedRevision = CommerceValues::integer($expectedRevision, 1, PHP_INT_MAX, 'revision');
+        return CommerceDatabase::transaction($this->pdo, function () use ($actorId, $id, $outcome, $note, $expectedRevision, $key): array {
+            CommerceAccess::requirePermission('admin.orders.edit', $actorId);
+            $lock = CommerceDatabase::lock($this->pdo);
+            $order = $this->query('SELECT * FROM orders WHERE id=?' . $lock, [$id])->fetch();
+            if (!$order) throw new RequestRejected(404, 'not_found', 'Order not found.');
+            // A replayed operation key returns the current state rather than acting twice.
+            if ($this->query('SELECT id FROM admin_activity_log WHERE operation_key=?' . $lock, [$key])->fetchColumn())
+                return ['id' => $id, 'status' => $order['status'], 'revision' => (int)$order['revision']];
+            if ((int)$order['revision'] !== $expectedRevision) throw new RequestRejected(409, 'revision_conflict', 'Order changed. Refresh and retry.');
+            if ($order['status'] !== 'awaiting_verification') throw new RequestRejected(409, 'verify_unavailable', 'This order is not awaiting verification.');
+            $now = CommerceDatabase::clock($this->pdo); $next = $expectedRevision + 1;
+            if ($outcome === 'unreachable') {
+                $this->query('UPDATE orders SET verify_attempts=verify_attempts+1,verify_outcome=?,verify_note=?,verified_by=?,verified_at=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?',
+                    ['unreachable', $note, $actorId, $now, $now, $id, $expectedRevision]);
+                StaffAudit::record($this->pdo, $actorId, 'order.verify', 'order', $id, $key, ['outcome' => 'unreachable', 'revision' => $next]);
+                return ['id' => $id, 'status' => 'awaiting_verification', 'revision' => $next];
+            }
+            $target = $outcome === 'reached' ? 'confirmed' : 'cancelled';
+            OrderStates::validate('awaiting_verification', $target);
+            if ($target === 'cancelled') (new InventoryService($this->pdo))->restockOrder($id, $actorId);
+            $this->query('UPDATE orders SET status=?,verify_outcome=?,verify_note=?,verified_by=?,verified_at=?,verify_deadline_at=NULL,revision=revision+1,updated_at=? WHERE id=? AND revision=?',
+                [$target, $outcome, $note, $actorId, $now, $now, $id, $expectedRevision]);
+            $reason = $outcome === 'reached' ? 'Confirmed after verification call' : 'Rejected at verification call';
+            $this->query('INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,?,?,?,?,?,?)',
+                [$id, 'awaiting_verification', $target, $actorId, $reason, $key, $now]);
+            StaffAudit::record($this->pdo, $actorId, 'order.verify', 'order', $id, $key, ['outcome' => $outcome, 'status' => $target, 'revision' => $next]);
+            if ($target === 'cancelled') {
+                if (in_array($order['payment_status'], ['advance_paid','paid'], true)) PaymentService::enqueueRefund($this->pdo, $order, 'Order rejected at verification');
+                (new QueueService($this->pdo))->orderCancelled($id);
+            } else (new QueueService($this->pdo))->orderStatus($id, 'confirmed');
+            return ['id' => $id, 'status' => $target, 'revision' => $next];
         });
     }
 }

@@ -3,8 +3,33 @@
 /** Commerce staff UI. Developer sessions/grants are deliberately independent. */
 class Admin extends StorefrontController
 {
+    private const ELEVATION_IDLE=1800;
     private array $errors=[];
     private ?array $values=null;
+    /** Console authority is per-session and separate from the shopping session: it exists only after a
+        deliberate /admin/login, never from a storefront login or a remembered cookie, and lapses when idle. */
+    protected function handle(callable $action,bool $api=false): void
+    {
+        parent::handle(function()use($action,$api):void{
+            if(!$this->elevated()){
+                if($api)throw new RequestRejected(401,'unauthenticated','Staff sign-in is required.');
+                $this->redirect('admin/login');return;
+            }
+            $action();
+        },$api);
+    }
+    private function elevated(): bool
+    {
+        RequestSecurity::session();
+        $actor=CommerceAccess::actor();
+        // Non-staff get their existing answers (401 anonymous, 403 customer) from the guards below.
+        if(!$actor||!array_filter($actor['permissions'],static fn($p)=>str_starts_with($p,'admin.')))return true;
+        if(($_SESSION['admin_id']??null)===(int)$actor['id']&&time()-(int)($_SESSION['admin_seen']??0)<=self::ELEVATION_IDLE){
+            $_SESSION['admin_seen']=time();return true;
+        }
+        unset($_SESSION['admin_id'],$_SESSION['admin_seen']);
+        return false;
+    }
     private function actor(): array
     {
         $actor=CommerceAccess::actor();
@@ -31,7 +56,7 @@ class Admin extends StorefrontController
     }
     public function login(): void
     {
-        $this->handle(function():void{
+        parent::handle(function():void{
             $errors=[];$email='';RequestSecurity::session();
             if(($_SERVER['REQUEST_METHOD']??'GET')==='POST'){
                 RequestSecurity::requireMutation();
@@ -42,6 +67,7 @@ class Admin extends StorefrontController
                     if(!$result['status'])throw new RequestRejected(($result['code']??'')==='throttled'?429:401,'login_failed',$result['message']);
                     $actor=CommerceAccess::requireActor();
                     if(!array_filter($actor['permissions'],static fn($p)=>str_starts_with($p,'admin.')))throw new RequestRejected(403,'forbidden','This account does not have staff access.');
+                    $_SESSION['admin_id']=(int)$actor['id'];$_SESSION['admin_seen']=time();
                     $this->redirect('admin');return;
                 }catch(RequestRejected $e){http_response_code($e->status);$errors['form']=$e->getMessage();}
             }
@@ -50,7 +76,7 @@ class Admin extends StorefrontController
     }
     public function logout(): void
     {
-        $this->handle(function():void{RequestSecurity::requireMutation();Auth::logout();$this->redirect('admin/login');});
+        parent::handle(function():void{RequestSecurity::requireMutation();Auth::logout();$this->redirect('admin/login');});
     }
     public function index(): void
     {
@@ -126,8 +152,19 @@ class Admin extends StorefrontController
                 $input=$_POST;if(($input['id']??'')==='')unset($input['id']);$input['enabled']=$input['enabled']??0;
                 if($module==='categories'&&array_key_exists('tax_rate',$input))$input['tax_bps']=$input['tax_rate']===''?null:CommerceValues::decimal($input['tax_rate'],2,10000,'tax_rate');
                 if($module==='categories'&&array_key_exists('advance_rate',$input))$input['advance_bps']=$input['advance_rate']===''?null:CommerceValues::decimal($input['advance_rate'],2,10000,'advance_rate');
+                // Brand logos: an upload replaces the stored file, the clear box removes it, neither leaves it as-is.
+                unset($input['logo_path']);$images=null;$stored=null;
+                if($module==='brands'){
+                    $upload=$_FILES['logo']??null;
+                    if(is_array($upload)&&($upload['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_NO_FILE){
+                        $images=new ProductImageService($this->pdo);
+                        $stored=$images->brandLogo($actor['id'],$upload);$input['logo_path']=$stored;
+                    } elseif(($_POST['logo_clear']??'')==='1') $input['logo_path']=null;
+                }
                 $service=new ProductService($this->pdo);$method=$module==='categories'?'saveCategory':'saveBrand';
-                $service->$method($actor['id'],$input,CommerceValues::key($_POST['operation_key']??null));return 'admin/'.$module;
+                try{$service->$method($actor['id'],$input,CommerceValues::key($_POST['operation_key']??null));}
+                catch(Throwable $e){if($images&&$stored)$images->discard($stored);throw $e;}
+                return 'admin/'.$module;
             },fn()=> $this->tablePage($module));
         });
     }
@@ -163,7 +200,7 @@ class Admin extends StorefrontController
             $actor=CommerceAccess::requirePermission('admin.orders.edit');
             $this->submitted(function()use($actor){
                 $id=CommerceValues::id($_POST['id']??null);
-                (new OrderService($this->pdo))->transition($actor['id'],$id,CommerceValues::text($_POST['target']??null,20,'target'),CommerceValues::integer($_POST['revision']??null,1,PHP_INT_MAX,'revision'),CommerceValues::key($_POST['operation_key']??null),CommerceValues::text($_POST['reason']??null,190,'reason'));
+                (new OrderService($this->pdo))->transition($actor['id'],$id,CommerceValues::text($_POST['target']??null,32,'target'),CommerceValues::integer($_POST['revision']??null,1,PHP_INT_MAX,'revision'),CommerceValues::key($_POST['operation_key']??null),CommerceValues::text($_POST['reason']??null,190,'reason'));
                 return 'admin/order?id='.$id;
             },fn()=> $this->orderPage());
         });
@@ -326,6 +363,47 @@ class Admin extends StorefrontController
                 (new OrderService($this->pdo))->recordBalance($actor['id'],$id,CommerceValues::integer($_POST['revision']??null,1,PHP_INT_MAX,'revision'),CommerceValues::key($_POST['operation_key']??null));
                 return 'admin/order?id='.$id;
             },fn()=> $this->orderPage());
+        });
+    }
+    public function verifyOrder(): void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.orders.edit');
+            $this->submitted(function()use($actor){
+                $id=CommerceValues::id($_POST['id']??null);
+                (new OrderService($this->pdo))->confirmByCall($actor['id'],$id,CommerceValues::text($_POST['outcome']??null,16,'outcome'),
+                    ($_POST['note']??'')===''?null:$_POST['note'],CommerceValues::integer($_POST['revision']??null,1,PHP_INT_MAX,'revision'),CommerceValues::key($_POST['operation_key']??null));
+                return 'admin/order?id='.$id;
+            },fn()=> $this->orderPage());
+        });
+    }
+    public function delivery(): void { $this->handle(fn()=> $this->deliveryPage()); }
+    private function deliveryPage(): void
+    {
+        $actor=$this->actor();CommerceAccess::requirePermission('admin.settings.edit');
+        $service=new DeliveryService($this->pdo);
+        $zone=isset($_GET['id'])?$service->zone($actor['id'],CommerceValues::id($_GET['id'])):null;
+        $this->render('delivery',['zones'=>$service->zones($actor['id']),'zone'=>$zone,'values'=>$this->values]);
+    }
+    public function saveZone(): void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.settings.edit');
+            $this->submitted(function()use($actor){
+                $id=(new DeliveryService($this->pdo))->saveZone($actor['id'],$_POST,CommerceValues::key($_POST['operation_key']??null));
+                return 'admin/delivery?id='.$id;
+            },fn()=> $this->deliveryPage());
+        });
+    }
+    public function saveZonePincodes(): void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.settings.edit');
+            $this->submitted(function()use($actor){
+                $id=CommerceValues::id($_POST['zone_id']??null);
+                (new DeliveryService($this->pdo))->addPincodes($actor['id'],$id,(string)($_POST['pincodes']??''),CommerceValues::key($_POST['operation_key']??null));
+                return 'admin/delivery?id='.$id;
+            },fn()=> $this->deliveryPage());
         });
     }
     public function staff(): void { $this->handle(fn()=> $this->staffPage()); }

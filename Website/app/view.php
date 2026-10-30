@@ -18,7 +18,8 @@ class ViewRouteProvider extends RouteProvider
             ] : []),
             // Storefront routes
             'calculator' => ['GET' => ['StorefrontTools', 'calculator']],
-            'compare' => ['GET' => ['StorefrontTools', 'comparison'], 'POST' => ['StorefrontTools', 'compareChange']],
+            // Compare is hidden from the storefront; route kept for a later re-enable.
+            // 'compare' => ['GET' => ['StorefrontTools', 'comparison'], 'POST' => ['StorefrontTools', 'compareChange']],
             'wishlist' => ['GET' => ['StorefrontTools', 'wishlist'], 'POST' => ['StorefrontTools', 'saveWishlist']],
             'visualizer/help' => ['GET' => ['StorefrontTools', 'help']],
             'visualizer' => ['GET' => ['StorefrontTools', 'visualizer']],
@@ -31,6 +32,7 @@ class ViewRouteProvider extends RouteProvider
             'shop' => ['GET' => ['StorefrontProduct', 'listing']],
             'category/{slug}' => ['GET' => ['StorefrontProduct', 'listing']],
             'product/{slug}/reviews' => ['GET' => ['StorefrontProduct', 'reviews'], 'POST' => ['StorefrontProduct', 'reviews']],
+            'product/{slug}/delivery' => ['GET' => ['StorefrontProduct', 'deliveryCheck']],
             'enquiry' => ['POST' => ['StorefrontProduct', 'enquiry']],
             'review/reply' => ['POST' => ['StorefrontProduct', 'reply']],
             'review/react' => ['POST' => ['StorefrontProduct', 'react']],
@@ -63,6 +65,8 @@ class ViewRouteProvider extends RouteProvider
             'account/delete' => ['POST' => ['CustomerAccount', 'deleteStart']],
             'account/delete/confirm' => ['POST' => ['CustomerAccount', 'deleteConfirm']],
             'account/addresses' => ['POST' => ['CustomerAccount', 'address']],
+            'account/profile' => ['POST' => ['CustomerAccount', 'updateProfile']],
+            'account/profile/confirm' => ['POST' => ['CustomerAccount', 'confirmProfile']],
             // Admin routes
             'payment/verify' => ['POST' => ['Payment', 'verify']],
             'admin/login' => ['GET' => ['Admin', 'login'], 'POST' => ['Admin', 'login']],
@@ -75,6 +79,9 @@ class ViewRouteProvider extends RouteProvider
             'admin/stock' => ['GET' => ['Admin', 'stockForm'], 'POST' => ['Admin', 'adjustStock']],
             'admin/order' => ['GET' => ['Admin', 'orderForm'], 'POST' => ['Admin', 'transitionOrder']],
             'admin/order/balance' => ['POST' => ['Admin', 'orderBalance']],
+            'admin/order/verify' => ['POST' => ['Admin', 'verifyOrder']],
+            'admin/delivery' => ['GET' => ['Admin', 'delivery'], 'POST' => ['Admin', 'saveZone']],
+            'admin/delivery/pincodes' => ['POST' => ['Admin', 'saveZonePincodes']],
             'admin/staff' => ['GET' => ['Admin', 'staff'], 'POST' => ['Admin', 'saveStaff']],
             'admin/staff/role' => ['POST' => ['Admin', 'staffRole']],
             'admin/product/archive' => ['POST' => ['Admin', 'archiveProduct']],

@@ -23,7 +23,7 @@ $trackEvent = static fn($s) => $trackHist[$s] ?? null;
 <section class="order-success" aria-live="polite">
   <div id="order-lottie" class="order-success-anim" data-src="<?= $a('order-success.json') ?>" aria-hidden="true"></div>
   <h1>Order placed!</h1>
-  <p class="order-success-lead">Thank you, <?= $e($order['address']['recipient']) ?>. Your order <strong><?= $e($order['order_number']) ?></strong> is confirmed.</p>
+  <p class="order-success-lead">Thank you, <?= $e($order['address']['recipient']) ?>. Your order <strong><?= $e($order['order_number']) ?></strong> has been placed.</p>
   <p class="order-success-total"><?= $m($order['total_minor']) ?> · <?= $e($status($order['payment_status'])) ?></p>
   <div class="order-success-actions">
     <?php if ($awaiting): ?><a class="button button-wide" href="<?= $u('checkout?order=' . $order['id']) ?>">Complete payment →</a><?php endif; ?>
@@ -36,7 +36,8 @@ $trackEvent = static fn($s) => $trackHist[$s] ?? null;
 <div class="page-intro"><div><span class="eyebrow">YOUR ORDER</span><h1>Order <?= $e($order['order_number']) ?></h1><p>Status: <strong><?= $e($status($order['status'])) ?></strong> · Payment: <?= $e($status($order['payment_status'])) ?></p></div><a class="button secondary" href="<?= $u('orders') ?>">All orders ↗</a></div>
 
 <?php if ($verifying): ?><div class="notice" role="status"><?= $icon('shield') ?> Our team will call you shortly to verify this order for security. It's confirmed once we've verified you.</div><?php endif; ?>
-<?php if ($balance > 0): ?><div class="notice" role="status">You paid <strong><?= $m($due) ?></strong> in advance. The remaining <strong><?= $m($balance) ?></strong> is payable after you receive the product.</div><?php endif; ?>
+<?php if ($order['payment_status'] === 'refunded'): ?><div class="notice" role="status">This order was cancelled and your payment has been refunded.</div>
+<?php elseif ($balance > 0 && $order['payment_status'] === 'advance_paid' && !$cancelled): ?><div class="notice" role="status">You paid <strong><?= $m($due) ?></strong> in advance. The remaining <strong><?= $m($balance) ?></strong> is payable after you receive the product.</div><?php endif; ?>
 
 <div class="order-layout">
   <div class="order-main">

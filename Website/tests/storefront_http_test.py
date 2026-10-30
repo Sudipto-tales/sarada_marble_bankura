@@ -42,6 +42,9 @@ class Forms(HTMLParser):
             self.current = {'action': attrs.get('action'), 'inputs': {}}
             self.forms.append(self.current)
         elif tag == 'input' and self.current is not None and 'name' in attrs:
+            # Mirror the browser: an unchecked checkbox/radio is not submitted.
+            if attrs.get('type') in ('checkbox', 'radio') and 'checked' not in attrs:
+                return
             self.current['inputs'][attrs['name']] = attrs.get('value', '')
 
     def handle_endtag(self, tag):
@@ -215,7 +218,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check('1.5' in body and '₹1.52' in body, 'Cart uses decimal sell units and canonical half-up money.')
             owned_cart = form(body, 'variant_id')
             check('Your cart is empty' in other.request('/cart')[2], 'Second guest sees an independent cart.')
-            other_csrf = form(other.request('/account')[2], 'email')['csrf']
+            other_csrf = form(other.request('/account/login')[2], 'email')['csrf']
             check(other.request('/cart', 'POST', dict(owned_cart, csrf=other_csrf))[0] == 404, 'Stolen cart ID cannot cross guest ownership.')
             check(add.get('action') == 'add' and 'cart_revision' not in add, 'Product page add form uses additive add-to-bag action.')
             accumulate = dict(add, csrf=other_csrf, quantity='1', return_to='//evil.example/x')
@@ -230,7 +233,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check(guest.request('/cart', 'POST', owned_cart)[0] == 409, 'Stale cart revision returns conflict.')
             check(guest.request('/cart/change/1/remove')[0] == 404, 'Legacy GET remove URL cannot mutate cart.')
             check(guest.request('/checkout')[0] == 303, 'Guest checkout redirects to verified account sign-in.')
-            login = form(guest.request('/account')[2], 'email')
+            login = form(guest.request('/account/login')[2], 'email')
             login.update(email='http-a@example.test', password='Disposable-HTTP-Customer-Password')
             check(guest.request('/account', 'POST', login)[0] == 303, 'Real Auth login succeeds and merges guest cart.')
             check('commerce_guest' not in guest.cookies, 'Merged guest proof is cleared.')
@@ -272,7 +275,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
                 amount = int(invoice_row[field])
                 check(f'data-total="{field}">₹{amount//100}.{amount%100:02d}' in invoice, 'Invoice ' + field + ' matches the persisted order without recomputing it.')
             check('Your cart is empty' in guest.request('/cart')[2], 'Successful checkout closes cart without controller-side clearing.')
-            other_login = form(other.request('/account')[2], 'email')
+            other_login = form(other.request('/account/login')[2], 'email')
             other_login.update(email='http-b@example.test', password='Disposable-HTTP-Customer-Password')
             check(other.request('/account', 'POST', other_login)[0] == 303, 'Independent customer sign-in succeeds.')
             status, headers, body = other.request(order_url)
@@ -288,7 +291,8 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check(state['orders'] == 1 and state['requests'] == 1 and state['jobs'] == 2 and int(state['stock'][0]['on_hand_milli']) == 8500
                   and int(state['stock'][0]['reserved_milli']) == 0, 'HTTP retry leaves one order/key, one set of intents and one stock deduction.')
             # Remaining prototype pages use the same live services/guards.
-            for path, title in [('/calculator','Every square foot'),('/compare','The details make'),('/wishlist','The ones you love'),('/visualizer','visualizer-config'),('/saved-designs','Ideas to come back'),('/visualizer/help','See your ideas')]:
+            # '/compare' is hidden from the storefront; restore it here when the route comes back.
+            for path, title in [('/calculator','Every square foot'),('/wishlist','The ones you love'),('/visualizer','visualizer-config'),('/saved-designs','Ideas to come back'),('/visualizer/help','See your ideas')]:
                 status, headers, tool = guest.request(path)
                 check(status == 200 and title in tool and headers['Cache-Control'] == 'private, no-store', 'Working PHP tool route: '+path)
             check('SARADA' not in guest.request('/shop')[2] and 'visualizer-editor.js' not in guest.request('/shop')[2], 'Heavy photo scripts are not loaded by catalog pages.')
@@ -300,21 +304,21 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             detail = guest.request('/product/http-marble')[2]
             token = form(detail, 'variant_id')['csrf']
             check(guest.request('/wishlist','POST',{'csrf':'bad','product_id':seed['variants'][0]})[0] == 403, 'Wishlist mutations require CSRF.')
-            check(guest.request('/compare','POST',{'csrf':'bad','product_id':'1'})[0] == 403, 'Comparison mutations require CSRF.')
+            # check(guest.request('/compare','POST',{'csrf':'bad','product_id':'1'})[0] == 403, 'Comparison mutations require CSRF.')
             # Fixture has one product; derive its database ID from its own guarded form.
             product_id = next(f['inputs']['product_id'] for f in Forms(detail).forms if f['action']=='/wishlist')
             pick = {'csrf':token,'product_id':product_id}
             check(guest.request('/wishlist','POST',pick)[0] == 303 and 'Marble &lt;script&gt;' in guest.request('/wishlist')[2], 'Guest saves a real escaped material.')
             check(other.request('/wishlist')[2].count('class="stone-card"') == 0, 'Signed-in customer cannot see guest saved items.')
-            check(guest.request('/compare','POST',pick)[0] == 303 and 'Variants &amp; selling units' in guest.request('/compare')[2], 'Comparison uses real material variants and units.')
-            check(guest.request('/compare','POST',dict(pick,action='remove'))[0] == 303 and 'A little perspective helps' in guest.request('/compare')[2], 'Comparison remove returns useful empty state.')
+            # check(guest.request('/compare','POST',pick)[0] == 303 and 'Variants &amp; selling units' in guest.request('/compare')[2], 'Comparison uses real material variants and units.')
+            # check(guest.request('/compare','POST',dict(pick,action='remove'))[0] == 303 and 'A little perspective helps' in guest.request('/compare')[2], 'Comparison remove returns useful empty state.')
             calculate = '/calculator?' + urlencode({'variant_id':seed['variants'][0],'surfaces[0][name]':'Floor','surfaces[0][length]':'1','surfaces[0][width]':'2','surfaces[0][unit]':'ft','surfaces[0][cutout]':'0','waste_bps':'1000'})
             calculator = guest.request(calculate)
             check(calculator[0] == 200 and '2.2 sqft' in calculator[2], 'Calculator renders rational coverage and wastage.')
             handoff = form(calculator[2], 'variant_id')
             check(handoff['quantity']=='2.5' and guest.request('/cart','POST',handoff)[0] == 303 and '2.5' in guest.request('/cart')[2], 'Calculator rounds to real variant increments and hands off to the owned cart.')
             check(guest.request('/calculator?surfaces[0][length]=-1')[0] == 422, 'Calculator rejects invalid measurements.')
-            login = form(guest.request('/account')[2], 'email')
+            login = form(guest.request('/account/login')[2], 'email')
             login.update(email='http-a@example.test',password='Disposable-HTTP-Customer-Password')
             check(guest.request('/account','POST',login)[0] == 303, 'Customer signs back in through actual Auth.')
             token = form(guest.request('/account')[2], 'csrf')['csrf']
@@ -338,20 +342,20 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             check('Station Road' in guest.request(order_url)[2] and 'Updated Road' not in guest.request(order_url)[2], 'Existing order retains its immutable delivery snapshot after address edits/archive.')
             check('Track your order' in guest.request(order_url)[2], 'Order detail renders recorded transition history.')
             extra_ids = run_fixture('extra')
-            for selection_id in [product_id] + extra_ids[:3]:
-                check(guest.request('/compare','POST',{'csrf':token,'product_id':str(selection_id)})[0] == 303, 'Comparison accepts each of four real materials.')
-            check(guest.request('/compare','POST',{'csrf':token,'product_id':str(extra_ids[3])})[0] == 422 and '4 of 4' in guest.request('/compare')[2], 'Comparison bounds the shortlist at four without dropping prior selections.')
+            # for selection_id in [product_id] + extra_ids[:3]:
+            #     check(guest.request('/compare','POST',{'csrf':token,'product_id':str(selection_id)})[0] == 303, 'Comparison accepts each of four real materials.')
+            # check(guest.request('/compare','POST',{'csrf':token,'product_id':str(extra_ids[3])})[0] == 422 and '4 of 4' in guest.request('/compare')[2], 'Comparison bounds the shortlist at four without dropping prior selections.')
             third = Client(port)
-            third_login=form(third.request('/account')[2], 'email')
+            third_login=form(third.request('/account/login')[2], 'email')
             third_login.update(email='http-a@example.test',password='Disposable-HTTP-Customer-Password')
             check(third.request('/account','POST',third_login)[0] == 303 and third.request('/wishlist')[2].count('class="stone-card"') == 1, 'Account wishlist persists across independent browser sessions.')
-            check('A little perspective helps' in third.request('/compare')[2], 'Comparison remains private to each browser session.')
+            # check('A little perspective helps' in third.request('/compare')[2], 'Comparison remains private to each browser session.')
             check(guest.request('/shop?min_price=1.001')[0] == 422 and guest.request('/shop?min_price=2&max_price=1')[0] == 422, 'Readable price filters reject malformed or inverted ranges.')
             check(guest.request('/admin/products')[0] == 403 and guest.request('/admin/product?id='+product_id)[0] == 403, 'Customer cannot access staff catalog or product details.')
             staff=Client(port)
-            staff_login=form(staff.request('/account')[2], 'email')
+            staff_login=form(staff.request('/admin/login')[2], 'email')
             staff_login.update(email='http-admin@example.test',password='Disposable-HTTP-Admin-Password')
-            check(staff.request('/account','POST',staff_login)[0] == 303, 'Provisioned commerce staff uses the commerce account session.')
+            check(staff.request('/admin/login','POST',staff_login)[0] == 303, 'Provisioned commerce staff signs in at the staff console.')
             check(staff.request('/admin/products')[0] == 200 and 'Catalog overview' in staff.request('/admin/products')[2], 'Staff catalog calls the real service without legacy namespace errors.')
             check(staff.request('/admin/product?id='+product_id)[0] == 200 and 'HTTP-SQFT' in staff.request('/admin/product?id='+product_id)[2], 'Staff detail hydrates the requested persisted product.')
             check(staff.request('/admin/products','POST',{'csrf':token})[0] == 405, 'Read-only staff route rejects undocumented writes.')
@@ -409,8 +413,8 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
             for field in ['subtotal_minor','discount_minor','shipping_minor','tax_minor','total_minor']:
                 amount = int(coupon_row[field])
                 check(f'data-total="{field}">₹{amount//100}.{amount%100:02d}' in discounted_invoice, 'Discounted invoice ' + field + ' matches the persisted order.')
-            signin = Client(port).request('/account')[2]
-            check('/account/forgot' in signin and Client(port).request('/account/forgot')[0] == 200, 'Existing password reset entry remains reachable from sign-in.')
+            signin = Client(port).request('/account/login')[2]
+            check('/account/forgetpassword' in signin and Client(port).request('/account/forgot')[0] == 200, 'Existing password reset entry remains reachable from sign-in.')
             category_page = staff.request('/admin/categories')[2]
             category_id = re.search(r'/admin/categories\?edit=([0-9]+)', category_page)[1]
             category_url = '/admin/categories?edit=' + category_id

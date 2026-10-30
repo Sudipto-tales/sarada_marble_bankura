@@ -106,7 +106,9 @@
   const csrf = csrfInput ? csrfInput.value : '';
   const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const fmtDate = ts => { const d = new Date(ts * 1000); return `${String(d.getUTCDate()).padStart(2, '0')} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
-  const starsHTML = t => `<span class="stars"><i style="width:${Math.max(0, Math.min(100, t * 2))}%">★★★★★</i>★★★★★</span>`;
+  // Mirrors the PHP $stars helper: the rail is masked star shapes, --fill is the share coloured in.
+  const starsHTML = t => { const p = Math.max(0, Math.min(100, t * 2));
+    return `<span class="stars" style="--fill:${p}%" role="img" aria-label="Rated ${(t / 10).toFixed(1)} out of 5"><i aria-hidden="true"></i></span>`; };
 
   async function post(url, data) {
     const res = await fetch(url, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) });
@@ -166,8 +168,8 @@
 
   const si = root.querySelector('[data-star-input]');
   if (si) {
-    const hidden = si.querySelector('input[name=rating]'), fill = si.querySelector('.stars.input i');
-    const setFill = v => { fill.style.width = (parseFloat(v) / 5 * 100) + '%'; };
+    const hidden = si.querySelector('input[name=rating]'), rail = si.querySelector('.stars');
+    const setFill = v => { rail.style.setProperty('--fill', (parseFloat(v) / 5 * 100) + '%'); };
     si.querySelectorAll('.star-hit button').forEach(b => {
       b.addEventListener('mouseenter', () => setFill(b.dataset.star));
       b.addEventListener('click', () => { hidden.value = b.dataset.star; setFill(b.dataset.star); });
@@ -277,4 +279,31 @@
     list.unshift(item);
     localStorage.setItem('sarada-recent', JSON.stringify(list.slice(0, 12)));
   } catch (e) { /* storage blocked: skip */ }
+})();
+
+/* Progressive enhancement: check PIN delivery without a full page reload. Falls back to the GET form. */
+(() => {
+  'use strict';
+  const box = document.querySelector('[data-delivery-check]');
+  if (!box) return;
+  const form = box.querySelector('[data-delivery-form]');
+  const result = box.querySelector('[data-delivery-result]');
+  const endpoint = box.getAttribute('data-delivery-check');
+  if (!form || !result || !endpoint) return;
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const pin = (new FormData(form).get('postal_code') || '').toString().trim();
+    if (!/^[1-9][0-9]{5}$/.test(pin)) { result.className = 'pdp-delivery-result is-unavailable'; result.textContent = 'Enter a valid 6-digit PIN code.'; return; }
+    result.textContent = 'Checking…';
+    try {
+      const response = await fetch(endpoint + '?postal_code=' + encodeURIComponent(pin), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error((payload.error && payload.error.message) || 'Could not check this PIN code.');
+      const d = payload.delivery || {};
+      let text = d.message || '';
+      if (d.status === 'available' && d.shipping_minor) text += ' Delivery charge: ₹' + (d.shipping_minor / 100).toFixed(2) + '.';
+      result.className = 'pdp-delivery-result is-' + (d.status || 'unavailable');
+      result.textContent = text;
+    } catch (err) { result.className = 'pdp-delivery-result is-unavailable'; result.textContent = err.message; }
+  });
 })();

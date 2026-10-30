@@ -16,7 +16,9 @@ class Inputs(HTMLParser):
  def handle_starttag(self,tag,attrs):
   attrs=dict(attrs)
   if tag=='form':self.current={'action':attrs.get('action'),'inputs':{}};self.forms.append(self.current)
-  if tag=='input' and self.current is not None and 'name' in attrs:self.current['inputs'][attrs['name']]=attrs.get('value','')
+  if tag=='input' and self.current is not None and 'name' in attrs:
+   if attrs.get('type') in ('checkbox','radio') and 'checked' not in attrs:return
+   self.current['inputs'][attrs['name']]=attrs.get('value','')
  def handle_endtag(self,tag):
   if tag=='form':self.current=None
 class Client:
@@ -100,6 +102,9 @@ if(($argv[1]??'')==='inspect'){
   viewer,result=login('viewer');check(result[0]==303,'View-only login succeeds')
   customer,result=login('customer');check(result[0]==403,'Customer cannot enter staff workspace')
   check(customer.request('/admin/products')[0]==403,'Customer cannot read staff catalog')
+  shopper=Client(port);shop=fields(shopper.request('/account/login')[2],'/account/login');shop.update(email='admin@admin-test.invalid',password='Disposable-Admin-Test-Password')
+  check(shopper.request('/account/login','POST',shop)[0]==303,'Staff may also shop with the same account')
+  check(shopper.request('/admin')[0]==303 and shopper.request('/admin/data/products')[0]==401,'A storefront login carries no staff console authority')
   for module in ['products','categories','brands','inventory','orders','customers']:
    check(admin.request('/admin/'+module)[0]==200,'Admin table renders: '+module)
    check(viewer.request('/admin/'+module)[0]==200,'Viewer table renders: '+module)
@@ -158,16 +163,18 @@ if(($argv[1]??'')==='inspect'){
   check(admin.request('/admin/stock','POST',{**stock,'quantity':'0.1','reason':'Bad increment'})[0]==422,'Noncanonical stock increment rejected')
   check(admin.request('/admin/stock','POST',{**stock,'quantity':'-100','reason':'Too low'})[0]==409,'Inventory cannot become negative')
   check(viewer.request('/admin/stock','POST',{**stock,'quantity':'1','reason':'Denied'})[0]==403,'Viewer stock mutation denied')
-  order=run('order');oid=str(order['id']);data=fields(admin.request('/admin/order?id='+oid)[2],'/admin/order');data.update(target='confirmed',reason='Verified order');check(admin.request('/admin/order','POST',data)[0]==303,'Order transition persists')
+  order=run('order');oid=str(order['id'])
+  gate=fields(admin.request('/admin/order?id='+oid)[2],'/admin/order');gate.update(target='awaiting_verification',reason='Verifying by call');check(admin.request('/admin/order','POST',gate)[0]==303,'Order enters verification gate')
+  data=fields(admin.request('/admin/order?id='+oid)[2],'/admin/order');data.update(target='confirmed',reason='Verified order');check(admin.request('/admin/order','POST',data)[0]==303,'Order transition persists')
   check(admin.request('/admin/order','POST',data)[0]==303,'Order transition retry idempotent')
-  status,_,body=customer.request('/order/'+oid);check(status==200 and 'Status: confirmed' in body and 'Verified order' in body,'Admin confirmation reaches customer order timeline')
+  status,_,body=customer.request('/order/'+oid);check(status==200 and 'Confirmed' in body and 'Verified order' in body,'Admin confirmation reaches customer order timeline')
   check('confirmed' in customer.request('/orders')[2],'Admin status reaches customer order list')
 
   check(admin.request('/admin/order','POST',{**data,'operation_key':secrets.token_hex(16)})[0]==409,'Stale order transition rejected')
   data=fields(admin.request('/admin/order?id='+oid)[2],'/admin/order');check(admin.request('/admin/order','POST',{**data,'target':'delivered','reason':'Skip'})[0]==409,'Invalid fulfillment jump rejected')
   data.update(target='cancelled',reason='Customer requested cancellation');check(admin.request('/admin/order','POST',data)[0]==303,'Cancellation persists')
   check(admin.request('/admin/order','POST',data)[0]==303,'Cancellation retry idempotent')
-  status,_,body=customer.request('/order/'+oid);check(status==200 and 'Status: cancelled' in body and 'Customer requested cancellation' in body,'Admin cancellation reaches customer timeline')
+  status,_,body=customer.request('/order/'+oid);check(status==200 and 'Customer requested cancellation' in body and 'ancelled' in body,'Admin cancellation reaches customer timeline')
   check('Available: 10' in public.request('/product/verified-marble')[2],'Order cancellation restores public stock availability')
 
   check(run('inspect')['variant'][0]['on_hand_milli']==10000,'Cancellation restores consumed stock exactly once')

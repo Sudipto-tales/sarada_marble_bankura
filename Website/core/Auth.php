@@ -151,10 +151,74 @@ final class Auth
         return true;
     }
 
-    /** Store a customer's two-step preference: enablement, the single active channel and its contact phone. */
+    /**
+     * Normalise a profile edit, or return the reason it was rejected.
+     * Returns ['firstname','lastname','name','email','phone'] with the email lower-cased.
+     */
+    public static function normaliseProfile(string $firstname, string $lastname, string $email, string $phone): array
+    {
+        $firstname = trim($firstname); $lastname = trim($lastname); $phone = preg_replace('/\s+/', '', trim($phone));
+        if (!self::validName($firstname, 100) || strlen($lastname) > 100 || !preg_match('//u', $lastname)
+            || preg_match('/[\x00-\x1f\x7f]/', $lastname)) {
+            return ['error' => 'Enter a first name, and a last name without control characters.'];
+        }
+        $clean = self::email($email);
+        if (!$clean) return ['error' => 'Enter a valid email address.'];
+        if ($phone !== '' && !preg_match('/\A\+?[0-9]{8,15}\z/', $phone)) {
+            return ['error' => 'Enter a valid phone number with country code, or leave it blank.'];
+        }
+        $name = trim($firstname . ' ' . $lastname);
+        if (!self::validName($name, 255)) return ['error' => 'Enter a valid name.'];
+        return ['firstname' => $firstname, 'lastname' => $lastname, 'name' => $name, 'email' => $clean, 'phone' => $phone];
+    }
+
+    /** True when another account already holds this address. */
+    public static function emailTaken(string $email, int $exceptId): bool
+    {
+        $email = self::email($email);
+        if (!$email) return false;
+        $owner = self::query('SELECT id FROM users_tbl WHERE ' . self::emailPredicate(), [$email])->fetchColumn();
+        return $owner !== false && (int) $owner !== $exceptId;
+    }
+
+    /**
+     * Apply a verified profile edit. A changed address re-enters the unverified state only when the
+     * caller did not confirm it with a code, so the OTP path passes $emailVerified = true.
+     */
+    public static function saveProfile(int $id, array $profile, bool $emailVerified): bool
+    {
+        try {
+            self::query('UPDATE users_tbl SET firstname = ?, lastname = ?, name = ?, email = ?, otp_phone = ?, email_verify = ? WHERE id = ?',
+                [$profile['firstname'], $profile['lastname'], $profile['name'], $profile['email'],
+                    $profile['phone'] !== '' ? $profile['phone'] : null, $emailVerified ? 1 : 0, $id]);
+        } catch (PDOException $e) {
+            if (CommerceDatabase::uniqueConflict($e)) return false;
+            throw $e;
+        }
+        // A two-step channel that points at a phone we just cleared would lock the owner out of sign-in.
+        if ($profile['phone'] === '') {
+            self::query("UPDATE users_tbl SET otp_channel = 'email' WHERE id = ? AND otp_channel <> 'email'", [$id]);
+        }
+        return true;
+    }
+
+    /**
+     * Store a customer's two-step preference: enablement, the single active channel and its contact
+     * phone. A null $phone leaves the stored number alone — turning two-step off must not wipe the
+     * profile phone the account page also edits.
+     */
     public static function setTwoFactor(int $id, bool $enabled, string $channel = 'email', ?string $phone = null): void
     {
         if (!in_array($channel, ['email', 'whatsapp', 'sms'], true)) $channel = 'email';
+        // Turning two-step off clears the stored channel/phone so no stale number lingers on the account.
+        if (!$enabled) {
+            self::query('UPDATE users_tbl SET otp_enabled = 0, otp_channel = ?, otp_phone = NULL WHERE id = ?', ['email', $id]);
+            return;
+        }
+        if ($phone === null) {
+            self::query('UPDATE users_tbl SET otp_enabled = ?, otp_channel = ? WHERE id = ?', [$enabled ? 1 : 0, $channel, $id]);
+            return;
+        }
         self::query('UPDATE users_tbl SET otp_enabled = ?, otp_channel = ?, otp_phone = ? WHERE id = ?',
             [$enabled ? 1 : 0, $channel, $phone !== '' ? $phone : null, $id]);
     }
@@ -169,7 +233,8 @@ final class Auth
 
     private static function clearIdentity(): void
     {
-        foreach (['user_id', 'user_email', 'user_name', 'user_role', 'email_verified', 'logged_in', 'last_activity'] as $key) {
+        // admin_* goes too: a storefront login or a remembered cookie must never carry console access.
+        foreach (['user_id', 'user_email', 'user_name', 'user_role', 'email_verified', 'logged_in', 'last_activity', 'admin_id', 'admin_seen'] as $key) {
             unset($_SESSION[$key]);
         }
     }

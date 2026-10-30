@@ -6,7 +6,7 @@ final class NotificationJob
     public static function run(PDO $pdo,array $job):void
     {
         $payload=JobRegistry::decode($job);$type=$job['type'];$queue=new Queue($pdo);
-        if(!in_array($type,['auth_verification','order_confirmation','order_cancelled','order_status','low_stock_alert'],true)) throw new JobExecutionException('unknown_handler',true);
+        if(!in_array($type,['auth_verification','order_confirmation','order_payment_received','order_cancelled','order_status','low_stock_alert'],true)) throw new JobExecutionException('unknown_handler',true);
         $target=$payload[['auth_verification'=>'verification_id','low_stock_alert'=>'alert_id'][$type]??'order_id'];
         $deliveryKey=$type.':'.$target.':v1';$deliveryToken=bin2hex(random_bytes(32));
         $message=CommerceDatabase::transaction($pdo,function() use($pdo,$job,$type,$target,$deliveryKey,$deliveryToken):?array {
@@ -36,9 +36,14 @@ final class NotificationJob
                 $recipient=$ops;
             } else {
                 $order=$q('SELECT * FROM orders WHERE id=?'.$lock,[$target])->fetch();if(!$order)throw new JobExecutionException('order_missing',true);
-                if(($type==='order_cancelled'&&$order['status']!=='cancelled')||($type==='order_confirmation'&&$order['status']==='cancelled'))return null;
+                if(($type==='order_cancelled'&&$order['status']!=='cancelled')||(in_array($type,['order_confirmation','order_payment_received'],true)&&$order['status']==='cancelled'))return null;
                 $user=$q('SELECT * FROM users_tbl WHERE id=?',[$order['user_id']])->fetch();if(!$user)throw new JobExecutionException('recipient_missing',true);
                 $subject=$type==='order_cancelled'?'Your Maa Sarada order was cancelled':'Your Maa Sarada order is confirmed';
+                // Capture acknowledgement: payment received, but the order is still pending our verification call.
+                if($type==='order_payment_received'){
+                    $due=(int)($order['amount_due_minor']??$order['total_minor']);$balance=(int)$order['total_minor']-$due;
+                    $subject=$balance>0?'We received your Maa Sarada advance payment':'We received your Maa Sarada payment';
+                }
                 if($type==='order_status'){
                     $subjects=['confirmed'=>'Your Maa Sarada order is confirmed','processing'=>'Your Maa Sarada order is being prepared',
                         'shipped'=>'Your Maa Sarada order is on the way','outForDelivery'=>'Your Maa Sarada order is out for delivery','delivered'=>'Your Maa Sarada order was delivered'];
@@ -50,6 +55,13 @@ final class NotificationJob
                 }
                 $total=(int)$order['total_minor'];$formatted=intdiv($total,100).'.'.str_pad((string)($total%100),2,'0',STR_PAD_LEFT);
                 $body=$subject."\nOrder: ".$order['order_number'].($type==='order_status'?"\nStatus: ".$order['status']:'')."\nTotal: INR ".$formatted."\nPayment: ".$order['payment_mode'].' / '.$order['payment_status'];
+                if($type==='order_payment_received'){
+                    $money=static fn($minor)=>intdiv((int)$minor,100).'.'.str_pad((string)((int)$minor%100),2,'0',STR_PAD_LEFT);
+                    $due=(int)($order['amount_due_minor']??$order['total_minor']);$balance=$total-$due;
+                    $body.="\nPaid now: INR ".$money($due);
+                    if($balance>0)$body.="\nBalance payable on delivery: INR ".$money($balance);
+                    $body.="\nYour order is not confirmed yet. Our team will call you shortly to verify it.";
+                }
                 $recipient=$user['email'];
             }
             $sql="INSERT INTO notification_deliveries (delivery_key,type,target_id,status) VALUES (?,?,?,'pending')";
