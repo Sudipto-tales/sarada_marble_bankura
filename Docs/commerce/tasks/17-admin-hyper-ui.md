@@ -284,15 +284,17 @@ Html/admin/assets/vendor/admin-resources/jquery.vectormap/maps/jquery-jvectormap
 Html/admin/assets/vendor/daterangepicker/daterangepicker.css
 Html/admin/assets/vendor/daterangepicker/daterangepicker.js
 Html/admin/assets/vendor/daterangepicker/moment.min.js
-Html/admin/assets/vendor/datatables.net-bs5/css/dataTables.bootstrap5.min.css
-Html/admin/assets/vendor/datatables.net/js/jquery.dataTables.min.js
-Html/admin/assets/vendor/datatables.net-bs5/js/dataTables.bootstrap5.min.js
-Html/admin/assets/vendor/datatables.net-responsive/js/dataTables.responsive.min.js
-Html/admin/assets/vendor/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css
-Html/admin/assets/vendor/datatables.net-responsive-bs5/js/responsive.bootstrap5.min.js
 ```
 
-→ the same relative paths under `Website/assets/admin/hyper/vendor/`.
+→ the same relative paths under `Website/assets/admin/hyper/vendor/`. Seven files, verified
+`cmp`-identical to `Hyper/assets/vendor/`. Take only these: upstream also ships
+`daterangepicker/node_modules/` (the whole of moment, ~140 locale files), `demo.html`,
+`index.html`, `test.html` and a `website/` folder, none of which the control needs.
+
+**Done 2026-11-05.** Both MIT notices are inline in `jquery-jvectormap-1.2.2.min.js` and
+`daterangepicker.js` and must stay. The two `maps/*.js` files carry **no** inline header, so
+their jVectorMap-MIT / Natural-Earth provenance is recorded in
+`Website/assets/admin/hyper/README.md` instead.
 
 **Both maps are vendored.** Hyper's analytics card is `Sessions by country` over
 `world_mill_en`, so the world map is part of the design and ships. The India map ships alongside it
@@ -316,15 +318,34 @@ every component class this plan uses: `horizontal-steps`, `tilebox-one`, `cta-bo
 **`table-action` is absent** in this build; use `action-icon` on the links and no wrapper class
 on the `<td>`.
 
-**DataTables decision.** The panel currently loads DataTables **2.3.4** from
-`assets/admin/vendor/` with a hand-rolled server-side config in `admin.js`. Hyper's own pages use
-DataTables **1.x + bootstrap5** and `demo.customers.js` relies on 1.x-only options
-(`columns[].checkboxes`, `dataTables_paginate`, `#products-datatable_length`). **Keep 2.3.4** and
-reproduce Hyper's *look* via `layout` + `renderer` + the `.table-centered.table-nowrap` classes
-(S3). Porting `demo.*.js` verbatim would require downgrading DataTables and re-breaking the
-server-side search/pagination that `admin_http_test.py:111-115` proves. Vendor the bs5 CSS anyway
-so the pagination/length chrome matches, and load the bs5 pagination stylesheet after
-`dataTables-2.3.4.min.css`.
+**DataTables — corrected 2026-11-05 after checking the files.** The original plan said to vendor
+Hyper's `datatables.net*` bs5 files "so the pagination/length chrome matches". **That was wrong on
+two counts.**
+
+1. They are **already vendored**, by an earlier task, under
+   `Website/assets/admin/hyper/vendor/datatables.net{,-bs5,-responsive,-responsive-bs5}/`. The old
+   README called them "reserved for a future bs5 DataTables swap".
+2. That swap **cannot be done with them.** They are DataTables **1.x**; the panel runs
+   **2.3.4** from `assets/admin/vendor/`. The wrapper class namespaces are disjoint:
+
+   | Generation | Wrapper classes |
+   | --- | --- |
+   | 1.x (the vendored files) | `dataTables_wrapper`, `dataTables_length`, `dataTables_paginate` |
+   | 2.3.4 (in use) | `dt-container`, `dt-length`, `dt-paging`, `dt-search` |
+
+   So `dataTables.bootstrap5.min.css` matches **nothing** the live panel renders, and
+   `demo.customers.js` (1.x-only `columns[].checkboxes`, `#products-datatable_length`) cannot
+   drive a 2.3.4 table.
+
+**So: add no DataTables files, and load none of them.** Keep 2.3.4 — it carries the server-side
+search/pagination proven by `admin_http_test.py:111-115` — and reproduce Hyper's table *appearance*
+through 2.x `layout`/`renderer` config plus the existing `.dt-container` overrides in
+`assets/admin/admin.css` (§4.3 keeps them for exactly this reason). The markup stays Hyper's
+per §0; only the library generation differs, which is not a UI change.
+
+Those four directories (~90 KB with licences and sort images) are now dead weight. They are left
+in place, unreferenced and documented in the README — deleting them is a separate decision, not
+part of this task.
 
 Update `Website/assets/admin/hyper/README.md`: list the new plugin groups, both vector maps and
 the `analytics_map` setting that chooses between them, and why DataTables 2.3.4 is retained.
