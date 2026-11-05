@@ -29,6 +29,7 @@ Each task has a focused section below. Read [shared contracts](../contracts.md),
 | ADM-01 | [Delivered design/setup](../../admin-panel-design.md) and [protected local admin layout](07-admin.md#adm-01) |
 | ADM-02 | [Product CRUD and upload lifecycle](07-admin.md#adm-02) |
 | ADM-03 | [Inventory/order/customer admin](07-admin.md#adm-03) |
+| ADM-UI-01 | [Hyper theme parity for the admin panel, with live AJAX updates](17-admin-hyper-ui.md) |
 | ORD-01 | [Transactional order placement](04-inventory-orders.md#ord-01) |
 | ORD-02 | [Expiry/cancel and notification jobs](04-inventory-orders.md#ord-02) and [queue handlers](05-queue.md#ord-02) |
 | WEB-01 | [Catalog/product SSR](08-storefront-api.md#web-01) |
