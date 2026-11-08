@@ -75,6 +75,37 @@ final class AdminReadService
         }unset($row);
         return ['draw'=>$draw,'recordsTotal'=>$total,'recordsFiltered'=>$filtered,'data'=>$rows];
     }
+    /** Bounded product projection used by the optional card-grid view. */
+    public function productCards(int $actor,array $input):array
+    {
+        CommerceAccess::requirePermission('admin.products.view',$actor);
+        $draw=CommerceValues::integer($input['draw']??0,0,2147483647,'draw');
+        $start=CommerceValues::integer($input['start']??0,0,1000000,'start');
+        $length=CommerceValues::integer($input['length']??20,1,100,'length');
+        $search=CommerceValues::text($input['search']['value']??$input['q']??'',80,'search',true);
+        $from='products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id';
+        $where='';$args=[];
+        if($search!==''){
+            $like='%'.str_replace(['!','%','_'],['!!','!%','!_'],$search).'%';
+            $where=" WHERE (p.name LIKE ? ESCAPE '!' OR p.slug LIKE ? ESCAPE '!' OR c.name LIKE ? ESCAPE '!' OR b.name LIKE ? ESCAPE '!' OR EXISTS (SELECT 1 FROM product_variants sv WHERE sv.product_id=p.id AND sv.sku LIKE ? ESCAPE '!'))";
+            $args=[$like,$like,$like,$like,$like];
+        }
+        $total=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM '.$from)->fetchColumn();
+        $filtered=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM '.$from.$where,$args)->fetchColumn();
+        $sql="SELECT p.id,p.name,p.slug,p.status,c.name AS category_name,b.name AS brand_name,
+            (SELECT v.sku FROM product_variants v WHERE v.product_id=p.id ORDER BY v.enabled DESC,v.id LIMIT 1) AS sku,
+            (SELECT MIN(v.unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS min_price,
+            (SELECT MAX(v.unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS max_price,
+            (SELECT pi.path FROM product_images pi WHERE pi.product_id=p.id ORDER BY pi.position,pi.id LIMIT 1) AS image_path
+            FROM $from$where ORDER BY p.updated_at DESC,p.id DESC LIMIT $length OFFSET $start";
+        $rows=CommerceDatabase::query($this->pdo,$sql,$args)->fetchAll();
+        foreach($rows as &$row){
+            $row['id']=(string)$row['id'];
+            $row['min_price']=$row['min_price']===null?null:self::decimal($row['min_price'],2);
+            $row['max_price']=$row['max_price']===null?null:self::decimal($row['max_price'],2);
+        }unset($row);
+        return ['draw'=>$draw,'recordsTotal'=>$total,'recordsFiltered'=>$filtered,'data'=>$rows];
+    }
     public function stock(int $actor,int $id): array
     {
         CommerceAccess::requirePermission('admin.inventory.view',$actor);
@@ -109,6 +140,86 @@ final class AdminReadService
         foreach($statuses as &$row)$row['value_minor']=CommerceValues::integer($row['value_minor'],0,PHP_INT_MAX,'value_minor');unset($row);
         foreach($topProducts as &$row){$row['revenue_minor']=CommerceValues::integer($row['revenue_minor'],0,PHP_INT_MAX,'revenue_minor');$row['qty_milli']=CommerceValues::integer($row['qty_milli'],0,PHP_INT_MAX,'qty_milli');}unset($row);
         return compact('from','to','sales','coupons','statuses','topProducts','lowStock');
+    }
+    /** Real, bounded analytics for one of the supported UTC periods. */
+    public function analyticsDashboard(int $actorId,int $days):array
+    {
+        CommerceAccess::requirePermission('admin.analytics.view',$actorId);
+        if(!in_array($days,[7,30,90],true))CommerceValues::invalid('days');
+        $utc=new DateTimeZone('UTC');$today=new DateTimeImmutable('today',$utc);
+        $to=$today->format('Y-m-d');$from=$today->modify('-'.($days-1).' days')->format('Y-m-d');
+        $previousTo=(new DateTimeImmutable($from,$utc))->modify('-1 day')->format('Y-m-d');
+        $previousFrom=(new DateTimeImmutable($previousTo,$utc))->modify('-'.($days-1).' days')->format('Y-m-d');
+        $current=$this->reports($actorId,$from,$to);
+        $fromEpoch=(new DateTimeImmutable($from.' 00:00:00',$utc))->getTimestamp();
+        $untilEpoch=(new DateTimeImmutable($to.' 00:00:00',$utc))->modify('+1 day')->getTimestamp();
+        $previousFromEpoch=(new DateTimeImmutable($previousFrom.' 00:00:00',$utc))->getTimestamp();
+        $previousUntilEpoch=$fromEpoch;
+        $orderCount=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM orders WHERE created_at>=? AND created_at<?',[$fromEpoch,$untilEpoch])->fetchColumn();
+        $previousOrderCount=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM orders WHERE created_at>=? AND created_at<?',[$previousFromEpoch,$previousUntilEpoch])->fetchColumn();
+        $previousRevenue=(int)CommerceDatabase::query($this->pdo,"SELECT COALESCE(SUM(total_minor),0) FROM orders WHERE payment_status='paid' AND created_at>=? AND created_at<?",[$previousFromEpoch,$previousUntilEpoch])->fetchColumn();
+        $metrics=CommerceDatabase::query($this->pdo,'SELECT COALESCE(SUM(views),0) AS views,COALESCE(SUM(add_to_carts),0) AS add_to_carts,COALESCE(SUM(orders_net),0) AS orders_net FROM product_daily_metrics WHERE metric_date>=? AND metric_date<=?',[$from,$to])->fetch();
+        $previousMetrics=CommerceDatabase::query($this->pdo,'SELECT COALESCE(SUM(views),0) AS views,COALESCE(SUM(orders_net),0) AS orders_net FROM product_daily_metrics WHERE metric_date>=? AND metric_date<=?',[$previousFrom,$previousTo])->fetch();
+        $views=max(0,(int)$metrics['views']);$ordersNet=max(0,(int)$metrics['orders_net']);
+        $previousViews=max(0,(int)$previousMetrics['views']);
+        $revenue=(int)$current['sales']['revenue_minor'];
+        $activeProducts=(int)CommerceDatabase::query($this->pdo,"SELECT COUNT(*) FROM products WHERE status='active'")->fetchColumn();
+        $lowStock=(int)CommerceDatabase::query($this->pdo,"SELECT COUNT(*) FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE v.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli*5")->fetchColumn();
+        $daily=CommerceDatabase::query($this->pdo,"SELECT (created_at-(created_at%86400)) AS day_epoch,COUNT(*) AS order_count,
+            COALESCE(SUM(CASE WHEN payment_status='paid' THEN total_minor ELSE 0 END),0) AS revenue_minor
+            FROM orders WHERE created_at>=? AND created_at<? GROUP BY (created_at-(created_at%86400)) ORDER BY day_epoch",[$fromEpoch,$untilEpoch])->fetchAll();
+        $dailyMetrics=CommerceDatabase::query($this->pdo,'SELECT metric_date,COALESCE(SUM(views),0) AS views,COALESCE(SUM(orders_net),0) AS orders_net FROM product_daily_metrics WHERE metric_date>=? AND metric_date<=? GROUP BY metric_date ORDER BY metric_date',[$from,$to])->fetchAll();
+        $trend=[];$byDate=[];
+        foreach($daily as $row){$date=gmdate('Y-m-d',(int)$row['day_epoch']);$byDate[$date]=['orders'=>(int)$row['order_count'],'revenue_minor'=>(int)$row['revenue_minor'],'views'=>0,'orders_net'=>0];}
+        foreach($dailyMetrics as $row){$date=(string)$row['metric_date'];$byDate[$date]??=['orders'=>0,'revenue_minor'=>0,'views'=>0,'orders_net'=>0];$byDate[$date]['views']=max(0,(int)$row['views']);$byDate[$date]['orders_net']=max(0,(int)$row['orders_net']);}
+        $afterTo=(new DateTimeImmutable($to,$utc))->modify('+1 day');
+        for($day=new DateTimeImmutable($from,$utc);$day<$afterTo;$day=$day->modify('+1 day')){
+            $date=$day->format('Y-m-d');$row=$byDate[$date]??['orders'=>0,'revenue_minor'=>0,'views'=>0,'orders_net'=>0];
+            $trend[]=['date'=>$date,'orders'=>$row['orders'],'revenue_minor'=>(string)$row['revenue_minor'],'views'=>$row['views'],'orders_net'=>$row['orders_net']];
+        }
+        $checkpoint=CommerceDatabase::query($this->pdo,'SELECT updated_at FROM analytics_checkpoint ORDER BY id LIMIT 1')->fetchColumn();
+        $pending=(new MetricsService($this->pdo))->pending();
+        $tiles=[
+            'orders_total'=>$orderCount,'orders_paid'=>(int)$current['sales']['order_count'],'revenue_minor'=>$revenue,
+            'aov_minor'=>intdiv($revenue,max(1,(int)$current['sales']['order_count'])),'views'=>$views,
+            'add_to_carts'=>max(0,(int)$metrics['add_to_carts']),'conversion_bps'=>(int)round($ordersNet/max(1,$views)*10000),
+            'active_products'=>$activeProducts,'low_stock'=>$lowStock,'orders_net'=>$ordersNet,
+        ];
+        $growth=[
+            'orders'=>self::percentChange($orderCount,$previousOrderCount),
+            'revenue'=>self::percentChange($revenue,$previousRevenue),
+            'views'=>self::percentChange($views,$previousViews),
+        ];
+        return ['period'=>['days'=>$days,'from'=>$from,'to'=>$to], 'tiles'=>$tiles,'growth'=>$growth,
+            'trend'=>$trend,'statuses'=>$current['statuses'],'topProducts'=>$current['topProducts'],
+            'lowStockRows'=>$current['lowStock'],'metricsUpdatedAt'=>$checkpoint?(int)$checkpoint:0,'pendingMetrics'=>$pending];
+    }
+    /** Product-level view, cancellation-aware order and paid-revenue totals plus a 30-day chart. */
+    public function productAnalytics(int $actorId,int $productId):array
+    {
+        CommerceAccess::requirePermission('admin.products.view',$actorId);
+        $product=CommerceDatabase::query($this->pdo,'SELECT id FROM products WHERE id=?',[$productId])->fetch();
+        if(!$product)throw new RequestRejected(404,'not_found','Product not found.');
+        $utc=new DateTimeZone('UTC');$today=new DateTimeImmutable('today',$utc);$from=$today->modify('-29 days')->format('Y-m-d');$to=$today->format('Y-m-d');
+        $fromEpoch=(new DateTimeImmutable($from.' 00:00:00',$utc))->getTimestamp();$untilEpoch=$today->modify('+1 day')->getTimestamp();
+        $metricRows=CommerceDatabase::query($this->pdo,'SELECT metric_date,COALESCE(SUM(views),0) AS views,COALESCE(SUM(orders_net),0) AS orders_net FROM product_daily_metrics WHERE product_id=? AND metric_date>=? AND metric_date<=? GROUP BY metric_date ORDER BY metric_date',[$productId,$from,$to])->fetchAll();
+        $revenueRows=CommerceDatabase::query($this->pdo,"SELECT (o.created_at-(o.created_at%86400)) AS day_epoch,COALESCE(SUM(oi.line_total_minor),0) AS revenue_minor FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.product_id=? AND o.payment_status='paid' AND o.created_at>=? AND o.created_at<? GROUP BY (o.created_at-(o.created_at%86400))",[$productId,$fromEpoch,$untilEpoch])->fetchAll();
+        $byDate=[];
+        foreach($metricRows as $row)$byDate[(string)$row['metric_date']]=['views'=>max(0,(int)$row['views']),'orders'=>max(0,(int)$row['orders_net']),'revenue_minor'=>0];
+        foreach($revenueRows as $row){$date=gmdate('Y-m-d',(int)$row['day_epoch']);$byDate[$date]??=['views'=>0,'orders'=>0,'revenue_minor'=>0];$byDate[$date]['revenue_minor']=(int)$row['revenue_minor'];}
+        $trend=[];$views=0;$orders=0;$revenue=0;
+        for($day=new DateTimeImmutable($from,$utc);$day<=$today;$day=$day->modify('+1 day')){
+            $date=$day->format('Y-m-d');$row=$byDate[$date]??['views'=>0,'orders'=>0,'revenue_minor'=>0];
+            $views+=$row['views'];$orders+=$row['orders'];$revenue+=$row['revenue_minor'];
+            $trend[]=['date'=>$date,'views'=>$row['views'],'orders'=>$row['orders'],'revenue_minor'=>(string)$row['revenue_minor']];
+        }
+        return ['views'=>$views,'orders'=>$orders,'revenue_minor'=>$revenue,
+            'conversion_bps'=>(int)round($orders/max(1,$views)*10000),'trend'=>$trend,'from'=>$from,'to'=>$to];
+    }
+    private static function percentChange(int $current,int $previous):?string
+    {
+        if($previous===0)return $current===0?'0.0':null;
+        return number_format((($current-$previous)/$previous)*100,1,'.','');
     }
     /** Open work across the modules a staff account can reach; counts link to the screen that clears them. */
     public function attention(array $actor): array

@@ -108,8 +108,25 @@ class Admin extends StorefrontController
     {
         $this->handle(function()use($module):void{
             $definition=AdminReadService::definition($module);$actor=CommerceAccess::requirePermission($definition[1]);
-            echo json_encode((new AdminReadService($this->pdo))->table($actor['id'],$module,$_GET),JSON_THROW_ON_ERROR);
+            $read=new AdminReadService($this->pdo);
+            $result=$module==='products'&&($_GET['view']??'')==='grid'?$read->productCards($actor['id'],$_GET):$read->table($actor['id'],$module,$_GET);
+            if($module==='products'&&($_GET['view']??'')==='grid')foreach($result['data'] as &$row){
+                $row['image_url']=$row['image_path']?self::url($row['image_path']):null;
+                $row['product_url']=self::url('product/'.$row['slug']);
+            }
+            unset($row);
+            echo json_encode($result,JSON_THROW_ON_ERROR|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
         },true);
+    }
+    public function analytics():void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.analytics.view');
+            $days=CommerceValues::integer($_GET['days']??30,1,90,'days');
+            if(!in_array($days,[7,30,90],true))CommerceValues::invalid('days');
+            $dashboard=(new AdminReadService($this->pdo))->analyticsDashboard($actor['id'],$days);
+            $this->render('analytics',compact('dashboard'));
+        });
     }
     public function productForm(): void { $this->handle(fn()=> $this->productPage()); }
     private function productPage(): void
@@ -121,7 +138,8 @@ class Admin extends StorefrontController
         $values=$this->values??($product?AdminCatalogForm::display($product):['status'=>'draft','variants'=>[['sku'=>'','sell_unit'=>'sqft','price'=>'','increment'=>'1','enabled'=>1]]]);
         if (!isset($values['details'])) $values['details']=$product?(new ProductDetailService($this->pdo))->get((int)$product['id']):ProductDetailService::validate([]);
         $taxonomies=(new ProductService($this->pdo))->taxonomies($actor['id']);
-        $this->render('product',compact('product','values','taxonomies'));
+        $productAnalytics=$product?(new AdminReadService($this->pdo))->productAnalytics($actor['id'],(int)$product['id']):null;
+        $this->render('product',compact('product','values','taxonomies','productAnalytics'));
     }
     public function saveProduct(): void
     {
