@@ -76,6 +76,7 @@ if(($argv[1]??'')==='order'){
  $address=(new AddressService($pdo))->save($customer,['recipient'=>'Test Customer','phone'=>'9999988888','line1'=>'Snapshot Road','city'=>'Bankura','state'=>'West Bengal','postal_code'=>'722101']);$cart=(new CartService($pdo))->get('user:'.$customer);$cart=(new CartService($pdo))->change('user:'.$customer,$variant,1000,$cart['revision']);
  echo json_encode((new OrderService($pdo))->place($customer,$cart['id'],$cart['revision'],$address['id'],'cod','fixture:order:place'));exit;
 }
+if(($argv[1]??'')==='paid'){$pdo->exec("UPDATE orders SET payment_status='paid' WHERE id=(SELECT MAX(id) FROM orders)");$row=$pdo->query("SELECT payment_status,json_extract(address_snapshot,'$.state') AS state_name FROM orders ORDER BY id DESC LIMIT 1")->fetch();echo json_encode($row);exit;}
 if(($argv[1]??'')==='subdirectory'){
  $_SERVER['SCRIPT_NAME']='/stone/index.php';$actor=CommerceAccess::actor((int)$pdo->query("SELECT id FROM users_tbl WHERE email='admin@admin-test.invalid'")->fetchColumn());
  $product=(new ProductService($pdo))->adminDetail($actor['id'],(int)$pdo->query("SELECT id FROM products WHERE slug='verified-marble'")->fetchColumn());$values=AdminCatalogForm::display($product);$taxonomies=(new ProductService($pdo))->taxonomies($actor['id']);$errors=[];$notice=null;
@@ -112,6 +113,8 @@ if(($argv[1]??'')==='inspect'){
   result=json.loads(admin.request('/admin/data/products?'+urlencode({'search[value]':'Material 055'}))[2]);check(result['recordsFiltered']==1 and result['data'][0]['name']=='Material 055','Search finds material beyond first page')
   grid=json.loads(admin.request('/admin/data/products?'+urlencode({'view':'grid','length':20,'start':0,'search[value]':'Material 055'}))[2]);check(grid['recordsFiltered']==1 and {'sku','min_price','max_price','image_url','product_url'}<=set(grid['data'][0]),'Product grid receives bounded card fields through the protected table feed')
   check(admin.request('/admin/analytics')[0]==200 and 'Orders and revenue' in admin.request('/admin/analytics')[2],'Analytics dashboard is permission-protected and renders')
+  live_status,_,live_body=admin.request('/admin/analytics/live?days=30');live=json.loads(live_body)
+  check(live_status==200 and len(live['trend'])==30 and 'regionMap' in live and 'regionTotals' in live,'Analytics live feed returns current authorized chart and India-region data')
   check(admin.request('/admin/analytics?days=8')[0]==422,'Analytics range is allowlisted')
   check(admin.request('/admin/data/products?length=-1')[0]==422,'Unbounded table length rejected')
   check(admin.request('/admin/data/products?order[0][column]=999')[0]==422,'Unsafe sort column rejected')
@@ -167,7 +170,8 @@ if(($argv[1]??'')==='inspect'){
   check(admin.request('/admin/stock','POST',{**stock,'quantity':'0.1','reason':'Bad increment'})[0]==422,'Noncanonical stock increment rejected')
   check(admin.request('/admin/stock','POST',{**stock,'quantity':'-100','reason':'Too low'})[0]==409,'Inventory cannot become negative')
   check(viewer.request('/admin/stock','POST',{**stock,'quantity':'1','reason':'Denied'})[0]==403,'Viewer stock mutation denied')
-  order=run('order');oid=str(order['id'])
+  order=run('order');oid=str(order['id']);paid=run('paid')
+  live=json.loads(admin.request('/admin/analytics/live?days=7')[2]);map_values=live['regionMap'] if isinstance(live['regionMap'],dict) else {};check(map_values.get('IN-WB',0)>0 and live['regionTotals'][0]['name']=='West Bengal',f'Paid delivery state feeds India map and region ranking: paid={paid}, regions={live["regionTotals"]}')
   analytics=admin.request('/admin/analytics?days=7')[2];check('Total orders' in analytics and 'Orders and revenue' in analytics and 'events pending.' in analytics,'Analytics displays real order metrics and aggregation freshness')
   gate=fields(admin.request('/admin/order?id='+oid)[2],'/admin/order');gate.update(target='awaiting_verify',reason='Verifying by call');check(admin.request('/admin/order','POST',gate)[0]==303,'Order enters verification gate')
   data=fields(admin.request('/admin/order?id='+oid)[2],'/admin/order');data.update(target='confirmed',reason='Verified order');check(admin.request('/admin/order','POST',data)[0]==303,'Order transition persists')
@@ -186,6 +190,7 @@ if(($argv[1]??'')==='inspect'){
   result=json.loads(admin.request('/admin/data/customers')[2]);check(result['recordsTotal']==1 and set(result['data'][0])=={'id','name','email','status','email_verify'},'Customer projection excludes staff and secrets')
   check(admin.request('/admin/settings')[0]==200,'Effective settings render')
   operations,result=login('operations');check(result[0]==303,'Operations staff login succeeds')
+  check(operations.request('/admin/analytics/live')[0]==403,'Analytics live feed enforces the analytics grant')
   check(operations.request('/admin/products')[0]==403 and operations.request('/admin/data/products')[0]==403,'Operations staff cannot access catalog grants')
   check(operations.request('/admin')[0]==200 and 'href="/admin/products"' not in operations.request('/admin')[2],'Navigation hides ungranted modules')
   check(admin.request('/admin/stock','POST',{**stock,'quantity':'1','reason':'Denied','csrf':'bad'})[0]==403,'Stock CSRF enforced')
@@ -254,7 +259,13 @@ if(($argv[1]??'')==='inspect'){
    b.js("void adminTable.search('').draw()");b.wait('adminTable.page.info().recordsDisplay===56');b.js('void adminTable.page(2).draw(false)');b.wait("adminTable.page.info().page===2 && adminTable.rows({page:'current'}).count()===16");check(b.js("adminTable.rows({page:'current'}).count()===16"),'DataTables pagination works')
    b.js("document.querySelector('[data-product-view=grid]').click()");b.wait("!document.querySelector('#product-grid').hidden && document.querySelectorAll('#product-grid .product-grid-card').length>0");check(b.js("document.querySelector('#product-grid-count').textContent.includes('56')"),'Product grid loads real product cards and count')
    b.js("document.querySelector('[data-product-view=list]').click()");b.wait("!document.querySelector('.table-scroll').hidden && document.querySelector('#product-grid').hidden");check(True,'Product list/grid toggle restores the server-side list')
-   b.go(base+'/admin/analytics');b.wait("document.querySelector('#analytics-trend .apexcharts-canvas')!==null");b.wait("['#analytics-trend','#analytics-status','#analytics-products'].every(selector=>document.querySelector(selector+' .apexcharts-canvas, '+selector+' .chart-empty'))");check(b.js("document.querySelectorAll('#analytics-trend .apexcharts-canvas,#analytics-status .apexcharts-canvas,#analytics-products .apexcharts-canvas').length>=2"),'Analytics charts render and empty series show an honest state')
+   b.go(base+'/admin/analytics');b.wait("document.querySelector('#analytics-trend .apexcharts-canvas')!==null");b.wait("['#analytics-trend','#analytics-status','#analytics-products'].every(selector=>document.querySelector(selector+' .apexcharts-canvas, '+selector+' .chart-empty'))");b.wait("document.querySelector('#analytics-region-map svg')!==null");check(b.js("document.querySelectorAll('#analytics-trend .apexcharts-canvas,#analytics-status .apexcharts-canvas,#analytics-products .apexcharts-canvas').length===3"),'Analytics charts render with live update targets')
+   check(b.js("document.querySelectorAll('#analytics-region-map .jvectormap-region').length>=30"),'Vendored India vector map renders state regions')
+   check(b.js("getComputedStyle(document.querySelector('.analytics-stat-icon .uil-receipt'),'::before').content!=='none'"),'Analytics KPI icons use loaded Hyper icon glyphs')
+   check(b.js("adminAnalyticsRefresh().then(()=>document.querySelector('[data-live-status]').textContent.includes('updated'))"),'Analytics browser refresh updates the live chart payload')
+   b.shot('/tmp/sarada-admin-analytics.png')
+   b.js("document.querySelector('#analytics-region-map').scrollIntoView()")
+   b.shot('/tmp/sarada-admin-analytics-map.png')
    b.go(base+'/admin/product?id='+pid);b.wait("document.querySelector('#product-analytics-chart .apexcharts-canvas')!==null");check(b.js("document.querySelectorAll('#product-analytics-chart .apexcharts-canvas').length===1"),'Product analytics chart renders')
    b.shot('/tmp/sarada-admin-products.png')
    for width in [360,390,768,1024,1440]:

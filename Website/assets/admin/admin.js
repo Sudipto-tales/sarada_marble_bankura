@@ -150,19 +150,77 @@
   function chartRows(element){try{return JSON.parse(element.dataset.chartSeries||'[]');}catch{return[];}}
   function initAdminCharts(){
     if(!window.ApexCharts)return;
+    window.adminAnalyticsCharts=window.adminAnalyticsCharts||{};
     const primary=getComputedStyle(document.documentElement).getPropertyValue('--admin-primary').trim()||'#696cff';
     const formatMoney=value=>`₹${Number(value||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-    const mount=(element,options)=>{if(element&&chartRows(element).length)new ApexCharts(element,options).render();else if(element)element.innerHTML='<p class="chart-empty">No recorded data for this period.</p>';};
+    const mount=(element,options,key)=>{if(!element)return;options.noData={text:'No recorded data for this period.',style:{color:'#a1acb8',fontSize:'13px'}};const chart=new ApexCharts(element,options);window.adminAnalyticsCharts[key]=chart;chart.render();};
+    document.querySelectorAll('.analytics-sparkline:not(.is-flat)').forEach(element=>{
+      let values=[];try{values=JSON.parse(element.dataset.sparkSeries||'[]').map(value=>Number(value)||0);}catch{}
+      if(values.length){const chart=new ApexCharts(element,{chart:{type:'area',height:38,sparkline:{enabled:true},toolbar:{show:false},animations:{enabled:false}},series:[{data:values}],colors:[primary],stroke:{curve:'smooth',width:2},fill:{type:'gradient',gradient:{opacityFrom:.26,opacityTo:.02}},tooltip:{enabled:false},dataLabels:{enabled:false}});window.adminAnalyticsCharts[element.id]=chart;chart.render();}
+    });
     const trend=document.querySelector('#analytics-trend');
-    if(trend){const rows=chartRows(trend);mount(trend,{chart:{type:'line',height:300,toolbar:{show:false},fontFamily:'Inter,system-ui,sans-serif'},colors:[primary,'#03c3ec'],series:[{name:'Orders',type:'column',data:rows.map(row=>Number(row.orders)||0)},{name:'Paid revenue',type:'area',data:rows.map(row=>Number(row.revenue_minor||0)/100)}],stroke:{curve:'smooth',width:[0,2.5]},fill:{type:['solid','gradient'],opacity:[1,.18],gradient:{opacityFrom:.22,opacityTo:.02}},plotOptions:{bar:{columnWidth:'42%',borderRadius:3}},dataLabels:{enabled:false},grid:{borderColor:'#ebeef0',strokeDashArray:4},xaxis:{categories:rows.map(row=>row.date.slice(5)),labels:{style:{colors:'#697a8d'}}},yaxis:[{title:{text:'Orders'},labels:{style:{colors:'#697a8d'}}},{opposite:true,title:{text:'Paid revenue (INR)'},labels:{formatter:formatMoney,style:{colors:'#697a8d'}}}],legend:{labels:{colors:'#697a8d'}},tooltip:{shared:true,y:[{formatter:value=>`${Math.round(value)} orders`},{formatter:formatMoney}]}});}
+    if(trend){const rows=chartRows(trend);mount(trend,{chart:{type:'line',height:300,toolbar:{show:false},fontFamily:'Inter,system-ui,sans-serif'},colors:[primary,'#03c3ec'],series:[{name:'Orders',type:'column',data:rows.map(row=>Number(row.orders)||0)},{name:'Paid revenue',type:'area',data:rows.map(row=>Number(row.revenue_minor||0)/100)}],stroke:{curve:'smooth',width:[0,2.5]},fill:{type:['solid','gradient'],opacity:[1,.18],gradient:{opacityFrom:.22,opacityTo:.02}},plotOptions:{bar:{columnWidth:'42%',borderRadius:3}},dataLabels:{enabled:false},grid:{borderColor:'#ebeef0',strokeDashArray:4},xaxis:{categories:rows.map(row=>row.date.slice(5)),labels:{style:{colors:'#697a8d'}}},yaxis:[{title:{text:'Orders'},labels:{style:{colors:'#697a8d'}}},{opposite:true,title:{text:'Paid revenue (INR)'},labels:{formatter:formatMoney,style:{colors:'#697a8d'}}}],legend:{labels:{colors:'#697a8d'}},tooltip:{shared:true,y:[{formatter:value=>`${Math.round(value)} orders`},{formatter:formatMoney}]}},'analytics-trend');}
     const status=document.querySelector('#analytics-status');
-    if(status){const rows=chartRows(status);mount(status,{chart:{type:'donut',height:300,fontFamily:'Inter,system-ui,sans-serif'},colors:[primary,'#03c3ec','#71dd37','#ffab00','#ff3e1d','#8592a3'],labels:rows.map(row=>String(row.status)),series:rows.map(row=>Number(row.order_count)||0),dataLabels:{enabled:false},legend:{position:'bottom',labels:{colors:'#697a8d'}},stroke:{width:2,colors:['#fff']},plotOptions:{pie:{donut:{size:'68%'}}},tooltip:{y:{formatter:value=>`${value} orders`}}});}
+    if(status){const rows=chartRows(status);mount(status,{chart:{type:'donut',height:300,fontFamily:'Inter,system-ui,sans-serif'},colors:[primary,'#03c3ec','#71dd37','#ffab00','#ff3e1d','#8592a3'],labels:rows.map(row=>String(row.status)),series:rows.map(row=>Number(row.order_count)||0),dataLabels:{enabled:false},legend:{position:'bottom',labels:{colors:'#697a8d'}},stroke:{width:2,colors:['#fff']},plotOptions:{pie:{donut:{size:'68%'}}},tooltip:{y:{formatter:value=>`${value} orders`}}},'analytics-status');}
     const products=document.querySelector('#analytics-products');
-    if(products){const rows=chartRows(products).slice(0,10).reverse();mount(products,{chart:{type:'bar',height:Math.max(250,rows.length*36),toolbar:{show:false},fontFamily:'Inter,system-ui,sans-serif'},colors:[primary],series:[{name:'Paid revenue',data:rows.map(row=>Number(row.revenue_minor||0)/100)}],plotOptions:{bar:{horizontal:true,borderRadius:4,barHeight:'58%'}},dataLabels:{enabled:false},grid:{borderColor:'#ebeef0',strokeDashArray:4},xaxis:{categories:rows.map(row=>String(row.name)),labels:{formatter:formatMoney,style:{colors:'#697a8d'}}},yaxis:{labels:{style:{colors:'#697a8d'}}},tooltip:{y:{formatter:formatMoney}}});}
+    if(products){const rows=chartRows(products).slice(0,10).reverse();mount(products,{chart:{type:'bar',height:Math.max(250,rows.length*36),toolbar:{show:false},fontFamily:'Inter,system-ui,sans-serif'},colors:[primary],series:[{name:'Paid revenue',data:rows.map(row=>Number(row.revenue_minor||0)/100)}],plotOptions:{bar:{horizontal:true,borderRadius:4,barHeight:'58%'}},dataLabels:{enabled:false},grid:{borderColor:'#ebeef0',strokeDashArray:4},xaxis:{categories:rows.map(row=>String(row.name)),labels:{formatter:formatMoney,style:{colors:'#697a8d'}}},yaxis:{labels:{style:{colors:'#697a8d'}}},tooltip:{y:{formatter:formatMoney}}},'analytics-products');}
+    const map=document.querySelector('#analytics-region-map');
+    if(map&&window.jQuery?.fn?.vectorMap){
+      let values={};try{values=JSON.parse(map.dataset.regionSeries||'{}');}catch{}
+      window.jQuery(map).vectorMap({map:'in_mill_en',backgroundColor:'transparent',zoomOnScroll:false,regionStyle:{initial:{fill:'#e9eaf5','fill-opacity':1,stroke:'#fff','stroke-width':1,'stroke-opacity':1},hover:{fill:primary,'fill-opacity':.85}},series:{regions:[{values,scale:['#e7e8ff',primary],normalizeFunction:'polynomial'}]},onRegionTipShow:(event,label,code)=>{const value=Number(values[code]||0);label.html(`${label.html()}<br><strong>${formatMoney(value/100)}</strong>`);}});
+      window.adminAnalyticsCharts.regionMap=window.jQuery(map).vectorMap('get','mapObject');
+    }
     const productChart=document.querySelector('#product-analytics-chart');
     if(productChart){const rows=chartRows(productChart);mount(productChart,{chart:{type:'line',height:260,toolbar:{show:false},fontFamily:'Inter,system-ui,sans-serif'},colors:[primary,'#03c3ec'],series:[{name:'Views',data:rows.map(row=>Number(row.views)||0)},{name:'Net orders',data:rows.map(row=>Number(row.orders)||0)}],stroke:{curve:'smooth',width:2.5},markers:{size:0},dataLabels:{enabled:false},grid:{borderColor:'#ebeef0',strokeDashArray:4},xaxis:{categories:rows.map(row=>row.date.slice(5)),labels:{style:{colors:'#697a8d'},hideOverlappingLabels:true}},yaxis:{min:0,labels:{style:{colors:'#697a8d'}}},legend:{labels:{colors:'#697a8d'}},tooltip:{shared:true}});}
   }
   initAdminCharts();
+  const analyticsRoot=document.querySelector('#analytics-dashboard');
+  if(analyticsRoot){
+    const number=value=>Number(value||0).toLocaleString('en-IN');
+    const money=minor=>`₹${(Number(minor||0)/100).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const period=analyticsRoot.querySelector('[data-analytics-period]'),statusLine=analyticsRoot.querySelector('[data-live-status]');
+    const valueNodes=[...analyticsRoot.querySelectorAll('[data-analytics-value]')];
+    const map=analyticsRoot.querySelector('#analytics-region-map'),mapRows=analyticsRoot.querySelector('#analytics-region-rows');
+    const update=(data)=>{
+      const tiles=data.tiles||{},formats={orders_total:number,revenue_minor:money,aov_minor:money,conversion_bps:value=>`${(Number(value||0)/100).toFixed(2)}%`,active_products:number,low_stock:number,orders_net:number,views:number};
+      valueNodes.forEach(node=>{const key=node.dataset.analyticsValue;if(formats[key])node.textContent=formats[key](tiles[key]);});
+      analyticsRoot.querySelectorAll('[data-analytics-growth]').forEach(node=>{
+        const value=data.growth?.[node.dataset.analyticsGrowth]??null;node.classList.toggle('down',value!==null&&Number(value)<0);
+        node.textContent=value===null?'New activity':Number(value)===0?'No change vs previous period':`${Number(value)>0?'↑ ':'↓ '}${String(value).replace('-','')}% vs previous period`;
+      });
+      if(period)period.textContent=`${data.period.from} – ${data.period.to} UTC`;
+      const exportLink=analyticsRoot.querySelector('a[href*="format=csv"]');
+      if(exportLink){const url=new URL(exportLink.href);url.searchParams.set('from',data.period.from);url.searchParams.set('to',data.period.to);exportLink.href=url.href;}
+      const charts=window.adminAnalyticsCharts||{},rows=data.trend||[],categories=rows.map(row=>row.date.slice(5));
+      charts['analytics-trend']?.updateOptions({xaxis:{categories}});charts['analytics-trend']?.updateSeries([{name:'Orders',type:'column',data:rows.map(row=>Number(row.orders)||0)},{name:'Paid revenue',type:'area',data:rows.map(row=>Number(row.revenue_minor||0)/100)}]);
+      const statuses=data.statuses||[];charts['analytics-status']?.updateOptions({labels:statuses.map(row=>String(row.status))});charts['analytics-status']?.updateSeries(statuses.map(row=>Number(row.order_count)||0));
+      const products=(data.topProducts||[]).slice(0,10).reverse();charts['analytics-products']?.updateOptions({xaxis:{categories:products.map(row=>String(row.name))}});charts['analytics-products']?.updateSeries([{name:'Paid revenue',data:products.map(row=>Number(row.revenue_minor||0)/100)}]);
+      const sparkData={
+        'analytics-spark-orders':rows.map(row=>Number(row.orders)||0),
+        'analytics-spark-revenue':rows.map(row=>Number(row.revenue_minor||0)/100),
+        'analytics-spark-aov':rows.map(row=>Number(row.paid_orders)>0?(Number(row.revenue_minor||0)/100)/Number(row.paid_orders):0),
+        'analytics-spark-conversion':rows.map(row=>Number(row.views)>0?(Number(row.orders_net||0)/Number(row.views))*100:0)
+      };
+      Object.entries(sparkData).forEach(([id,values])=>charts[id]?.updateSeries([{data:values}]));
+      if(map&&data.regionMap){map.dataset.regionSeries=JSON.stringify(data.regionMap);charts.regionMap?.series?.regions?.[0]?.setValues(data.regionMap);}
+      if(mapRows){
+        const regions=data.regionTotals||[],total=regions.reduce((sum,row)=>sum+Number(row.revenue_minor||0),0),fragment=document.createDocumentFragment();
+        if(!regions.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=4;td.className='analytics-empty';td.textContent='No paid orders with a saved delivery state in this period.';tr.append(td);fragment.append(tr);}
+        regions.forEach(row=>{const tr=document.createElement('tr'),name=document.createElement('td'),orders=document.createElement('td'),revenue=document.createElement('td'),share=document.createElement('td');name.textContent=row.name;if(!row.map_code){const note=document.createElement('span');note.className='region-map-unavailable';note.textContent=' (map unavailable)';name.append(note);}orders.textContent=number(row.order_count);revenue.textContent=money(row.revenue_minor);share.textContent=`${total?((Number(row.revenue_minor||0)/total)*100).toFixed(1):'0.0'}%`;tr.append(name,orders,revenue,share);fragment.append(tr);});
+        mapRows.replaceChildren(fragment);
+      }
+      if(statusLine){statusLine.classList.remove('is-error');statusLine.textContent=`Live · updated ${new Date().toLocaleTimeString()}`;}
+    };
+    let refreshing=false;
+    const refresh=async()=>{
+      if(refreshing||document.hidden)return;refreshing=true;
+      try{const url=new URL(analyticsRoot.dataset.liveUrl,location.href);url.searchParams.set('days',analyticsRoot.dataset.days);const response=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json'}});const payload=await response.json();if(!response.ok)throw new Error(payload.error?.message||'Live refresh failed');update(payload);}
+      catch{if(statusLine){statusLine.classList.add('is-error');statusLine.textContent='Live refresh paused · retrying shortly';}}
+      finally{refreshing=false;}
+    };
+    window.adminAnalyticsRefresh=refresh;
+    window.setInterval(refresh,20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+  }
   const productForm=document.querySelector('#product-form'),rows=document.querySelector('#variant-rows');
   if(productForm){
     function normalizeRows(){

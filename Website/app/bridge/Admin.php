@@ -22,8 +22,9 @@ class Admin extends StorefrontController
     {
         RequestSecurity::session();
         $actor=CommerceAccess::actor();
-        // Non-staff get their existing answers (401 anonymous, 403 customer) from the guards below.
-        if(!$actor||!array_filter($actor['permissions'],static fn($p)=>str_starts_with($p,'admin.')))return true;
+        // Anonymous visitors go to staff sign-in; signed-in customers keep the permission guard's 403.
+        if(!$actor)return false;
+        if(!array_filter($actor['permissions'],static fn($p)=>str_starts_with($p,'admin.')))return true;
         if(($_SESSION['admin_id']??null)===(int)$actor['id']&&time()-(int)($_SESSION['admin_seen']??0)<=self::ELEVATION_IDLE){
             $_SESSION['admin_seen']=time();return true;
         }
@@ -127,6 +128,16 @@ class Admin extends StorefrontController
             $dashboard=(new AdminReadService($this->pdo))->analyticsDashboard($actor['id'],$days);
             $this->render('analytics',compact('dashboard'));
         });
+    }
+    public function analyticsLive():void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.analytics.view');
+            $days=CommerceValues::integer($_GET['days']??30,1,90,'days');
+            if(!in_array($days,[7,30,90],true))CommerceValues::invalid('days');
+            $dashboard=(new AdminReadService($this->pdo))->analyticsDashboard($actor['id'],$days);
+            echo json_encode($dashboard,JSON_THROW_ON_ERROR|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
+        },true);
     }
     public function productForm(): void { $this->handle(fn()=> $this->productPage()); }
     private function productPage(): void
