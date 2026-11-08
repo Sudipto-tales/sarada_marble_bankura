@@ -13,6 +13,10 @@ Authorized 2026-10-11. Sequential delivery of ADM-01, ADM-02 and the implemented
 - Stock form: variant, signed quantity change, reason, expected stock revision, stable operation key. Orders: immutable detail/history and only valid next/cancel status choices, revision and stable operation key. Customers/settings: bounded minimum lookup/read-only effective implemented configuration; no arbitrary environment writes.
 - All cookie mutations POST + CSRF + server permission. Field validation summaries/inline errors retain escaped input; stale conflict requires reload. Never silently turn malformed input into zero or lose a variant through truncated POST input.
 
+### Shared Admin presentation classes
+
+`app/page/admin/header.php` and `footer.php` form the shared shell. New pages should set `$title`, `$description` and `$module`, include `header.php`, render inside its open `<main id="admin-main">`, then include `footer.php`. The shell uses `.wrapper.layout-wrapper`, `.layout-navbar`, `.sidebar.layout-menu`, `.content-page.layout-page` and `.page-title-box`; the grouped navigation uses `.side-nav-title` and `.side-nav-link`. Use `.panel` for white content surfaces, `.metric-grid` / `.metric-card` for KPI rows, `.field` / `.form-grid` for forms, and `.table-scroll` around wide tables. `admin-theme.css` owns the typography, colors, spacing, cards, controls and the under-700px drawer. `admin.js` owns drawer accessibility, product grid/list switching and ApexCharts initialization. New links still need a server route and a matching `$can(...)` navigation permission; controllers and services must enforce their own permissions.
+
 ## Dependencies and provenance
 
 Use locally vendored DataTables 2.3.4 and jQuery 3.7.1 (MIT), not a premium editor/template. Search/paging follows the official [server-side protocol](https://datatables.net/manual/core/server-side); official [download/license information](https://datatables.net/download/). Asset sources/licenses and hashes live in `Website/assets/admin/vendor/README.md`.
