@@ -1,6 +1,5 @@
 <?php
 /** Shared review thread: rating summary, review list, likes and one level of replies. Expects $reviews and $actor. */
-$stars = static fn($t): string => '<span class="stars"><i style="width:' . max(0, min(100, (int)$t * 2)) . '%">★★★★★</i>★★★★★</span>';
 $initial = static fn($name): string => strtoupper(mb_substr(trim((string)$name) ?: 'C', 0, 1));
 $csrfToken = RequestSecurity::csrfToken();
 $loggedIn = !empty($actor);

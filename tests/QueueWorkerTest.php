@@ -24,9 +24,10 @@ $pdo->exec($mysql?"CREATE TRIGGER failed_archive_error BEFORE INSERT ON job_fail
 CommerceTest::fails(fn()=>$queue->reap(['emails']),'Archive insertion failure propagates safely.');
 $check((int)$pdo->query("SELECT COUNT(*) FROM jobs WHERE id=$last")->fetchColumn()===1,'Failed archive cannot destroy only durable active copy.');$pdo->exec('DROP TRIGGER failed_archive_error');
 $check($queue->reap(['emails'])===1&&$queue->reap(['emails'])===0,'Crash on final attempt is reaped exactly once.');
-$held=CommerceDatabase::transaction($pdo,fn()=>$typed->purchase(9));
-CommerceTest::fails(fn()=>$queue->claim(['purchase_events'],'bad-worker'),'Held queue cannot be claimed.');CommerceTest::fails(fn()=>$queue->reap(['purchase_events']),'Held queue cannot be reaped.');
-$check((int)$pdo->query("SELECT attempts FROM jobs WHERE id=$held")->fetchColumn()===0,'Held queue consumes no attempts or archival effects.');
+$enqueued=CommerceDatabase::transaction($pdo,fn()=>$typed->purchase(9));
+$check(in_array('purchase_events',JobRegistry::enabledQueues(),true),'Analytics queue is enabled for its consumer (EVT-01).');
+$claimed=$queue->claim(['purchase_events'],'evt-worker');
+$check($claimed&&(int)$claimed['id']===$enqueued,'The now-enabled analytics queue is claimable by its consumer.');
 $id=CommerceDatabase::transaction($pdo,fn()=>$typed->orderConfirmation(4));$pdo->exec("UPDATE jobs SET payload='malformed' WHERE id=$id");
 $stats=$worker->run(['emails'],1,30);$check($stats['claimed']===1&&$stats['failed']===1&&(int)$pdo->query("SELECT COUNT(*) FROM job_failed WHERE original_job_id=$id")->fetchColumn()===1,'Malformed stored envelope fails permanently without dynamic execution.');
 $id=CommerceDatabase::transaction($pdo,fn()=>$typed->orderConfirmation(5));$start=hrtime(true);$stats=$worker->run(['emails'],1,1);
@@ -91,5 +92,5 @@ $pdo->exec($mysql?"CREATE TRIGGER queue_insert_error BEFORE INSERT ON jobs FOR E
 $result=Auth::register('Rollback','Customer','Rollback Customer','queued-rollback@example.test','Disposable-Queued-Password');
 $check(!$result['status']&&(int)$pdo->query("SELECT COUNT(*) FROM users_tbl WHERE email='queued-rollback@example.test'")->fetchColumn()===0,'Enqueue failure rolls back signup and verification token atomically.');$pdo->exec('DROP TRIGGER queue_insert_error');
 [$exit,$out,$err]=CommerceTest::command(['vayu','queue:work','--queues=emails','--max=1','--max-seconds=1']);$check($exit===0&&$err===''&&json_decode($out,true)['claimed']===0,'Bounded worker is available through CLI without HTTP/session dependency.');
-[$exit,$out,$err]=CommerceTest::command(['vayu','queue:work','--queues=purchase_events']);$check($exit===1&&$out===''&&!str_contains($err,'queued-signup'),'CLI rejects held queues with sanitized error.');
+[$exit,$out,$err]=CommerceTest::command(['vayu','queue:work','--queues=purchase_events','--max=1','--max-seconds=1']);$check($exit===0&&$err===''&&json_decode($out,true)['claimed']===0,'CLI accepts the now-enabled analytics queue (EVT-01).');
 CommerceTest::finish('Queue leases, workers and queued verification');

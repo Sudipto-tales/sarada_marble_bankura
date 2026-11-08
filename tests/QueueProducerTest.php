@@ -23,8 +23,8 @@ CommerceTest::rejects(fn()=>CommerceDatabase::transaction($pdo,fn()=>$queue->enq
 $case1=CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','order_confirmation',1,['order_id'=>5],'Case:Sensitive'));
 $case2=CommerceDatabase::transaction($pdo,fn()=>$queue->enqueue('emails','order_confirmation',1,['order_id'=>6],'case:sensitive'));
 $check($case1!==$case2,'Dedupe key collation is explicitly case sensitive.');
-$held=CommerceDatabase::transaction($pdo,fn()=>$typed->purchase(7));
-$check(!in_array('purchase_events',JobRegistry::enabledQueues(),true)&&(int)$pdo->query("SELECT attempts FROM jobs WHERE id=$held")->fetchColumn()===0,'Purchase intent remains held until its consumer is integrated.');
+$enqueued=CommerceDatabase::transaction($pdo,fn()=>$typed->purchase(7));
+$check(in_array('purchase_events',JobRegistry::enabledQueues(),true)&&(int)$pdo->query("SELECT attempts FROM jobs WHERE id=$enqueued")->fetchColumn()===0,'Purchase intent enqueues on the now-enabled analytics queue with no attempts (EVT-01).');
 CommerceTest::fails(fn()=>$pdo->exec("UPDATE jobs SET status='running' WHERE id=$id"),'Database rejects an incomplete running lease.');
 $check(JobRegistry::decode($row)===['order_id'=>1],'Stored envelope revalidates before execution.');
 $bad=$row;$bad['payload']='{"order_id":1,"secret":"private"}';CommerceTest::rejects(fn()=>JobRegistry::decode($bad),422,'Corrupted known envelope rejects on consumption.');

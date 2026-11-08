@@ -8,7 +8,9 @@
       <?php foreach ($order['items'] as $item): ?><p><?= $e($item['name']) ?> · <?= $q($item['qty_milli']) ?> <?= $e($item['sell_unit']) ?> · <?= $m($item['line_total_minor']) ?></p><?php endforeach; ?>
       <div class="php-address-card"><span class="eyebrow">DELIVER TO</span><p><strong><?= $e($order['address']['recipient']) ?></strong><br><?= $e($order['address']['line1']) ?><br><?= $e($order['address']['city'] . ' ' . $order['address']['postal_code']) ?></p></div>
       <p class="muted"><?= $icon('shield') ?> Payments are processed by Razorpay. We never see your card details.</p>
+      <?php $payBalance = (int)($order['total_minor'] ?? 0) - (int)$payment['amount_minor']; ?>
       <button type="button" id="razorpay-pay" class="button button-wide">Pay <?= $m($payment['amount_minor']) ?> securely</button>
+      <?php if ($payBalance > 0): ?><p class="muted" role="status">This is a <?= $m($payment['amount_minor']) ?> advance. The remaining <?= $m($payBalance) ?> is payable after you receive the product.</p><?php endif; ?>
       <p id="payment-notice" class="muted" role="status">Your order is held while awaiting payment.</p>
     </section>
   </div>
@@ -22,7 +24,8 @@
         <div><dt>CGST</dt><dd><?= $m($ocgst) ?></dd></div>
         <div><dt>SGST</dt><dd><?= $m($otax - $ocgst) ?></dd></div>
         <div><dt>Delivery</dt><dd><?= (int)($order['shipping_minor'] ?? 0) ? $m($order['shipping_minor']) : 'Free' ?></dd></div>
-        <div class="summary-total"><dt>Amount due</dt><dd><?= $m($order['total_minor'] ?? 0) ?></dd></div>
+        <div class="summary-total"><dt>Order total</dt><dd><?= $m($order['total_minor'] ?? 0) ?></dd></div>
+        <?php if ($payBalance > 0): ?><div><dt>Pay now (advance)</dt><dd><?= $m($payment['amount_minor']) ?></dd></div><div class="summary-total"><dt>Balance on delivery</dt><dd><?= $m($payBalance) ?></dd></div><?php endif; ?>
       </dl>
     </div>
     <ul class="trust-badges"><li><?= $icon('shield') ?><span>Secure Checkout</span></li><li><?= $icon('truck') ?><span>Reliable Delivery</span></li><li><?= $icon('return') ?><span>Easy Support</span></li></ul>

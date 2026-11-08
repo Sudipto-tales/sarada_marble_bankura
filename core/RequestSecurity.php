@@ -86,9 +86,10 @@ final class RequestSecurity
     {
         if (strlen($body) > $limit) throw new RequestRejected(413, 'body_too_large', 'Request is too large.');
         try {
+            // Require a JSON object, then return it with nested objects as associative arrays too.
             $object = json_decode($body, false, 16, JSON_THROW_ON_ERROR);
             if (!$object instanceof stdClass) throw new JsonException();
-            return (array) $object;
+            return json_decode($body, true, 16, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
             throw new RequestRejected(400, 'invalid_json', 'A valid JSON object is required.');
         }

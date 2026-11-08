@@ -78,6 +78,6 @@ $materialLink = static fn(?array $p): string => $p ? $u('product/' . $p['slug'])
   <span class="off-script" aria-hidden="true">Make it your home ♥</span>
   <h2>Pair your offer with a plan.</h2>
   <p>Estimate coverage, picture the finished room, and shortlist your favourites before you commit.</p>
-  <div class="off-closing-actions"><a class="button" href="<?= $u('calculator') ?>">Plan your area ↗</a><a class="button secondary" href="<?= $u('visualizer') ?>">Visualize your room ↗</a></div>
+  <div class="off-closing-actions"><a class="button" href="<?= $u('calculator') ?>">Plan your area ↗</a><a class="button secondary" href="<?= $u('visualizer') ?>" data-video>Visualize your room ↗</a></div>
 </section>
 <?php require __DIR__ . '/footer.php'; ?>

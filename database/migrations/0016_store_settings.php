@@ -12,6 +12,9 @@ class StoreSettings extends Migration
     }
     public function verify():void
     {
-        MigrationSchema::verifyDefinition($this->pdo,'store_settings',['id'=>'id','skey'=>'varchar(40)','svalue'=>'varchar(190)','updated_at'=>'bigint'],[[['skey'],true]]);
+        // svalue width is intentionally not pinned here: 0024 widens it to VARCHAR(512) on MySQL for
+        // provider credentials, and the runner re-verifies every migration against the final schema.
+        MigrationSchema::verifyDefinition($this->pdo,'store_settings',['id'=>'id','skey'=>'varchar(40)','updated_at'=>'bigint'],[[['skey'],true]]);
+        MigrationSchema::requireColumns($this->pdo,'store_settings',['svalue']);
     }
 }

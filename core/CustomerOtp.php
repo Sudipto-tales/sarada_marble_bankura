@@ -9,7 +9,7 @@ require_once __DIR__ . '/PrivateStorage.php';
  */
 final class CustomerOtp
 {
-    private const PURPOSES = ['register', 'login', 'reset', 'delete'];
+    private const PURPOSES = ['register', 'login', 'reset', 'delete', 'twostep', 'profile'];
     private const DEVICE_COOKIE = 'trusted_device';
     private const REQUEST_WINDOW = 3600; // max 5 requests/guesses per hour per email+purpose
     private const GUESS_LIMIT = 5;        // wrong-code guesses before a code is locked
@@ -77,8 +77,11 @@ final class CustomerOtp
         return $allowed;
     }
 
-    /** Generate, hash-store (replacing any prior code) and deliver a 6-digit code. False when rate-limited. */
-    public static function request(int $userId, string $purpose, string $email): bool
+    /**
+     * Generate, hash-store (replacing any prior code) and deliver a 6-digit code. False when rate-limited.
+     * Channel defaults to email; whatsapp/sms require the admin-stored credentials and the user's phone.
+     */
+    public static function request(int $userId, string $purpose, string $email, string $channel = 'email', ?string $phone = null): bool
     {
         if (!in_array($purpose, self::PURPOSES, true)) throw new InvalidArgumentException('Invalid OTP purpose.');
         if ($userId < 1) throw new InvalidArgumentException('Invalid OTP owner.');
@@ -89,14 +92,23 @@ final class CustomerOtp
         self::query('DELETE FROM auth_otp_codes WHERE user_id = ? AND purpose = ?', [$userId, $purpose]);
         self::query('INSERT INTO auth_otp_codes (user_id, purpose, code_hash, expires_at, attempts, created_at)
             VALUES (?, ?, ?, ?, 0, ?)', [$userId, $purpose, hash('sha256', $purpose . ':' . $code), $expires, time()]);
-        self::deliver($email, $purpose, $code, $expires);
+        self::deliver($email, $purpose, $code, $expires, $channel, $phone);
         self::cleanup();
         return true;
     }
 
-    private static function deliver(string $email, string $purpose, string $code, int $expires): void
+    private static function deliver(string $email, string $purpose, string $code, int $expires, string $channel = 'email', ?string $phone = null): void
     {
-        $action = ['register' => 'verify your account', 'login' => 'sign in', 'reset' => 'reset your password', 'delete' => 'confirm account deletion'][$purpose];
+        $action = ['register' => 'verify your account', 'login' => 'sign in', 'reset' => 'reset your password',
+            'delete' => 'confirm account deletion', 'twostep' => 'turn on two-step verification',
+            'profile' => 'confirm your new contact details'][$purpose];
+        if ($channel === 'whatsapp' || $channel === 'sms') {
+            $creds = OtpChannels::credentials(self::connection(), $channel);
+            if ($creds === null || !is_string($phone) || $phone === '') throw new RuntimeException('OTP delivery is unavailable.');
+            $to = self::msisdn($phone);
+            $channel === 'whatsapp' ? self::sendWhatsapp($to, $code, $creds) : self::sendSms($to, $code, $creds);
+            return;
+        }
         $subject = 'Your Maa Sarada verification code';
         $body = 'Your Maa Sarada code to ' . $action . ' is ' . $code
             . "\nIt expires at " . gmdate('Y-m-d H:i:s', $expires) . ' UTC. Never share this code with anyone.';
@@ -114,6 +126,57 @@ final class CustomerOtp
                 throw new RuntimeException('OTP transport is unavailable.');
             }
         } finally { umask($old); }
+    }
+
+    /** Digits-only MSISDN for provider APIs (country code, no plus/spaces). */
+    private static function msisdn(string $phone): string
+    {
+        $digits = preg_replace('/\D+/', '', $phone);
+        if ($digits === '' || strlen($digits) > 15) throw new RuntimeException('OTP delivery is unavailable.');
+        return $digits;
+    }
+
+    /** Meta WhatsApp Cloud API authentication template: the code fills the body and copy-code button. */
+    private static function sendWhatsapp(string $phone, string $code, array $creds): void
+    {
+        $payload = ['messaging_product' => 'whatsapp', 'to' => $phone, 'type' => 'template',
+            'template' => ['name' => $creds['template'], 'language' => ['code' => 'en_US'],
+                'components' => [
+                    ['type' => 'body', 'parameters' => [['type' => 'text', 'text' => $code]]],
+                    ['type' => 'button', 'sub_type' => 'url', 'index' => '0', 'parameters' => [['type' => 'text', 'text' => $code]]],
+                ]]];
+        self::httpPost('https://graph.facebook.com/v21.0/' . rawurlencode($creds['phone_id']) . '/messages',
+            ['Authorization: Bearer ' . $creds['token'], 'Content-Type: application/json'],
+            json_encode($payload, JSON_THROW_ON_ERROR), 'whatsapp');
+    }
+
+    /** MSG91 flow API: the code is sent as both the reserved `otp` and `var1` so either template maps it. */
+    private static function sendSms(string $phone, string $code, array $creds): void
+    {
+        $payload = ['template_id' => $creds['template'], 'short_url' => '0',
+            'recipients' => [['mobiles' => $phone, 'otp' => $code, 'var1' => $code]]];
+        if ($creds['sender'] !== '') $payload['sender'] = $creds['sender'];
+        self::httpPost('https://control.msg91.com/api/v5/flow/',
+            ['authkey: ' . $creds['authkey'], 'Content-Type: application/json', 'Accept: application/json'],
+            json_encode($payload, JSON_THROW_ON_ERROR), 'sms');
+    }
+
+    /** Bounded HTTPS POST; logs only classifiers because provider responses may carry secrets/PII. */
+    private static function httpPost(string $url, array $headers, string $body, string $label): void
+    {
+        if (!function_exists('curl_init')) throw new RuntimeException('OTP transport is unavailable.');
+        $curl = curl_init($url);
+        try {
+            curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body,
+                CURLOPT_CONNECTTIMEOUT => 5, CURLOPT_TIMEOUT => 15, CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_HTTPHEADER => $headers]);
+            $response = curl_exec($curl);
+            $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+            if (!is_string($response) || $status < 200 || $status >= 300) {
+                error_log('OTP ' . $label . ' transport unavailable: HTTP ' . $status . ', curl ' . curl_errno($curl));
+                throw new RuntimeException('OTP delivery is unavailable.');
+            }
+        } finally { curl_close($curl); }
     }
 
     /** Single-use verification with a bounded guess count. Consumes the code on success. */

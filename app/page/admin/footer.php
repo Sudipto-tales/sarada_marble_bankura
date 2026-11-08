@@ -1,1 +1,1 @@
-</main><footer class="admin-footer"><span>© <?= date('Y') ?> Maa Sarada Marble &amp; Sanitation</span><span>Thoughtful materials. Clear decisions.</span></footer></div></body></html>
+</main></div></div><footer class="footer"><div class="container-fluid"><div class="row"><div class="col-md-6">© <?= date('Y') ?> Maa Sarada Marble &amp; Sanitation</div><div class="col-md-6"><div class="text-md-end footer-links d-none d-md-block">Thoughtful materials. Clear decisions.</div></div></div></div></footer></div></div></body></html>

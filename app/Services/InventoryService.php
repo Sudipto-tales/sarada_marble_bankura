@@ -191,10 +191,11 @@ final class InventoryService
         ProductService::advanceVersion($this->pdo); return $this->reservation($id);
     }
     /** Caller has locked the order. Restore consumed stock once, leaving other reservations intact. */
-    public function restockOrder(int $orderId, int $actorId): void
+    public function restockOrder(int $orderId, int $actorId, bool $system = false): void
     {
         $this->transactionRequired();
-        CommerceAccess::requirePermission('admin.orders.edit', $actorId);
+        // $system restocks are initiated by the auto-cancel worker, which has no staff actor to authorize.
+        if (!$system) CommerceAccess::requirePermission('admin.orders.edit', $actorId);
         $lock = CommerceDatabase::lock($this->pdo);
         $headers = $this->query('SELECT * FROM inventory_reservations WHERE id IN (SELECT reservation_id FROM inventory_movements WHERE order_id=?) ORDER BY id' . $lock, [$orderId])->fetchAll();
         if (count($headers) !== 1 || $headers[0]['state'] !== 'consumed') throw new RequestRejected(409, 'stock_inconsistent', 'Order stock history is unavailable.');

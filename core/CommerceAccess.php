@@ -51,6 +51,15 @@ final class CommerceAccess
         return $actor && in_array($permission, $actor['permissions'], true);
     }
 
+    /** The single top role that may create staff and grant/revoke roles, including other superadmins. */
+    public static function isSuperadmin(int $userId): bool
+    {
+        global $pdo;
+        $query = $pdo->prepare("SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ? AND r.name = 'superadmin'");
+        $query->execute([$userId]);
+        return (bool)$query->fetchColumn();
+    }
+
     /** Guard an already ownership-scoped SQL result; another owner's record is a 404. */
     public static function requireOwned($record, int $actorId): array
     {
@@ -72,8 +81,8 @@ final class CommerceAccess
             throw new CommerceProvisioningRejected('Password must contain 12 to 72 bytes and no null bytes. Retry and enter a longer password if needed; input is hidden.');
         if ($name === '' || strlen($name) > 190 || !preg_match('//u', $name) || preg_match('/[\x00-\x1f\x7f]/', $name))
             throw new CommerceProvisioningRejected('Supply a valid staff name of at most 190 bytes.');
-        if (!in_array($role, ['admin', 'catalog_manager', 'operations', 'viewer'], true))
-            throw new CommerceProvisioningRejected('Role must be admin, catalog_manager, operations or viewer.');
+        if (!in_array($role, ['superadmin', 'admin', 'catalog_manager', 'operations', 'viewer'], true))
+            throw new CommerceProvisioningRejected('Role must be superadmin, admin, catalog_manager, operations or viewer.');
         if ($pdo->inTransaction()) throw new RuntimeException('Provisioning requires its own transaction.');
         $hash = password_hash($password, PASSWORD_DEFAULT);
         try {
