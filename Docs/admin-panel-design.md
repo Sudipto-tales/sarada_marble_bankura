@@ -4,8 +4,8 @@ Authorized 2026-10-11. Sequential delivery of ADM-01, ADM-02 and the implemented
 
 ## Design and workflow
 
-- Use the existing Maa Sarada logo, deep navy (#082c40), teal (#087e8b), cyan accents (#58cbd2), pale blue backgrounds and white content panels. Local Inter font. Apply the palette to the storefront adapters too.
-- Desktop: 248px sidebar, compact top bar, responsive metric cards, full-width table/work area. Mobile: accessible drawer, single-column forms/cards, horizontally scrollable data tables with visible actions. No page-level horizontal overflow.
+- Use the existing Maa Sarada logo and local Inter font with the shared Developer Console palette: indigo (#696cff), pale gray (#f5f5f9), white navigation/cards, soft shadows and slate text. Keep commerce navigation, forms and tables readable with the same active indigo states and responsive drawer behavior.
+- Desktop: 260px sidebar, 68px top bar, Developer Console typography and spacing scale, responsive metric cards, full-width table/work area. Mobile: accessible drawer below 700px, single-column forms/cards, horizontally scrollable data tables with visible actions. No page-level horizontal overflow.
 - Staff sign-in uses existing commerce authentication; no public staff registration or Developer account reuse. Navigation reflects exact grants; services independently enforce writes.
 - Real overview counts only. Products, categories, brands, stock, orders and minimum customer lookup use DataTables with server-side bounded search/paging/sorting across the full dataset, plus basic HTML/search fallbacks.
 - Product form: core details, publication, category/brand, up to 20 SKU/unit/finish/price/coverage/dimension rows, explicit archive controls and revision. Human INR/quantity fields convert through exact decimal arithmetic. Removing a variant deactivates it through existing ProductService behavior.
@@ -41,7 +41,7 @@ Hero artwork, the bundled KasaMood PDF library and brand/contact copy remain cur
 
 Verification: PHP 8.3.6, SQLite 3.45.1 and MariaDB 10.11.14. `AdminStorefrontSyncTest.php` **15 passed on each database**, proving publication/taxonomy/variant-photo visibility, gallery ordering and deep selection beyond 50 products. `admin_http_test.py --mysql` **113 passed**; SQLite `admin_http_test.py --browser` **181 passed** including real admin edits propagating through warmed storefront pages, original photo loading in the visualizer and customer order status/history. Existing storefront HTTP **96 passed**, catalog **32 passed**, tools **42 passed**, Developer **19 passed** and photo-editor browser regression **25 passed**. Seven related PHP files pass syntax checks; `git diff --check` passes. Standalone Node syntax check was unavailable (`node` absent); actual Chrome executed the editor without runtime errors. Temporary test schemas/files/profiles were cleaned; the live catalog was not populated with test merchandise.
 
-Implemented locally with full PHP view paths in `Website/app/page/admin/` and local `Website/assets/admin/` assets. The public storefront PHP adapters also use the navy/teal logo palette. Staff templates share their own shell; Developer pages/auth remain independent.
+Implemented locally with full PHP view paths in `Website/app/page/admin/` and local `Website/assets/admin/` assets. Staff templates share their own shell; Developer pages/auth remain independent. The common `Website/assets/admin/admin-theme.css` layer keeps the Admin presentation aligned with the Developer Console without changing its commerce authentication, page content or service permissions.
 
 | URL | Behavior and authority |
 | --- | --- |
