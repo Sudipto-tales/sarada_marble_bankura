@@ -40,6 +40,13 @@ abstract class StorefrontController extends BaseController
     {
         return rtrim(rtrim(intdiv((int)$milli, 1000) . '.' . str_pad((string)((int)$milli % 1000), 3, '0', STR_PAD_LEFT), '0'), '.');
     }
+    /** Emit a JSON success body with a correlation id; never floating-point money. */
+    protected function json(array $payload, int $status = 200): void
+    {
+        if ($status !== 200) http_response_code($status);
+        $payload['request_id'] = bin2hex(random_bytes(16));
+        echo json_encode($payload, JSON_THROW_ON_ERROR);
+    }
     /** Preserve database IDs and minor-unit money in JSON clients. */
     protected static function jsonValues(array $values): array
     {

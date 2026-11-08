@@ -46,6 +46,21 @@ $hasPreview = (bool)array_filter($product['images'], static fn(array $image): bo
         <a class="pdp-calculator" href="<?= $u('calculator') ?>?variant_id=<?= $e($variant['id']) ?>">▦ Not sure how much? Calculate your area ↗</a>
       </form>
       <?php endforeach; ?>
+      <div class="pdp-pincode" data-delivery-check="<?= $u('product/' . $product['slug'] . '/delivery') ?>">
+        <h3>Deliver to your PIN code</h3>
+        <form class="pdp-pincode-form" method="get" action="<?= $u('product/' . $product['slug']) ?>#delivery" data-delivery-form>
+          <label class="field"><span class="sr-only">6-digit delivery PIN code</span>
+            <input type="text" name="postal_code" inputmode="numeric" pattern="[1-9][0-9]{5}" maxlength="6" placeholder="Enter PIN code, e.g. 722101" value="<?= $e($_GET['postal_code'] ?? '') ?>" required aria-describedby="delivery-result">
+          </label>
+          <button type="submit" class="button secondary">Check</button>
+        </form>
+        <p id="delivery-result" class="pdp-delivery-result<?= $delivery ? ' is-' . $e($delivery['status']) : '' ?>" role="status" aria-live="polite" data-delivery-result><?php
+          if ($delivery) {
+              echo $e($delivery['message']);
+              if (($delivery['status'] ?? '') === 'available' && !empty($delivery['shipping_minor'])) echo ' Delivery charge: ' . $e(StorefrontController::money($delivery['shipping_minor'])) . '.';
+          }
+        ?></p>
+      </div>
     </div>
   </div>
 </section>
@@ -70,21 +85,7 @@ $hasPreview = (bool)array_filter($product['images'], static fn(array $image): bo
   </section>
   <section id="delivery" class="pdp-section" role="tabpanel" aria-labelledby="tab-delivery"><span class="eyebrow">Plan your order</span><h2>Delivery &amp; selection</h2>
     <?php if (!empty($advanceBps)): ?><p class="pdp-advance-note"><?= $e(number_format($advanceBps / 100, $advanceBps % 100 ? 2 : 0)) ?>% booking: pay just <?= $e(number_format($advanceBps / 100, $advanceBps % 100 ? 2 : 0)) ?>% now to reserve this material and the balance when it is delivered. Smaller orders are payable in full &mdash; the exact amount is shown at checkout.</p><?php endif; ?>
-    <div class="pdp-pincode" data-delivery-check="<?= $u('product/' . $product['slug'] . '/delivery') ?>">
-      <h3>Check delivery to your PIN code</h3>
-      <form class="pdp-pincode-form" method="get" action="<?= $u('product/' . $product['slug']) ?>#delivery" data-delivery-form>
-        <label class="field"><span class="sr-only">6-digit PIN code</span>
-          <input type="text" name="postal_code" inputmode="numeric" pattern="[1-9][0-9]{5}" maxlength="6" placeholder="e.g. 722101" value="<?= $e($_GET['postal_code'] ?? '') ?>" required aria-describedby="delivery-result">
-        </label>
-        <button type="submit" class="button">Check</button>
-      </form>
-      <p id="delivery-result" class="pdp-delivery-result<?= $delivery ? ' is-' . $e($delivery['status']) : '' ?>" role="status" aria-live="polite" data-delivery-result><?php
-        if ($delivery) {
-            echo $e($delivery['message']);
-            if (($delivery['status'] ?? '') === 'available' && !empty($delivery['shipping_minor'])) echo ' Delivery charge: ' . $e(StorefrontController::money($delivery['shipping_minor'])) . '.';
-        }
-      ?></p>
-    </div>
+    <p class="note">Use the <strong>Deliver to your PIN code</strong> check in the order panel above to confirm we service your area before you buy.</p>
     <p>Review your delivery address, available payment options and shipping charges during checkout. Contact the store to confirm site access, unloading arrangements and delivery timing before ordering.</p><p class="note">Natural colour and vein patterns vary between slabs. Confirm the exact material and finish for your project.</p></section>
   <section id="reviews" class="pdp-section pdp-reviews" role="tabpanel" aria-labelledby="tab-reviews" data-reviews data-review-action="<?= $u('product/' . $product['slug'] . '/reviews') ?>" data-reply-action="<?= $u('review/reply') ?>" data-react-action="<?= $u('review/react') ?>" data-auth="<?= $actor ? '1' : '0' ?>">
     <span class="eyebrow">Customer voices</span><h2>Ratings &amp; reviews</h2>

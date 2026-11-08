@@ -175,6 +175,7 @@ echo json_encode(['users'=>$users,'variants'=>$product['variant_ids'],'other_add
                   and '<script>alert(1)</script>' not in body, 'Home renders the design and escaped live database products without JavaScript.')
             check('/assets/storefront/home.css' in body and 'storefront-data.js' not in body
                   and '.html' not in body and '../Html' not in body, 'PHP home uses local production assets and PHP destinations only.')
+            check('storefront-ajax.js' in body and 'data-cart-count' in body, 'The site loads the AJAX cart module and exposes the bag-count hook.')
             check(guest.request('/', 'POST')[0] == 405, 'Home rejects unsupported mutations.')
             check(guest.request('/catalogues')[0] == 200 and 'KasaMood' in guest.request('/catalogues')[2], 'Catalogue library renders server-side.')
             check(guest.request('/catalogue/kasamood')[0] == 200 and 'application/pdf' in guest.request('/catalogue/kasamood')[2], 'Original catalogue reader renders without JavaScript.')

@@ -337,6 +337,8 @@ final class ProductService
     }
     private function listProductsObserved(array $filters, ?int $staffId): array
     {
+        // Public keyword search uses the two-stage ranked path (SRCH-01); staff/plain listing stays as-is.
+        if ($staffId === null && isset($filters['q']) && $filters['q'] !== '') return $this->searchRanked($filters);
         $page=CommerceValues::integer($filters['page']??1,1,1000,'page'); $perPage=CommerceValues::integer($filters['per_page']??12,1,50,'per_page');
         $clauses=[]; $values=[];
         if ($staffId===null) $clauses[]="p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1) AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)";
@@ -350,8 +352,10 @@ final class ProductService
             $clauses[]="(p.name LIKE ? ESCAPE '!' OR p.tags LIKE ? ESCAPE '!')"; $values[]=$q; $values[]=$q;
         }
         foreach (['min_price_minor'=>'>=','max_price_minor'=>'<='] as $name=>$compare) if (isset($filters[$name])&&$filters[$name]!=='') {
-            $clauses[]="(SELECT MIN(pv.unit_price_minor) FROM product_variants pv WHERE pv.product_id=p.id AND pv.enabled=1) $compare ?";
-            $values[]=CommerceValues::integer($filters[$name],0,CommerceValues::MAX_MONEY,$name);
+            // Interpolate the validated integer (not a bound string): a string bind makes SQLite compare the
+            // subquery's INTEGER against TEXT, where every INTEGER sorts below TEXT and the filter passes all rows.
+            $limit=CommerceValues::integer($filters[$name],0,CommerceValues::MAX_MONEY,$name);
+            $clauses[]="(SELECT MIN(pv.unit_price_minor) FROM product_variants pv WHERE pv.product_id=p.id AND pv.enabled=1) $compare $limit";
         }
         if (isset($filters['finish']) && $filters['finish'] !== '') {
             $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vf WHERE vf.product_id=p.id AND vf.enabled=1 AND vf.finish=?)';
@@ -370,6 +374,108 @@ final class ProductService
         $rows=$this->query('SELECT p.*,c.name AS category_name,c.slug AS category_slug,b.name AS brand_name,b.slug AS brand_slug'.$from.$where.' ORDER BY '.$sorts[$sort]." LIMIT $perPage OFFSET $offset",$values)->fetchAll();
         return ['items'=>$this->hydrate($rows,$staffId!==null),'page'=>$page,'per_page'=>$perPage,'total'=>$total,'pages'=>(int)ceil($total/$perPage)];
     }
+    private const CANDIDATE_CAP = 1000;
+    // Weights (per-million) for the ranked score: relevance .40, net sales_30d .20, rating .15, stock .10, featured .10, freshness .05.
+    private const WEIGHTS = ['relevance'=>400000,'sales'=>200000,'rating'=>150000,'stock'=>100000,'featured'=>100000,'freshness'=>50000];
+
+    /** Visibility + bounded filter clauses shared by the ranked search (keyword/sort handled separately). */
+    private function searchClauses(array $filters): array
+    {
+        $clauses = ["p.status='active'", 'c.enabled=1', '(p.brand_id IS NULL OR b.enabled=1)',
+            'EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)'];
+        $values = [];
+        if (isset($filters['brand']) && $filters['brand'] !== '') { $clauses[] = 'b.slug=?'; $values[] = CommerceValues::slug($filters['brand']); }
+        if (isset($filters['category']) && $filters['category'] !== '') {
+            $ids = $this->categoryTreeIds(CommerceValues::slug($filters['category']));
+            $clauses[] = 'p.category_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')'; foreach ($ids as $cid) $values[] = $cid;
+        }
+        foreach (['min_price_minor'=>'>=','max_price_minor'=>'<='] as $name => $cmp) if (isset($filters[$name]) && $filters[$name] !== '') {
+            // Interpolate the validated integer; a bound string breaks SQLite numeric comparison on the subquery.
+            $limit = CommerceValues::integer($filters[$name], 0, CommerceValues::MAX_MONEY, $name);
+            $clauses[] = "(SELECT MIN(pv.unit_price_minor) FROM product_variants pv WHERE pv.product_id=p.id AND pv.enabled=1) $cmp $limit";
+        }
+        if (isset($filters['finish']) && $filters['finish'] !== '') {
+            $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vf WHERE vf.product_id=p.id AND vf.enabled=1 AND vf.finish=?)';
+            $values[] = CommerceValues::text($filters['finish'], 80, 'finish');
+        }
+        if (isset($filters['in_stock']) && CommerceValues::flag($filters['in_stock'], 'in_stock') === 1) {
+            $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vs JOIN inventory i ON i.variant_id=vs.id WHERE vs.product_id=p.id AND vs.enabled=1 AND i.on_hand_milli-i.reserved_milli>=vs.qty_increment_milli)';
+        }
+        return [$clauses, $values];
+    }
+
+    /**
+     * SRCH-01 two-stage ranked keyword search. Stage 1 selects visible candidates (capped at 1000) with a
+     * lexical score — MySQL FULLTEXT `MATCH … AGAINST` natural-language relevance, SQLite a bounded escaped
+     * LIKE score. Stage 2 bulk-loads net sales_30d/rating/stock/featured/freshness, normalises each to [0,1]
+     * against the candidate set and sorts by a deterministic integer weighted score, then product id. Candidate
+     * caps make a large corpus approximate, so `capped`/`has_more` are exposed instead of a false exact total.
+     */
+    private function searchRanked(array $filters): array
+    {
+        $page = CommerceValues::integer($filters['page'] ?? 1, 1, 1000, 'page');
+        $perPage = CommerceValues::integer($filters['per_page'] ?? 12, 1, 50, 'per_page');
+        $q = CommerceValues::text($filters['q'], 80, 'q');
+        [$clauses, $values] = $this->searchClauses($filters);
+        $mysql = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql';
+        $from = ' FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id';
+        if ($mysql) {
+            $match = 'MATCH(p.name,p.description,p.tags) AGAINST(? IN NATURAL LANGUAGE MODE)';
+            $selectBinds = [$q]; $whereBinds = [$q];
+            $select = "SELECT p.id,($match) AS lex" . $from . ' WHERE ' . implode(' AND ', $clauses) . " AND $match ORDER BY lex DESC,p.id ASC LIMIT " . (self::CANDIDATE_CAP + 1);
+        } else {
+            // Bounded escaped LIKE scoring: name 3, tags 2, description 1. Never concatenate uncontrolled input.
+            $pattern = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $q) . '%';
+            $score = "((CASE WHEN p.name LIKE ? ESCAPE '!' THEN 3 ELSE 0 END)+(CASE WHEN p.tags LIKE ? ESCAPE '!' THEN 2 ELSE 0 END)+(CASE WHEN p.description LIKE ? ESCAPE '!' THEN 1 ELSE 0 END))";
+            $where = "(p.name LIKE ? ESCAPE '!' OR p.tags LIKE ? ESCAPE '!' OR p.description LIKE ? ESCAPE '!')";
+            $selectBinds = [$pattern, $pattern, $pattern]; $whereBinds = [$pattern, $pattern, $pattern];
+            $select = "SELECT p.id,$score AS lex" . $from . ' WHERE ' . implode(' AND ', $clauses) . " AND $where ORDER BY lex DESC,p.id ASC LIMIT " . (self::CANDIDATE_CAP + 1);
+        }
+        $candidates = $this->query($select, array_merge($selectBinds, $values, $whereBinds))->fetchAll();
+        $capped = count($candidates) > self::CANDIDATE_CAP;
+        if ($capped) array_pop($candidates);
+        if (!$candidates) return ['items'=>[], 'page'=>$page, 'per_page'=>$perPage, 'total'=>0, 'pages'=>0, 'capped'=>false, 'has_more'=>false, 'generation'=>$this->searchGeneration($q)];
+        $ids = array_map(static fn(array $r): int => (int) $r['id'], $candidates);
+        $lex = []; foreach ($candidates as $r) $lex[(int) $r['id']] = (float) $r['lex'];
+
+        // Stage 2 signals, bulk loaded for the candidate set only.
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $cutoff = gmdate('Y-m-d', CommerceDatabase::clock($this->pdo) - 30 * 86400);
+        $sales = []; foreach ($this->query("SELECT product_id,COALESCE(SUM(orders_net),0) AS s FROM product_daily_metrics WHERE product_id IN ($marks) AND metric_date>? GROUP BY product_id", array_merge($ids, [$cutoff]))->fetchAll() as $row) $sales[(int) $row['product_id']] = max(0, (int) $row['s']);
+        $rows = $this->query("SELECT p.*,c.name AS category_name,c.slug AS category_slug,b.name AS brand_name,b.slug AS brand_slug
+            FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE p.id IN ($marks)", $ids)->fetchAll();
+        $products = $this->hydrate($rows);
+
+        $maxLex = max($lex) ?: 0.0; $maxSales = $sales ? max($sales) : 0; $now = CommerceDatabase::clock($this->pdo);
+        foreach ($products as &$product) {
+            $id = (int) $product['id'];
+            $age = max(0, ($now - (int) strtotime((string) $product['created_at'])) / 86400);
+            $norm = [
+                'relevance' => $maxLex > 0 ? ($lex[$id] ?? 0) / $maxLex : 0.0,
+                'sales' => $maxSales > 0 ? ($sales[$id] ?? 0) / $maxSales : 0.0,
+                'rating' => $product['rating_tenths'] !== null ? $product['rating_tenths'] / 50 : 0.0,
+                'stock' => $product['in_stock'] ? 1.0 : 0.0,
+                'featured' => (int) $product['featured'] ? 1.0 : 0.0,
+                'freshness' => max(0.0, 1 - $age / 90),
+            ];
+            $sum = 0; foreach (self::WEIGHTS as $factor => $weight) $sum += (int) round(min(1.0, max(0.0, $norm[$factor])) * $weight);
+            $product['search_score'] = $sum;
+        }
+        unset($product);
+        // Deterministic order: score descending, then product id ascending for stable ties and pagination.
+        usort($products, static fn(array $a, array $b): int => $b['search_score'] <=> $a['search_score'] ?: (int) $a['id'] <=> (int) $b['id']);
+        $total = count($products); $pages = (int) ceil($total / $perPage);
+        return ['items'=>array_slice($products, ($page - 1) * $perPage, $perPage), 'page'=>$page, 'per_page'=>$perPage,
+            'total'=>$total, 'pages'=>$pages, 'capped'=>$capped, 'has_more'=>$page < $pages, 'generation'=>$this->searchGeneration($q)];
+    }
+
+    /** A stable generation token (catalog version + UTC day + normalised query) so pagination is consistent. */
+    private function searchGeneration(string $q): string
+    {
+        $version = (int) $this->query("SELECT version FROM catalog_versions WHERE namespace='catalog'")->fetchColumn();
+        return $version . '-' . gmdate('Y-m-d', CommerceDatabase::clock($this->pdo)) . '-' . substr(hash('sha256', mb_strtolower($q)), 0, 12);
+    }
+
     public function detail(string $slug): array
     {
         return DeveloperTrace::span(__METHOD__,fn()=>$this->detailObserved($slug));

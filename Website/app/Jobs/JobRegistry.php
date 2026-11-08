@@ -15,6 +15,7 @@ final class JobRegistry
         'payment_refund'=>['maintenance',['refund_id']],
         'low_stock_alert'=>['emails',['alert_id']],
         'purchase_event'=>['purchase_events',['order_id']],
+        'order_cancelled_event'=>['purchase_events',['order_id']],
     ];
     public static function envelope(string $queue,string $type,int $version,array $payload):array
     {
@@ -40,8 +41,7 @@ final class JobRegistry
         if(!is_array($payload)||array_is_list($payload)) throw new RequestRejected(422,'invalid_job','Invalid job payload.');
         $envelope=self::envelope($job['queue'],$job['type'],(int)$job['version'],$payload);return json_decode($envelope['payload'],true,8,JSON_THROW_ON_ERROR);
     }
-    /** Analytics (purchase_events) stays held until EVT-01 registers its consumer. */
-    public static function enabledQueues():array {return ['emails','maintenance'];}
+    public static function enabledQueues():array {return ['emails','maintenance','purchase_events'];}
     public static function execute(PDO $pdo,array $job):void
     {
         self::decode($job);
@@ -49,6 +49,7 @@ final class JobRegistry
         if($job['type']==='reservation_expiry') {ReservationExpiryJob::run($pdo,$job);return;}
         if(in_array($job['type'],['payment_window','verify_window'],true)) {BookingWindowJob::run($pdo,$job);return;}
         if($job['type']==='payment_refund') {RefundJob::run($pdo,$job);return;}
+        if(in_array($job['type'],['purchase_event','order_cancelled_event'],true)) {PurchaseEventJob::run($pdo,$job);return;}
         throw new JobExecutionException('unknown_handler',true);
     }
 }

@@ -29,7 +29,7 @@ final class BookingWindowJob
                 CommerceDatabase::query($pdo, "UPDATE orders SET status='cancelled',revision=revision+1,updated_at=?,payment_deadline_at=NULL WHERE id=?", [$now, $orderId]);
                 CommerceDatabase::query($pdo, "INSERT INTO order_status_history (order_id,from_status,to_status,actor_user_id,reason,operation_key,created_at) VALUES (?,?,'cancelled',?,?,?,?)",
                     [$orderId, $order['status'], (int)$order['user_id'], 'Auto-cancelled: advance payment not completed in time', 'autocancel:' . $orderId, $now]);
-                (new QueueService($pdo))->orderCancelled($orderId);
+                $cancel = new QueueService($pdo); $cancel->orderCancelled($orderId); $cancel->cancellationEvent($orderId);
                 $ack(); return;
             }
             // verify_window

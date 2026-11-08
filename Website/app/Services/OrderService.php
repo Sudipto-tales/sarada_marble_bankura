@@ -95,9 +95,13 @@ final class OrderService
                 if($reservation['principal_key']!==$principal||(int)$reservation['cart_revision']!==$cartRevision)throw new RequestRejected(409,'reservation_conflict','Reservation does not match this checkout.');
             }else $reservation=$inventory->reserve($principal,$lines,'checkout:'.$request['id'],$cartId,$cartRevision);
             $rows=$inventory->checkoutLines((int)$reservation['id'],$principal,$lines);
-            $policy=self::policy();$subtotals=[];
+            $policy=self::policy();$subtotals=[];$unitPrice=[];$basePrice=[];
+            // Default-off dynamic pricing: effective==base unless rules are enabled. The applied version is snapshotted.
+            $pricing=new PricingService($this->pdo);$pricingOn=PricingService::enabled();$ruleVersion=$pricingOn?PricingService::version($this->pdo):null;
             foreach($rows as $vid=>$row) {
-                $price=CommerceValues::integer($row['variant']['unit_price_minor'],0,CommerceValues::MAX_MONEY,'price');
+                $base=CommerceValues::integer($row['variant']['unit_price_minor'],0,CommerceValues::MAX_MONEY,'price');
+                $price=$pricingOn?CommerceValues::integer($pricing->effective((int)$row['variant']['product_id'],(int)$row['product']['category_id'],$vid,$base,$now)['unit_price_minor'],0,CommerceValues::MAX_MONEY,'price'):$base;
+                $basePrice[$vid]=$base;$unitPrice[$vid]=$price;
                 $subtotals[$vid]=CommerceValues::line($price,$row['quantity']);
             }
             $subtotal=CommerceValues::sum(array_values($subtotals));if($subtotal>CommerceValues::MAX_MONEY)CommerceValues::invalid('subtotal');
@@ -145,8 +149,8 @@ final class OrderService
                     throw new RequestRejected(422,'delivery_unavailable','We do not deliver to this PIN code yet. Please contact the store.');
             }
             if ($expectedQuote !== null) {
-                $current = self::quote(['items' => array_map(static fn($vid, $row) => ['variant_id' => $vid,
-                    'qty_milli' => $row['quantity'], 'unit_price_minor' => $row['variant']['unit_price_minor']], array_keys($rows), array_values($rows))],$couponPreview);
+                $quoteItems=[];foreach($rows as $vid=>$row)$quoteItems[]=['variant_id'=>$vid,'qty_milli'=>$row['quantity'],'unit_price_minor'=>$unitPrice[$vid]];
+                $current = self::quote(['items' => $quoteItems],$couponPreview);
                 if ($current !== $expectedQuote) throw new RequestRejected(409, 'price_conflict', 'Prices or delivery charges changed. Review your order again.');
             }
             $number='SMB-'.gmdate('Ymd',$now).'-'.str_pad((string)$request['id'],10,'0',STR_PAD_LEFT);
@@ -157,8 +161,8 @@ final class OrderService
             // limits and recomputes on the same PDO before any transaction can commit the order.
             if($couponId!==null&&$coupons->redeem($this->pdo,$couponId,$userId,$orderId,$subtotal)!==$discount)throw new RuntimeException('Coupon amount changed inside checkout.');
             foreach($rows as $vid=>$row) {
-                $variant=$row['variant'];$this->query('INSERT INTO order_items (order_id,product_id,variant_id,name,sku,sell_unit,coverage_sqft_milli,qty_increment_milli,qty_milli,base_price_minor,unit_price_minor,subtotal_minor,discount_minor,tax_minor,line_total_minor,tax_bps,advance_bps) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                    [$orderId,$variant['product_id'],$vid,$row['product']['name'],$variant['sku'],$variant['sell_unit'],$variant['coverage_sqft_milli'],$variant['qty_increment_milli'],$row['quantity'],$variant['unit_price_minor'],$variant['unit_price_minor'],$subtotals[$vid],$lineDiscount[$vid],$taxParts[$vid],CommerceValues::sum([$subtotals[$vid]-$lineDiscount[$vid],$taxParts[$vid]]),$rates[$vid],$advanceBps[$vid]]);
+                $variant=$row['variant'];$this->query('INSERT INTO order_items (order_id,product_id,variant_id,name,sku,sell_unit,coverage_sqft_milli,qty_increment_milli,qty_milli,base_price_minor,unit_price_minor,subtotal_minor,discount_minor,tax_minor,line_total_minor,tax_bps,advance_bps,price_rule_version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                    [$orderId,$variant['product_id'],$vid,$row['product']['name'],$variant['sku'],$variant['sell_unit'],$variant['coverage_sqft_milli'],$variant['qty_increment_milli'],$row['quantity'],$basePrice[$vid],$unitPrice[$vid],$subtotals[$vid],$lineDiscount[$vid],$taxParts[$vid],CommerceValues::sum([$subtotals[$vid]-$lineDiscount[$vid],$taxParts[$vid]]),$rates[$vid],$advanceBps[$vid],$ruleVersion]);
             }
             // The header/products/variants/stock are already locked; consume adds no new earlier lock.
             $inventory->consume((int)$reservation['id'],$principal,$orderId);
@@ -228,7 +232,7 @@ final class OrderService
             if ($target === 'cancelled') {
                 // Refund any captured advance/full payment when a paid order is cancelled.
                 if (in_array($order['payment_status'], ['advance_paid','paid'], true)) PaymentService::enqueueRefund($this->pdo, $order, 'Order cancelled');
-                (new QueueService($this->pdo))->orderCancelled($id);
+                $cancel = new QueueService($this->pdo); $cancel->orderCancelled($id); $cancel->cancellationEvent($id);
             }
             // The verification gate is an internal step; the storefront shows its own notice, so no customer email.
             elseif ($target !== 'awaiting_verify') (new QueueService($this->pdo))->orderStatus($id,$target);
@@ -310,7 +314,7 @@ final class OrderService
             StaffAudit::record($this->pdo, $actorId, 'order.verify', 'order', $id, $key, ['outcome' => $outcome, 'status' => $target, 'revision' => $next]);
             if ($target === 'cancelled') {
                 if (in_array($order['payment_status'], ['advance_paid','paid'], true)) PaymentService::enqueueRefund($this->pdo, $order, 'Order rejected at verification');
-                (new QueueService($this->pdo))->orderCancelled($id);
+                $cancel = new QueueService($this->pdo); $cancel->orderCancelled($id); $cancel->cancellationEvent($id);
             } else (new QueueService($this->pdo))->orderStatus($id, 'confirmed');
             return ['id' => $id, 'status' => $target, 'revision' => $next];
         });

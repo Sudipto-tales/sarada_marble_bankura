@@ -36,6 +36,8 @@ if (in_array($command, ['help', '--help', '-h'], true)) {
     echo "Inspect old orphan images: php vayu catalog:images:clean [--delete]\n";
     echo "Seed development demo catalog: php vayu demo:seed --actor-id=ID\n";
     echo "Bounded worker: php vayu queue:work --queues=emails,maintenance --max=20 --max-seconds=30\nRetry one failed job: php vayu queue:retry --failed-id=123\n";
+    echo "Aggregate analytics: php vayu analytics:aggregate [--batch=200] [--max-seconds=20]\nPrune old processed events: php vayu analytics:purge --retention-days=90 [--batch=500]\n";
+    echo "Rebuild recommendations: php vayu recommend:rebuild\n";
     exit(0);
 }
 if ($command === 'demo:seed') {
@@ -116,6 +118,32 @@ if ($command === 'commerce:create') {
         fwrite(STDERR, "Staff account creation failed. Check database availability and run php vayu migrate before retrying.\n");
         exit(1);
     }
+}
+if ($command === 'recommend:rebuild') {
+    try {
+        if (count($argv) !== 2) throw new InvalidArgumentException();
+        require __DIR__.'/config/bootstarp.php';
+        echo json_encode((new RecommendationService($pdo))->rebuild(),JSON_THROW_ON_ERROR)."\n";exit(0);
+    } catch(Throwable $e) {fwrite(STDERR,"Recommendation rebuild failed. Check migrations and database configuration. Usage: php vayu recommend:rebuild\n");exit(1);}
+}
+if (in_array($command,['analytics:aggregate','analytics:purge'],true)) {
+    try {
+        require __DIR__.'/config/bootstarp.php';$options=[];
+        foreach(array_slice($argv,2) as $option) {
+            if(!preg_match('/\A--([a-z-]+)=(.*)\z/',$option,$match)||isset($options[$match[1]]))throw new InvalidArgumentException();
+            $options[$match[1]]=$match[2];
+        }
+        $metrics=new MetricsService($pdo);
+        if($command==='analytics:aggregate') {
+            if(array_diff(array_keys($options),['batch','max-seconds']))throw new InvalidArgumentException();
+            $stats=$metrics->aggregate(CommerceValues::integer($options['batch']??200,1,1000,'batch'),CommerceValues::integer($options['max-seconds']??20,1,300,'max_seconds'));
+        } else {
+            if(array_diff(array_keys($options),['retention-days','batch','max-seconds']))throw new InvalidArgumentException();
+            if(!isset($options['retention-days']))throw new InvalidArgumentException();
+            $stats=$metrics->purge(CommerceValues::integer($options['retention-days'],1,3650,'retention_days'),CommerceValues::integer($options['batch']??500,1,1000,'batch'),CommerceValues::integer($options['max-seconds']??20,1,300,'max_seconds'));
+        }
+        echo json_encode($stats,JSON_THROW_ON_ERROR)."\n";exit(0);
+    } catch(Throwable $e) {fwrite(STDERR,"Analytics command failed. Check migrations and database configuration. Usage: php vayu analytics:aggregate [--batch=N] [--max-seconds=N]; php vayu analytics:purge --retention-days=N [--batch=N] [--max-seconds=N]\n");exit(1);}
 }
 if (in_array($command,['queue:work','queue:retry'],true)) {
     try {

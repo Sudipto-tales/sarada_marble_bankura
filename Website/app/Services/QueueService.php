@@ -14,6 +14,7 @@ final class QueueService
         return $this->queue->enqueue('emails','order_status',1,['order_id'=>$id],'order:'.$id.':status:'.$status.':v1');
     }
     public function purchase(int $id):int {return $this->queue->enqueue('purchase_events','purchase_event',1,['order_id'=>$id],'order:'.$id.':purchase:v1');}
+    public function cancellationEvent(int $id):int {return $this->queue->enqueue('purchase_events','order_cancelled_event',1,['order_id'=>$id],'order:'.$id.':cancelled_event:v1');}
     public function reservationExpiry(int $id,?int $availableAt=null):int {return $this->queue->enqueue('maintenance','reservation_expiry',1,['reservation_id'=>$id],'reservation:'.$id.':expiry:v1',$availableAt);}
     public function paymentWindow(int $id,int $availableAt):int {return $this->queue->enqueue('maintenance','payment_window',1,['order_id'=>$id],'order:'.$id.':payment_window:v1',$availableAt);}
     public function verifyWindow(int $id,int $availableAt):int {return $this->queue->enqueue('maintenance','verify_window',1,['order_id'=>$id],'order:'.$id.':verify_window:v1',$availableAt);}

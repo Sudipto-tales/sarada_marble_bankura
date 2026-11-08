@@ -70,10 +70,8 @@ class StorefrontProduct extends StorefrontController
         $this->handle(function () use ($slug): void {
             $product = (new CatalogReadService($this->pdo))->detail($slug);
             $cart = (new CartService($this->pdo))->get(CartService::principal(true));
-            $catalog = new CatalogReadService($this->pdo);
-            $related = array_slice(array_values(array_filter($catalog->listing([
-                'category' => $product['category_slug'], 'per_page' => 5, 'in_stock' => 1,
-            ])['items'], static fn(array $item): bool => (int)$item['id'] !== (int)$product['id'])), 0, 4);
+            // REC-01: published recommendations for this product, falling back to live category similarity.
+            $related = (new RecommendationService($this->pdo))->forProduct((int)$product['id'], 4);
             $brands = (new ProductService($this->pdo))->taxonomies()['brands'];
             $detailService = new ProductDetailService($this->pdo);
             $details = $detailService->get((int)$product['id']);

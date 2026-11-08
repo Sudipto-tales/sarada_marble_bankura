@@ -71,12 +71,15 @@ final class CartService
             if($id!==null) throw new RequestRejected(404,'not_found','Cart not found.');
             return ['id'=>null,'revision'=>0,'items'=>[],'subtotal_minor'=>0,'savings_minor'=>0,'currency'=>'INR'];
         }
-        $items=$this->query('SELECT ci.variant_id,ci.qty_milli,v.*,(SELECT MIN(original_price_minor) FROM variant_reference_prices rp WHERE rp.variant_id=v.id) AS original_price_minor,p.name,p.slug,p.status,c.enabled AS category_enabled,b.enabled AS brand_enabled,i.on_hand_milli,i.reserved_milli
+        $items=$this->query('SELECT ci.variant_id,ci.qty_milli,v.*,(SELECT MIN(original_price_minor) FROM variant_reference_prices rp WHERE rp.variant_id=v.id) AS original_price_minor,p.name,p.slug,p.status,p.category_id,c.enabled AS category_enabled,b.enabled AS brand_enabled,i.on_hand_milli,i.reserved_milli
             FROM cart_items ci JOIN product_variants v ON v.id=ci.variant_id JOIN products p ON p.id=v.product_id JOIN categories c ON c.id=p.category_id
             LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN inventory i ON i.variant_id=v.id WHERE ci.cart_id=? ORDER BY ci.variant_id',[$row['id']])->fetchAll();
         $amounts=[]; $savings=[];
+        // Default-off dynamic pricing: when enabled, show the effective price so display and checkout agree.
+        $pricingOn=PricingService::enabled();$pricing=$pricingOn?new PricingService($this->pdo):null;
         foreach($items as &$item) {
             $item['qty_milli']=(int)$item['qty_milli'];$item['unit_price_minor']=(int)$item['unit_price_minor'];
+            if($pricingOn)$item['unit_price_minor']=(int)$pricing->effective((int)$item['product_id'],(int)$item['category_id'],(int)$item['variant_id'],$item['unit_price_minor'])['unit_price_minor'];
             $item['line_total_minor']=CommerceValues::line($item['unit_price_minor'],$item['qty_milli']);
             // Show the crossed-out reference total only when it is genuinely higher than the selling price.
             $item['original_price_minor']=$item['original_price_minor']===null?null:(int)$item['original_price_minor'];

@@ -1,6 +1,8 @@
-# Developer console design — DEV-UI-01
+# Developer console design
 
-Owner: coordinator. Claimed and completed 2026-10-13. Status: done.
+The initial design work is tracked as DEV-UI-01 (completed 2026-10-13). The
+current presentation is a Sneat-inspired light refresh layered over the same
+Vayu console shell.
 
 Dependency: existing Developer login, permission-protected pages and runtime API.
 This standalone presentation slice is outside the commerce MVP task counts.
@@ -14,13 +16,32 @@ Scope: redesign login and shared console presentation; readable responsive panel
 consistent icons, keyboard-accessible mobile navigation and explicit sample states.
 Keep dedicated Developer authentication, CSRF and runtime collection behavior.
 
-Delivered: dark teal sidebar with lime active navigation, inline SVG navigation
-icons, larger typography, clearer panels/tables, a refreshed split login layout,
-responsive layouts and a mobile overlay with keyboard focus handling. The
-presentation layer lives in `assets/developer/design.css`; the original base
-stylesheet continues to provide structural styles. No external assets added.
+The console uses a fixed light sidebar, white top navbar, indigo active state,
+soft-shadow cards, and a pale gray content background. The shared layout adds
+Sneat-familiar class names (`layout-wrapper`, `layout-container`, `layout-menu`,
+`layout-page`, `layout-navbar`, `content-wrapper`, and `container-p-y`) without
+depending on Bootstrap or remote assets. Existing Vayu selectors remain in
+place so the console pages, permissions, and JavaScript hooks keep working.
 
-Actual verification on PHP 8.3.6:
+The shell lives in `app/page/developer.php`; `assets/developer/console.css`
+continues to provide the base component structure, and
+`assets/developer/design.css` supplies the theme tokens and responsive visual
+overrides. `assets/developer/console.js` retains the mobile menu overlay,
+keyboard handling, polling, charts, and sample preview behavior.
+
+To reuse the shell for future protected admin pages, keep the `layout-wrapper`
+and `layout-container` around a permission-filtered `layout-menu` and a
+`layout-page`. Put the navbar first in the page, then render content inside
+`content-wrapper container-xxl flex-grow-1 container-p-y`. Reuse `panel` for
+white cards, `stat-grid` / `stat-card` for summaries, and the existing table
+styles for lists. Admin routes must keep their own authorization, CSRF, and
+content logic; this stylesheet provides presentation only.
+
+No external assets were added. The login flow and its development-only hint are
+unchanged; login styling now shares the indigo and gray palette.
+
+The original DEV-UI-01 verification (before this visual refresh) was performed
+on PHP 8.3.6:
 
 - `php -l app/page/developer.php`: passed.
 - `php tests/DeveloperAccessTest.php`: 19 checks passed with in-memory SQLite.
@@ -31,6 +52,8 @@ Actual verification on PHP 8.3.6:
   mobile menu overlay/focus/Escape, and password visibility passed.
 - Dashboard and login screenshots visually inspected at both widths.
 
-Browser verification used a temporary local PHP rendering fixture and synthetic
-runtime data, outside the application. Real account provisioning and live runtime
-collectors were not part of this design slice. No production changes or release.
+This refresh was checked with `php -l app/page/developer.php` and
+`git diff --check`; both passed. Browser screenshots and interactions have not
+yet been rechecked for the refreshed theme. Real account provisioning and live
+runtime collectors are outside this presentation work. No production changes
+or release.

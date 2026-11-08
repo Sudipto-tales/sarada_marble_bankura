@@ -1,16 +1,23 @@
 (() => {
   'use strict';
   document.documentElement.classList.add('js');
-  const sidebar=document.querySelector('.sidebar'),toggle=document.querySelector('.drawer-toggle'),backdrop=document.querySelector('.sidebar-backdrop');
+  const sidebar=document.querySelector('#leftside-menu'),toggle=document.querySelector('.drawer-toggle'),backdrop=document.querySelector('.sidebar-backdrop');
   if(sidebar){
-    const media=matchMedia('(max-width:900px)');let previousFocus=null;
+    const media=matchMedia('(max-width:700px)');let previousFocus=null;
     function drawer(open){
-      sidebar.classList.toggle('open',open);backdrop.hidden=!open;toggle.setAttribute('aria-expanded',String(open));
-      sidebar.inert=media.matches&&!open;document.body.classList.toggle('drawer-open',open&&media.matches);
-      if(open){previousFocus=document.activeElement;sidebar.querySelector('.drawer-close').focus();}else if(previousFocus){previousFocus.focus();previousFocus=null;}
+      const mobile=media.matches&&open;
+      sidebar.classList.toggle('open',open);
+      backdrop.hidden=!mobile;
+      toggle.setAttribute('aria-expanded',String(mobile));
+      toggle.setAttribute('aria-label',mobile?'Close navigation':'Open navigation');
+      sidebar.inert=media.matches&&!open;
+      document.body.classList.toggle('drawer-open',mobile);
+      if(mobile){previousFocus=document.activeElement;sidebar.querySelector('.drawer-close')?.focus();}
+      else if(previousFocus){previousFocus.focus();previousFocus=null;}
     }
-    toggle.onclick=()=>drawer(!sidebar.classList.contains('open'));
-    sidebar.querySelector('.drawer-close').onclick=()=>drawer(false);backdrop.onclick=()=>drawer(false);
+    toggle?.addEventListener('click',()=>drawer(!sidebar.classList.contains('open')));
+    sidebar.querySelector('.drawer-close')?.addEventListener('click',()=>drawer(false));
+    backdrop?.addEventListener('click',()=>drawer(false));
     media.addEventListener('change',()=>drawer(false));sidebar.inert=media.matches;
     document.addEventListener('keydown',event=>{
       if(!sidebar.classList.contains('open')||!media.matches)return;

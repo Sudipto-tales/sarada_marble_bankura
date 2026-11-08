@@ -311,3 +311,16 @@ body[data-page=home] .h-phone-back>span{white-space:normal}
 .php-profile-form .note{margin:0;font-size:12.4px;color:var(--muted);line-height:1.6}
 .php-profile-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
 @media(max-width:520px){.php-profile-names{grid-template-columns:1fr}}
+
+/* AJAX Phase 1 — add-to-cart toast (success/error), fixed to the viewport, no layout shift. */
+.sf-toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,16px);z-index:1000;
+  max-width:min(92vw,420px);display:flex;gap:14px;align-items:center;justify-content:space-between;
+  padding:13px 18px;border-radius:12px;background:var(--deep);color:#fff;
+  font:600 14px/1.45 inherit;box-shadow:0 10px 30px rgba(8,44,64,.28);
+  opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,transform .2s ease}
+.sf-toast.is-show{opacity:1;visibility:visible;transform:translate(-50%,0);pointer-events:auto}
+.sf-toast.is-error{background:var(--clay)}
+.sf-toast span{min-width:0}
+.sf-toast a{color:#fff;text-decoration:underline;white-space:nowrap;font-weight:700}
+@media(max-width:520px){.sf-toast{left:14px;right:14px;transform:translateY(16px);max-width:none}.sf-toast.is-show{transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.sf-toast{transition:opacity .2s ease}}
