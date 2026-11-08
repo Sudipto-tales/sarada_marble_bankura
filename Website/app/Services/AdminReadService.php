@@ -123,7 +123,7 @@ final class AdminReadService
         [$start,$last]=$dates;$end=$last+86400;
         if($last<$start||$end-$start>93*86400)CommerceValues::invalid('date_range');
         $sales=CommerceDatabase::query($this->pdo,"SELECT COUNT(*) AS order_count,COALESCE(SUM(total_minor),0) AS revenue_minor FROM orders WHERE payment_status='paid' AND created_at>=? AND created_at<?",[$start,$end])->fetch();
-        $coupons=CommerceDatabase::query($this->pdo,'SELECT c.code,c.used_count,COUNT(r.id) AS range_uses,SUM(r.amount_minor) AS discount_minor FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id WHERE r.created_at>=? AND r.created_at<? GROUP BY c.id,c.code,c.used_count ORDER BY discount_minor DESC,c.id LIMIT 100',[$start,$end])->fetchAll();
+        $coupons=CommerceDatabase::query($this->pdo,'SELECT c.code,c.used_count,c.usage_limit,COUNT(r.id) AS range_uses,SUM(r.amount_minor) AS discount_minor FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id WHERE r.created_at>=? AND r.created_at<? GROUP BY c.id,c.code,c.used_count,c.usage_limit ORDER BY discount_minor DESC,c.id LIMIT 100',[$start,$end])->fetchAll();
         // Order pipeline across every status in range (not only paid), using idx_order_status_time.
         $statuses=CommerceDatabase::query($this->pdo,"SELECT status,COUNT(*) AS order_count,COALESCE(SUM(total_minor),0) AS value_minor FROM orders WHERE created_at>=? AND created_at<? GROUP BY status ORDER BY order_count DESC,status",[$start,$end])->fetchAll();
         // Best sellers by paid revenue in range, aggregated over the immutable order-item snapshots.
@@ -131,7 +131,7 @@ final class AdminReadService
             FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.payment_status='paid' AND o.created_at>=? AND o.created_at<?
             GROUP BY oi.product_id,oi.name ORDER BY revenue_minor DESC,oi.name LIMIT 20",[$start,$end])->fetchAll();
         // Current operational stock state (point-in-time, not range): enabled variants within five increments of empty.
-        $lowStock=CommerceDatabase::query($this->pdo,"SELECT p.name,v.sku,v.sell_unit,v.qty_increment_milli,(i.on_hand_milli-i.reserved_milli) AS available_milli
+        $lowStock=CommerceDatabase::query($this->pdo,"SELECT v.id AS variant_id,p.name,v.sku,v.sell_unit,v.qty_increment_milli,(i.on_hand_milli-i.reserved_milli) AS available_milli
             FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id
             WHERE v.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli*5
             ORDER BY available_milli ASC,p.name LIMIT 50")->fetchAll();
@@ -168,6 +168,17 @@ final class AdminReadService
         $daily=CommerceDatabase::query($this->pdo,"SELECT (created_at-(created_at%86400)) AS day_epoch,COUNT(*) AS order_count,
             COALESCE(SUM(CASE WHEN payment_status='paid' THEN total_minor ELSE 0 END),0) AS revenue_minor
             FROM orders WHERE created_at>=? AND created_at<? GROUP BY (created_at-(created_at%86400)) ORDER BY day_epoch",[$fromEpoch,$untilEpoch])->fetchAll();
+        $categories=CommerceDatabase::query($this->pdo,"SELECT c.id,c.name,COALESCE(SUM(oi.line_total_minor),0) AS revenue_minor,
+            COUNT(DISTINCT oi.order_id) AS order_count,COALESCE(SUM(oi.qty_milli),0) AS qty_milli
+            FROM order_items oi JOIN orders o ON o.id=oi.order_id JOIN products p ON p.id=oi.product_id JOIN categories c ON c.id=p.category_id
+            WHERE o.payment_status='paid' AND o.created_at>=? AND o.created_at<?
+            GROUP BY c.id,c.name ORDER BY revenue_minor DESC,c.name LIMIT 10",[$fromEpoch,$untilEpoch])->fetchAll();
+        $recentOrders=CommerceDatabase::query($this->pdo,"SELECT o.id,o.order_number,o.status,o.total_minor,o.created_at
+            FROM orders o WHERE o.payment_status='paid' AND o.created_at>=? AND o.created_at<?
+            ORDER BY o.total_minor DESC,o.created_at DESC,o.id DESC LIMIT 8",[$fromEpoch,$untilEpoch])->fetchAll();
+        foreach($categories as &$row){$row['revenue_minor']=CommerceValues::integer($row['revenue_minor'],0,PHP_INT_MAX,'revenue_minor');$row['qty_milli']=CommerceValues::integer($row['qty_milli'],0,PHP_INT_MAX,'qty_milli');}unset($row);
+        foreach($recentOrders as &$row){$row['total_minor']=CommerceValues::integer($row['total_minor'],0,PHP_INT_MAX,'total_minor');$row['created_at']=gmdate('Y-m-d H:i',(int)$row['created_at']);}unset($row);
+        foreach($current['coupons'] as &$row){$row['discount_minor']=CommerceValues::integer($row['discount_minor'],0,PHP_INT_MAX,'discount_minor');$row['range_uses']=(int)$row['range_uses'];$row['used_count']=(int)$row['used_count'];$row['usage_limit']=$row['usage_limit']===null?null:(int)$row['usage_limit'];}unset($row);
         $dailyMetrics=CommerceDatabase::query($this->pdo,'SELECT metric_date,COALESCE(SUM(views),0) AS views,COALESCE(SUM(orders_net),0) AS orders_net FROM product_daily_metrics WHERE metric_date>=? AND metric_date<=? GROUP BY metric_date ORDER BY metric_date',[$from,$to])->fetchAll();
         $trend=[];$byDate=[];
         foreach($daily as $row){$date=gmdate('Y-m-d',(int)$row['day_epoch']);$byDate[$date]=['orders'=>(int)$row['order_count'],'revenue_minor'=>(int)$row['revenue_minor'],'views'=>0,'orders_net'=>0];}
@@ -192,6 +203,7 @@ final class AdminReadService
         ];
         return ['period'=>['days'=>$days,'from'=>$from,'to'=>$to], 'tiles'=>$tiles,'growth'=>$growth,
             'trend'=>$trend,'statuses'=>$current['statuses'],'topProducts'=>$current['topProducts'],
+            'categories'=>$categories,'coupons'=>$current['coupons'],'recentOrders'=>$recentOrders,
             'lowStockRows'=>$current['lowStock'],'metricsUpdatedAt'=>$checkpoint?(int)$checkpoint:0,'pendingMetrics'=>$pending];
     }
     /** Product-level view, cancellation-aware order and paid-revenue totals plus a 30-day chart. */
