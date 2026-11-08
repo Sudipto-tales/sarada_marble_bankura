@@ -1,4 +1,5 @@
 import '../../data/models/filters.dart';
+import '../../data/models/product.dart';
 
 /// Route names in one place. Screens are pushed by name with typed argument
 /// objects so no screen constructs another screen's dependencies.
@@ -102,9 +103,14 @@ class CalculatorArgs {
 }
 
 class CheckoutArgs {
-  const CheckoutArgs({required this.buyNowProductId, this.buyNowSqFt});
+  const CheckoutArgs({
+    required this.buyNowProductId,
+    this.buyNowSqFt,
+    this.buyNowProduct,
+  });
   final String? buyNowProductId;
   final double? buyNowSqFt;
+  final Product? buyNowProduct;
 }
 
 class OrderArgs {

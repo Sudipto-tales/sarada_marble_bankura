@@ -58,15 +58,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Future<void> _addToCart(Product product, {bool buyNow = false}) async {
     final deps = AppScope.read(context);
-    await deps.cart.add(product, sqFt: _sqFt);
-    if (!mounted) return;
     if (buyNow) {
       Navigator.pushNamed(
         context,
         Routes.checkout,
-        arguments: CheckoutArgs(buyNowProductId: product.id, buyNowSqFt: _sqFt),
+        arguments: CheckoutArgs(
+          buyNowProductId: product.id,
+          buyNowSqFt: _sqFt,
+          buyNowProduct: product,
+        ),
       );
     } else {
+      await deps.cart.add(product, sqFt: _sqFt);
+      if (!mounted) return;
       Toast.success(
         context,
         '${Fmt.sqft(_sqFt)} of ${product.name} added',

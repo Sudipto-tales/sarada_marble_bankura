@@ -15,6 +15,7 @@ import '../../core/widgets/feedback.dart';
 import '../../core/widgets/state_views.dart';
 import '../../data/models/address.dart';
 import '../../data/models/cart_item.dart';
+import '../../data/models/coupon.dart';
 import '../../data/models/product.dart';
 import 'widgets/price_breakdown.dart';
 
@@ -36,6 +37,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Address? _address;
   int _slot = 0;
   bool _checkingAuth = true;
+  CheckoutSnapshot? _snapshot;
 
   static const _slots = [
     ('Standard', '5-9 days · included', 0.0),
@@ -46,6 +48,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
+    final product = widget.args.buyNowProduct;
+    final quantity = widget.args.buyNowSqFt;
+    if (product != null && quantity != null && quantity > 0) {
+      _snapshot = CheckoutSnapshot.buyNow(product, quantity);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _ensureLoggedIn());
   }
 
@@ -68,13 +75,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
   }
 
-  List<CartItem> get _items {
-    final deps = AppScope.read(context);
-    final buyNowId = widget.args.buyNowProductId;
-    if (buyNowId == null) return deps.cart.items;
-    return deps.cart.items.where((i) => i.productId == buyNowId).toList();
-  }
-
   double get _deliveryExtra => _slots[_slot].$3;
 
   @override
@@ -94,7 +94,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       body: Observer(
         listenable: deps.cart,
         builder: (context, cart) {
-          if (_items.isEmpty) {
+          if (_snapshot == null && cart.isLoading) {
+            return const LoadingView(label: 'Preparing checkout…');
+          }
+          _snapshot ??= CheckoutSnapshot.fromCart(cart);
+          final snapshot = _snapshot!;
+          if (snapshot.items.isEmpty) {
             return EmptyView(
               icon: Icons.shopping_bag_outlined,
               title: 'Nothing to check out',
@@ -119,8 +124,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               address: _address,
             ),
             _ => _SummaryStep(
-              items: _items,
-              cart: cart,
+              snapshot: snapshot,
               address: _address!,
               slotLabel: _slots[_slot].$1,
               deliveryExtra: _deliveryExtra,
@@ -132,11 +136,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         child: Observer(
           listenable: deps.cart,
           builder: (context, cart) {
-            if (_items.isEmpty) return const SizedBox.shrink();
-            final subtotal = _items.fold(
-              0.0,
-              (sum, item) => sum + cart.lineTotal(item),
-            );
+            if (_snapshot == null && cart.isLoading) return const SizedBox.shrink();
+            _snapshot ??= CheckoutSnapshot.fromCart(cart);
+            final snapshot = _snapshot!;
+            if (snapshot.items.isEmpty) return const SizedBox.shrink();
+            final subtotal = snapshot.subtotal;
             return Container(
               padding: const EdgeInsets.all(AppDimens.lg),
               decoration: BoxDecoration(
@@ -179,7 +183,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     child: GradientButton(
                       label: _step == 2 ? 'Continue to payment' : 'Continue',
                       icon: _step == 2 ? Icons.lock_rounded : null,
-                      onPressed: () => _next(cart, subtotal),
+                      onPressed: () => _next(snapshot),
                     ),
                   ),
                 ],
@@ -191,7 +195,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  void _next(CartController cart, double subtotal) {
+  void _next(CheckoutSnapshot snapshot) {
     if (_step == 0) {
       if (_address == null) {
         Toast.error(context, 'Select a delivery address first');
@@ -205,7 +209,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         context,
         Routes.payment,
         arguments: PaymentArgs(
-          items: _items,
+          snapshot: snapshot,
           address: _address!,
           deliveryExtra: _deliveryExtra,
           slotLabel: _slots[_slot].$1,
@@ -219,16 +223,74 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 /// order-building flow.
 class PaymentArgs {
   const PaymentArgs({
-    required this.items,
+    required this.snapshot,
     required this.address,
     required this.deliveryExtra,
     required this.slotLabel,
   });
 
-  final List<CartItem> items;
+  final CheckoutSnapshot snapshot;
   final Address address;
   final double deliveryExtra;
   final String slotLabel;
+}
+
+/// Immutable checkout pricing/input captured independently from the live cart.
+class CheckoutSnapshot {
+  CheckoutSnapshot._({
+    required this.items,
+    required this.products,
+    required this.coupon,
+    required this.clearPurchasedCartLines,
+  });
+
+  factory CheckoutSnapshot.buyNow(Product product, double sqFt) =>
+      CheckoutSnapshot._(
+        items: [CartItem(productId: product.id, sqFt: sqFt)],
+        products: {product.id: product},
+        coupon: null,
+        clearPurchasedCartLines: false,
+      );
+
+  factory CheckoutSnapshot.fromCart(CartController cart) {
+    final products = <String, Product>{};
+    for (final item in cart.items) {
+      final product = cart.product(item.productId);
+      if (product != null) products[item.productId] = product;
+    }
+    return CheckoutSnapshot._(
+      items: List.unmodifiable(cart.items),
+      products: Map.unmodifiable(products),
+      coupon: cart.coupon,
+      clearPurchasedCartLines: true,
+    );
+  }
+
+  final List<CartItem> items;
+  final Map<String, Product> products;
+  final Coupon? coupon;
+  final bool clearPurchasedCartLines;
+
+  double lineTotal(CartItem item) =>
+      (products[item.productId]?.pricePerSqFt ?? 0) * item.sqFt;
+
+  double lineSavings(CartItem item) =>
+      (products[item.productId]?.savingsPerSqFt ?? 0) * item.sqFt;
+
+  double get subtotal => items.fold(0.0, (sum, item) => sum + lineTotal(item));
+  double get savings => items.fold(0.0, (sum, item) => sum + lineSavings(item));
+  double get discount => coupon?.discountFor(subtotal) ?? 0;
+  String? get couponCode => discount > 0 ? coupon?.code : null;
+
+  double delivery(double extra) =>
+      (subtotal >= AppConfig.freeDeliveryAbove
+          ? 0.0
+          : AppConfig.deliveryCharge) +
+      extra;
+
+  double tax => (subtotal - discount).clamp(0, double.infinity) *
+      AppConfig.gstPercent / 100;
+  double total(double extra) => subtotal - discount + delivery(extra) + tax;
 }
 
 class _StepBar extends StatelessWidget {
@@ -468,15 +530,13 @@ class _DeliveryStep extends StatelessWidget {
 
 class _SummaryStep extends StatelessWidget {
   const _SummaryStep({
-    required this.items,
-    required this.cart,
+    required this.snapshot,
     required this.address,
     required this.slotLabel,
     required this.deliveryExtra,
   });
 
-  final List<CartItem> items;
-  final CartController cart;
+  final CheckoutSnapshot snapshot;
   final Address address;
   final String slotLabel;
   final double deliveryExtra;
@@ -484,18 +544,11 @@ class _SummaryStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final subtotal = items.fold(0.0, (sum, item) => sum + cart.lineTotal(item));
-    final savings = items.fold(
-      0.0,
-      (sum, item) => sum + cart.lineSavings(item),
-    );
-    final couponDiscount = cart.couponDiscount;
-    final delivery =
-        (subtotal >= AppConfig.freeDeliveryAbove
-            ? 0.0
-            : AppConfig.deliveryCharge) +
-        deliveryExtra;
-    final tax = (subtotal - couponDiscount) * AppConfig.gstPercent / 100;
+    final subtotal = snapshot.subtotal;
+    final savings = snapshot.savings;
+    final couponDiscount = snapshot.discount;
+    final delivery = snapshot.delivery(deliveryExtra);
+    final tax = snapshot.tax;
 
     return ListView(
       padding: const EdgeInsets.only(bottom: AppDimens.xxl),
@@ -509,8 +562,8 @@ class _SummaryStep extends StatelessWidget {
           ),
           child: Text('Order summary', style: t.titleMedium),
         ),
-        for (final item in items)
-          _SummaryLine(item: item, product: cart.product(item.productId)),
+        for (final item in snapshot.items)
+          _SummaryLine(item: item, product: snapshot.products[item.productId]),
         const SizedBox(height: AppDimens.md),
         Padding(
           padding: AppDimens.screenPad,
