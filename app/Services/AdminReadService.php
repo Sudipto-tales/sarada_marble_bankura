@@ -166,6 +166,7 @@ final class AdminReadService
         $activeProducts=(int)CommerceDatabase::query($this->pdo,"SELECT COUNT(*) FROM products WHERE status='active'")->fetchColumn();
         $lowStock=(int)CommerceDatabase::query($this->pdo,"SELECT COUNT(*) FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE v.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli*5")->fetchColumn();
         $daily=CommerceDatabase::query($this->pdo,"SELECT (created_at-(created_at%86400)) AS day_epoch,COUNT(*) AS order_count,
+            SUM(CASE WHEN payment_status='paid' THEN 1 ELSE 0 END) AS paid_order_count,
             COALESCE(SUM(CASE WHEN payment_status='paid' THEN total_minor ELSE 0 END),0) AS revenue_minor
             FROM orders WHERE created_at>=? AND created_at<? GROUP BY (created_at-(created_at%86400)) ORDER BY day_epoch",[$fromEpoch,$untilEpoch])->fetchAll();
         $categories=CommerceDatabase::query($this->pdo,"SELECT c.id,c.name,COALESCE(SUM(oi.line_total_minor),0) AS revenue_minor,
@@ -179,14 +180,39 @@ final class AdminReadService
         foreach($categories as &$row){$row['revenue_minor']=CommerceValues::integer($row['revenue_minor'],0,PHP_INT_MAX,'revenue_minor');$row['qty_milli']=CommerceValues::integer($row['qty_milli'],0,PHP_INT_MAX,'qty_milli');}unset($row);
         foreach($recentOrders as &$row){$row['total_minor']=CommerceValues::integer($row['total_minor'],0,PHP_INT_MAX,'total_minor');$row['created_at']=gmdate('Y-m-d H:i',(int)$row['created_at']);}unset($row);
         foreach($current['coupons'] as &$row){$row['discount_minor']=CommerceValues::integer($row['discount_minor'],0,PHP_INT_MAX,'discount_minor');$row['range_uses']=(int)$row['range_uses'];$row['used_count']=(int)$row['used_count'];$row['usage_limit']=$row['usage_limit']===null?null:(int)$row['usage_limit'];}unset($row);
+        $stateExpr=$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='sqlite'
+            ?"CASE WHEN json_valid(address_snapshot) THEN json_extract(address_snapshot,'$.state') ELSE NULL END"
+            :"CASE WHEN JSON_VALID(address_snapshot) THEN JSON_UNQUOTE(JSON_EXTRACT(address_snapshot,'$.state')) ELSE NULL END";
+        $stateRows=CommerceDatabase::query($this->pdo,"SELECT $stateExpr AS state_name,COUNT(*) AS order_count,COALESCE(SUM(total_minor),0) AS revenue_minor
+            FROM orders WHERE payment_status='paid' AND created_at>=? AND created_at<? AND $stateExpr IS NOT NULL AND TRIM($stateExpr)<>''
+            GROUP BY state_name ORDER BY revenue_minor DESC,state_name",[$fromEpoch,$untilEpoch])->fetchAll();
+        $stateCodes=[
+            'andaman and nicobar islands'=>'IN-AN','andhra pradesh'=>'IN-AP','arunachal pradesh'=>'IN-AR','assam'=>'IN-AS','bihar'=>'IN-BR',
+            'chandigarh'=>'IN-CH','chhattisgarh'=>'IN-CT','dadra and nagar haveli'=>'IN-DN','daman and diu'=>'IN-DD','delhi'=>'IN-DL','national capital territory of delhi'=>'IN-DL',
+            'goa'=>'IN-GA','gujarat'=>'IN-GJ','haryana'=>'IN-HR','himachal pradesh'=>'IN-HP','jammu and kashmir'=>'IN-JK','jammu kashmir'=>'IN-JK','jharkhand'=>'IN-JH',
+            'karnataka'=>'IN-KA','kerala'=>'IN-KL','madhya pradesh'=>'IN-MP','maharashtra'=>'IN-MH','manipur'=>'IN-MN','meghalaya'=>'IN-ML','mizoram'=>'IN-MZ','nagaland'=>'IN-NL',
+            'odisha'=>'IN-OR','orissa'=>'IN-OR','punjab'=>'IN-PB','rajasthan'=>'IN-RJ','sikkim'=>'IN-SK','tamil nadu'=>'IN-TN','tripura'=>'IN-TR',
+            'uttar pradesh'=>'IN-UP','uttarakhand'=>'IN-UT','uttaranchal'=>'IN-UT','west bengal'=>'IN-WB','puducherry'=>'IN-PY','pondicherry'=>'IN-PY',
+            'dadra and nagar haveli and daman and diu'=>null,'telangana'=>null,'lakshadweep'=>null,
+        ];
+        $regionTotals=[];$regionMap=[];
+        foreach($stateRows as $row){
+            $name=trim((string)$row['state_name']);$normalized=trim(preg_replace('/[^a-z0-9]+/',' ',strtolower($name))??'');
+            $code=preg_match('/\AIN-[A-Z]{2}\z/i',$name)?strtoupper($name):($stateCodes[$normalized]??null);
+            $key=$code??('name:'.$normalized);
+            if(!isset($regionTotals[$key]))$regionTotals[$key]=['name'=>$code?($normalized==='orissa'?'Odisha':($normalized==='uttaranchal'?'Uttarakhand':$name)):$name,'map_code'=>$code,'order_count'=>0,'revenue_minor'=>0];
+            $regionTotals[$key]['order_count']+=(int)$row['order_count'];$regionTotals[$key]['revenue_minor']+=(int)$row['revenue_minor'];
+            if($code)$regionMap[$code]=($regionMap[$code]??0)+(int)$row['revenue_minor'];
+        }
+        $regionTotals=array_values($regionTotals);usort($regionTotals,static fn($a,$b)=>$b['revenue_minor']<=>$a['revenue_minor']?:strcmp($a['name'],$b['name']));
         $dailyMetrics=CommerceDatabase::query($this->pdo,'SELECT metric_date,COALESCE(SUM(views),0) AS views,COALESCE(SUM(orders_net),0) AS orders_net FROM product_daily_metrics WHERE metric_date>=? AND metric_date<=? GROUP BY metric_date ORDER BY metric_date',[$from,$to])->fetchAll();
         $trend=[];$byDate=[];
-        foreach($daily as $row){$date=gmdate('Y-m-d',(int)$row['day_epoch']);$byDate[$date]=['orders'=>(int)$row['order_count'],'revenue_minor'=>(int)$row['revenue_minor'],'views'=>0,'orders_net'=>0];}
-        foreach($dailyMetrics as $row){$date=(string)$row['metric_date'];$byDate[$date]??=['orders'=>0,'revenue_minor'=>0,'views'=>0,'orders_net'=>0];$byDate[$date]['views']=max(0,(int)$row['views']);$byDate[$date]['orders_net']=max(0,(int)$row['orders_net']);}
+        foreach($daily as $row){$date=gmdate('Y-m-d',(int)$row['day_epoch']);$byDate[$date]=['orders'=>(int)$row['order_count'],'paid_orders'=>(int)$row['paid_order_count'],'revenue_minor'=>(int)$row['revenue_minor'],'views'=>0,'orders_net'=>0];}
+        foreach($dailyMetrics as $row){$date=(string)$row['metric_date'];$byDate[$date]??=['orders'=>0,'paid_orders'=>0,'revenue_minor'=>0,'views'=>0,'orders_net'=>0];$byDate[$date]['views']=max(0,(int)$row['views']);$byDate[$date]['orders_net']=max(0,(int)$row['orders_net']);}
         $afterTo=(new DateTimeImmutable($to,$utc))->modify('+1 day');
         for($day=new DateTimeImmutable($from,$utc);$day<$afterTo;$day=$day->modify('+1 day')){
-            $date=$day->format('Y-m-d');$row=$byDate[$date]??['orders'=>0,'revenue_minor'=>0,'views'=>0,'orders_net'=>0];
-            $trend[]=['date'=>$date,'orders'=>$row['orders'],'revenue_minor'=>(string)$row['revenue_minor'],'views'=>$row['views'],'orders_net'=>$row['orders_net']];
+            $date=$day->format('Y-m-d');$row=$byDate[$date]??['orders'=>0,'paid_orders'=>0,'revenue_minor'=>0,'views'=>0,'orders_net'=>0];
+            $trend[]=['date'=>$date,'orders'=>$row['orders'],'paid_orders'=>$row['paid_orders'],'revenue_minor'=>(string)$row['revenue_minor'],'views'=>$row['views'],'orders_net'=>$row['orders_net']];
         }
         $checkpoint=CommerceDatabase::query($this->pdo,'SELECT updated_at FROM analytics_checkpoint ORDER BY id LIMIT 1')->fetchColumn();
         $pending=(new MetricsService($this->pdo))->pending();
@@ -204,7 +230,8 @@ final class AdminReadService
         return ['period'=>['days'=>$days,'from'=>$from,'to'=>$to], 'tiles'=>$tiles,'growth'=>$growth,
             'trend'=>$trend,'statuses'=>$current['statuses'],'topProducts'=>$current['topProducts'],
             'categories'=>$categories,'coupons'=>$current['coupons'],'recentOrders'=>$recentOrders,
-            'lowStockRows'=>$current['lowStock'],'metricsUpdatedAt'=>$checkpoint?(int)$checkpoint:0,'pendingMetrics'=>$pending];
+            'lowStockRows'=>$current['lowStock'],'regionTotals'=>$regionTotals,'regionMap'=>$regionMap,
+            'metricsUpdatedAt'=>$checkpoint?(int)$checkpoint:0,'pendingMetrics'=>$pending];
     }
     /** Product-level view, cancellation-aware order and paid-revenue totals plus a 30-day chart. */
     public function productAnalytics(int $actorId,int $productId):array

@@ -92,6 +92,7 @@ class ViewRouteProvider extends RouteProvider
             'admin/coupon/archive' => ['POST'=>['Admin','archiveCoupon']],
             'admin/reports' => ['GET'=>['Admin','reports']],
             'admin/analytics' => ['GET'=>['Admin','analytics']],
+            'admin/analytics/live' => ['GET'=>['Admin','analyticsLive']],
             'admin' => ['GET' => ['Admin', 'index']],
             'admin/products' => ['GET' => ['Admin', 'products']],
             'admin/product' => ['GET' => ['Admin', 'productForm'], 'POST' => ['Admin', 'saveProduct']],
