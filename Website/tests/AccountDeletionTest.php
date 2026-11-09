@@ -93,9 +93,9 @@ try {
     $pdo->prepare("INSERT INTO addresses (user_id, label, recipient, phone, line1, line2, city, state, postal_code, country_code, is_default, enabled, revision)
         VALUES (?, 'Home', 'Vera Verified', '9999999999', '1 Stone Rd', '', 'Bankura', 'West Bengal', '722101', 'IN', 1, 1, 1)")->execute([$vera]);
     // Seed a wishlist row without a real product (FK cascades to products); deleting it never violates the FK.
-    if (!$mysql) $pdo->exec('PRAGMA foreign_keys = OFF');
+    if ($mysql) $pdo->exec('SET FOREIGN_KEY_CHECKS = 0'); else $pdo->exec('PRAGMA foreign_keys = OFF');
     $pdo->prepare('INSERT INTO wishlists (user_id, product_id, created_at) VALUES (?, 1, ?)')->execute([$vera, time()]);
-    if (!$mysql) $pdo->exec('PRAGMA foreign_keys = ON');
+    if ($mysql) $pdo->exec('SET FOREIGN_KEY_CHECKS = 1'); else $pdo->exec('PRAGMA foreign_keys = ON');
     $pdo->prepare("INSERT INTO carts (user_id, guest_token_hash, owner_key, status, revision, expires_at, created_at) VALUES (?, NULL, ?, 'active', 1, ?, ?)")
         ->execute([$vera, 'user:' . $vera, time() + 3600, time()]);
     $cartId = (int) $pdo->lastInsertId();
