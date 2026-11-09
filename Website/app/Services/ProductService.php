@@ -364,8 +364,16 @@ final class ProductService
         if (isset($filters['in_stock']) && CommerceValues::flag($filters['in_stock'], 'in_stock') === 1) {
             $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vs JOIN inventory i ON i.variant_id=vs.id WHERE vs.product_id=p.id AND vs.enabled=1 AND i.on_hand_milli-i.reserved_milli>=vs.qty_increment_milli)';
         }
+        if (isset($filters['min_rating']) && $filters['min_rating'] !== '') {
+            // Stars (1..5) → tenths; interpolate the validated integer so SQLite compares AVG (REAL/NULL)
+            // numerically, not against a TEXT bind. Products with no approved reviews (NULL avg) are excluded.
+            $tenths = CommerceValues::integer($filters['min_rating'], 1, 5, 'min_rating') * 10;
+            $clauses[] = '('.self::RATING_AVG_SQL.") >= $tenths";
+        }
         $sorts=['featured'=>'p.featured DESC,p.id DESC','newest'=>'p.id DESC','price_low'=>'(SELECT MIN(unit_price_minor) FROM product_variants WHERE product_id=p.id AND enabled=1) ASC,p.id ASC',
-            'price_high'=>'(SELECT MIN(unit_price_minor) FROM product_variants WHERE product_id=p.id AND enabled=1) DESC,p.id ASC'];
+            'price_high'=>'(SELECT MIN(unit_price_minor) FROM product_variants WHERE product_id=p.id AND enabled=1) DESC,p.id ASC',
+            // Highest average approved rating first; unrated products (NULL avg) sort last in both drivers.
+            'rating_high'=>'('.self::RATING_AVG_SQL.') DESC,p.id DESC'];
         $sort=$filters['sort']??'featured'; if (!is_string($sort)||!isset($sorts[$sort])) CommerceValues::invalid('sort');
         $from=' FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id';
         $where=$clauses?' WHERE '.implode(' AND ',$clauses):'';
@@ -374,6 +382,10 @@ final class ProductService
         $rows=$this->query('SELECT p.*,c.name AS category_name,c.slug AS category_slug,b.name AS brand_name,b.slug AS brand_slug'.$from.$where.' ORDER BY '.$sorts[$sort]." LIMIT $perPage OFFSET $offset",$values)->fetchAll();
         return ['items'=>$this->hydrate($rows,$staffId!==null),'page'=>$page,'per_page'=>$perPage,'total'=>$total,'pages'=>(int)ceil($total/$perPage)];
     }
+    // Average approved rating (tenths, 0..50) for the outer product `p`, matching the hydrate() roll-up:
+    // only approved reviews from active, email-verified users count. NULL when a product has none.
+    private const RATING_AVG_SQL = "SELECT AVG(COALESCE(pr.rating_tenths,pr.rating*10)) FROM product_reviews pr "
+        . "JOIN users_tbl pu ON pu.id=pr.user_id WHERE pr.product_id=p.id AND pr.status='approved' AND pu.status=1 AND pu.email_verify=1";
     private const CANDIDATE_CAP = 1000;
     // Weights (per-million) for the ranked score: relevance .40, net sales_30d .20, rating .15, stock .10, featured .10, freshness .05.
     private const WEIGHTS = ['relevance'=>400000,'sales'=>200000,'rating'=>150000,'stock'=>100000,'featured'=>100000,'freshness'=>50000];

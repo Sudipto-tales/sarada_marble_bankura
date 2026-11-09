@@ -7,7 +7,7 @@ final class CatalogReadService
     public static function filters(array $input):array
     {
         $filters=['page'=>CommerceValues::integer($input['page']??1,1,1000,'page'),'per_page'=>CommerceValues::integer($input['per_page']??12,1,50,'per_page'),'sort'=>$input['sort']??'featured'];
-        if(!is_string($filters['sort'])||!in_array($filters['sort'],['featured','newest','price_low','price_high'],true))CommerceValues::invalid('sort');
+        if(!is_string($filters['sort'])||!in_array($filters['sort'],['featured','newest','price_low','price_high','rating_high'],true))CommerceValues::invalid('sort');
         foreach(['category','brand'] as $field)if(isset($input[$field])&&$input[$field]!=='')$filters[$field]=CommerceValues::slug($input[$field]);
         if(isset($input['q'])&&$input['q']!=='')$filters['q']=CommerceValues::text($input['q'],80,'q');
         foreach(['min_price_minor','max_price_minor'] as $field)if(isset($input[$field])&&$input[$field]!=='')$filters[$field]=CommerceValues::integer($input[$field],0,CommerceValues::MAX_MONEY,$field);
@@ -17,6 +17,7 @@ final class CatalogReadService
         if(isset($filters['min_price_minor'],$filters['max_price_minor'])&&$filters['min_price_minor']>$filters['max_price_minor'])CommerceValues::invalid('price_range');
         if (isset($input['finish']) && $input['finish'] !== '') $filters['finish'] = CommerceValues::text($input['finish'], 80, 'finish');
         if (isset($input['in_stock']) && $input['in_stock'] !== '') $filters['in_stock'] = CommerceValues::flag($input['in_stock'], 'in_stock');
+        if (isset($input['min_rating']) && $input['min_rating'] !== '') $filters['min_rating'] = CommerceValues::integer($input['min_rating'], 1, 5, 'min_rating');
         ksort($filters);return $filters;
     }
     private function read(array $parameters,callable $loader):array
