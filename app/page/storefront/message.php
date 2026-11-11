@@ -1,0 +1,1 @@
+<?php require __DIR__ . '/header.php'; ?><div class="empty-state"><h1><?= $e($title) ?></h1><p><?= $e($message) ?></p><a class="button" href="<?= $u('account') ?>">Your account ↗</a></div><?php require __DIR__ . '/footer.php'; ?>

@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "source": "assets/images/rooms/sunlit_living.webp",
+  "surfaces": [
+    {
+      "id": "floor",
+      "label": "floor",
+      "corners": [
+        [
+          0,
+          0.62
+        ],
+        [
+          0.9,
+          0.62
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "score": 0.8454167246818542,
+      "mask": "sunlit-floor.png"
+    },
+    {
+      "id": "wall",
+      "label": "wall",
+      "corners": [
+        [
+          0,
+          0.04
+        ],
+        [
+          0.812,
+          0.04
+        ],
+        [
+          0.812,
+          0.645
+        ],
+        [
+          0,
+          0.645
+        ]
+      ],
+      "score": 0.8954078555107117,
+      "mask": "sunlit-wall.png"
+    }
+  ],
+  "model": {
+    "name": "sam2.1_hiera_small",
+    "checkpointSha256": "6d1aa6f30de5c92224f8172114de081d104bbd23dd9dc5c58996f0cad5dc4d38"
+  },
+  "metrics": {
+    "device": "cpu",
+    "torch": "2.5.1+cpu",
+    "threads": 4,
+    "loadSeconds": 0.829,
+    "encodeSeconds": 4.339,
+    "decodeSeconds": 0.258,
+    "totalSeconds": 5.427
+  },
+  "provenance": "SAM 2.1 small, sunlit-room prompts revision 1. Masks upscaled to source photo dimensions; rug/shadow edges need review."
+}

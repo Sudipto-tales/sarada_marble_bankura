@@ -1,0 +1,78 @@
+<?php
+require __DIR__ . '/support/CommerceTest.php';
+$pdo=CommerceTest::open(); $check=[CommerceTest::class,'check'];
+$admin=CommerceAccess::provision('catalog-admin@example.test','Disposable-Catalog-Password');
+$customer=CommerceTest::user('catalog-customer@example.test'); $service=new ProductService($pdo);
+$category=$service->saveCategory($admin,['slug'=>'marble','name'=>'Marble'],'category:create:marble');
+$brand=$service->saveBrand($admin,['slug'=>'quarry','name'=>'Quarry'],'brand:create:quarry');
+$input=['slug'=>'white-marble','name'=>'White Marble','description'=>'<script>stored text must be escaped in views</script>','tags'=>'white marble polished',
+    'category_id'=>$category,'brand_id'=>$brand,'status'=>'active','variants'=>[
+        ['sku'=>'white-sqft','sell_unit'=>'sqft','qty_increment_milli'=>500,'unit_price_minor'=>12500,'finish'=>'Polished'],
+        ['sku'=>'white-slab','sell_unit'=>'slab','qty_increment_milli'=>1000,'unit_price_minor'=>450000,'coverage_sqft_milli'=>36000]]];
+CommerceTest::rejects(fn()=>$service->save($customer,$input,0,'customer:save:product'),403,'Customer cannot save catalog.');
+$saved=$service->save($admin,$input,0,'product:create:white');
+$check($saved['revision']===1 && count($saved['variant_ids'])===2,'Real product and canonical variants persist.');
+$product=$service->detail('white-marble');
+$check((int)$product['min_price_minor']===12500 && $product['variants'][0]['sku']==='WHITE-SQFT','Public price projection and SKU normalization.');
+$check(CommerceValues::line(12500,1500)===18750 && CommerceValues::line(101,500)===51 && CommerceValues::round(10000*500,10000)===500,'Canonical integer rounding vectors.');
+$check(CommerceValues::decimal('125.50',2,CommerceValues::MAX_MONEY,'price')===12550,'Decimal money parser converts exactly.');
+CommerceTest::rejects(fn()=>CommerceValues::multiply(PHP_INT_MAX,2),422,'Multiplication overflow rejected.');
+CommerceTest::rejects(fn()=>CommerceValues::quantity(1500,$product['variants'][1]),422,'Fractional slab quantity rejected.');
+CommerceTest::rejects(fn()=>CommerceValues::integer('1e3',0,10000,'quantity'),422,'Exponent numeric input rejected.');
+$input['id']=$saved['id']; foreach($input['variants'] as $n=>&$variant) $variant['id']=$saved['variant_ids'][$n]; unset($variant);
+$input['name']='Updated White Marble';
+$changed=$service->save($admin,$input,1,'product:update:white');
+$check($changed['revision']===2 && $service->detail('white-marble')['name']==='Updated White Marble','Revision-safe update persists.');
+CommerceTest::rejects(fn()=>$service->save($admin,$input,1,'product:stale:white'),409,'Stale product revision rejected.');
+$collision=$input; unset($collision['id']); foreach($collision['variants'] as &$v) unset($v['id']); unset($v);
+CommerceTest::rejects(fn()=>$service->save($admin,$collision,0,'product:slug:duplicate'),409,'Duplicate slug rejected.');
+$collision['slug']='different-marble';
+CommerceTest::rejects(fn()=>$service->save($admin,$collision,0,'product:sku:duplicate'),409,'Duplicate SKU rolls back new product.');
+$check((int)$pdo->query('SELECT COUNT(*) FROM products')->fetchColumn()===1,'Uniqueness failure leaves no orphan product.');
+$invalid=$input; $invalid['variants'][0]['unit_price_minor']=-1;
+CommerceTest::rejects(fn()=>$service->save($admin,$invalid,2,'product:negative:price'),422,'Negative price rejected.');
+$invalid['variants'][0]['unit_price_minor']='999999999999999999999';
+CommerceTest::rejects(fn()=>$service->save($admin,$invalid,2,'product:overflow:price'),422,'Overflow price input rejected.');
+$invalid=$input; $invalid['variants'][1]['qty_increment_milli']=500;
+CommerceTest::rejects(fn()=>$service->save($admin,$invalid,2,'product:invalid:unit'),422,'Slab step must use whole sell units.');
+$invalid=$input; $invalid['variants']=[];
+CommerceTest::rejects(fn()=>$service->save($admin,$invalid,2,'product:empty:variants'),422,'Active product requires a sellable variant.');
+$otherInput=$input; unset($otherInput['id']); $otherInput['slug']='black-granite'; $otherInput['name']='Black Granite';
+$otherInput['tags']='black granite';
+foreach($otherInput['variants'] as $n=>&$v) { unset($v['id']); $v['sku']='BLACK-'.$n; } unset($v);
+$other=$service->save($admin,$otherInput,0,'product:create:black');
+CommerceTest::rejects(fn()=>$service->addImage($admin,$saved['id'],['path'=>'assets/products/'.str_repeat('a',32).'.jpg','mime'=>'image/jpeg','width'=>100,'height'=>100,'variant_id'=>$other['variant_ids'][0]],'image:cross:variant'),422,'Image cannot reference another product variant.');
+CommerceTest::rejects(fn()=>$service->addImage($admin,$saved['id'],['path'=>'../../secret.php','mime'=>'image/jpeg','width'=>100,'height'=>100],'image:unsafe:path'),422,'Image metadata path traversal rejected.');
+$service->addImage($admin,$saved['id'],['path'=>'assets/products/'.str_repeat('b',32).'.jpg','mime'=>'image/jpeg','width'=>100,'height'=>100],'image:create:white');
+$service->addImage($admin,$saved['id'],['path'=>'assets/products/'.str_repeat('c',32).'.jpg','mime'=>'image/jpeg','width'=>100,'height'=>100],'image:create:white:two');
+$page=$service->listing(['per_page'=>1]);
+$check($page['total']===2 && count($page['items'])===1 && $page['pages']===2,'Paginated cards do not duplicate images/variants.');
+$check($service->listing(['q'=>'White'])['total']===1,'Bounded literal query finds matching catalog.');
+$check($service->listing(['min_price_minor'=>20000,'max_price_minor'=>100000])['total']===0,'Price range uses one coherent lowest enabled price.');
+CommerceTest::rejects(fn()=>$service->listing(['sort'=>'id; DROP TABLE products']),422,'Sort injection rejected.');
+$child=$service->saveCategory($admin,['slug'=>'child','name'=>'Child','parent_id'=>$category],'category:create:child');
+CommerceTest::rejects(fn()=>$service->saveCategory($admin,['id'=>$category,'slug'=>'marble','name'=>'Marble','parent_id'=>$child],'category:cycle:marble'),422,'Category cycles rejected.');
+$service->saveCategory($admin,['id'=>$category,'slug'=>'marble','name'=>'Marble','enabled'=>0],'category:disable:marble');
+$check($service->listing()['total']===0,'Disabled category removes public catalog.');
+$service->saveCategory($admin,['id'=>$category,'slug'=>'marble','name'=>'Marble','enabled'=>1],'category:enable:marble');
+$service->saveBrand($admin,['id'=>$brand,'slug'=>'quarry','name'=>'Quarry','enabled'=>0],'brand:disable:quarry');
+CommerceTest::rejects(fn()=>$service->detail('white-marble'),404,'Disabled brand hides product detail.');
+$service->saveBrand($admin,['id'=>$brand,'slug'=>'quarry','name'=>'Quarry','enabled'=>1],'brand:enable:quarry');
+$beforeVersion=(int)$pdo->query("SELECT version FROM catalog_versions WHERE namespace='catalog'")->fetchColumn();
+$mysql=$pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql';
+$pdo->exec($mysql?"CREATE TRIGGER version_failure BEFORE UPDATE ON catalog_versions FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='injected'":"CREATE TRIGGER version_failure BEFORE UPDATE ON catalog_versions BEGIN SELECT RAISE(ABORT,'injected'); END");
+$beforeAudit=(int)$pdo->query('SELECT COUNT(*) FROM admin_activity_log')->fetchColumn();
+$input['name']='Should Roll Back';
+CommerceTest::fails(fn()=>$service->save($admin,$input,2,'product:version:failure'),'Version failure prevents mutation commit.');
+$pdo->exec('DROP TRIGGER version_failure');
+$check($service->detail('white-marble')['name']==='Updated White Marble'
+    && (int)$pdo->query("SELECT version FROM catalog_versions WHERE namespace='catalog'")->fetchColumn()===$beforeVersion
+    && (int)$pdo->query('SELECT COUNT(*) FROM admin_activity_log')->fetchColumn()===$beforeAudit,'Failed version advance rolls back product/variants/audit.');
+$input['name']='Updated White Marble'; array_pop($input['variants']);
+$service->save($admin,$input,2,'product:retire:variant');
+$check(count($service->detail('white-marble')['variants'])===1 && count($service->adminDetail($admin,$saved['id'])['variants'])===2,'Removed variant is disabled and preserved for history.');
+$service->archive($admin,$saved['id'],3,'product:archive:white');
+CommerceTest::rejects(fn()=>$service->detail('white-marble'),404,'Archived product is hidden.');
+$check($service->adminDetail($admin,$saved['id'])['status']==='archived','Archived product remains in staff/history queries.');
+CommerceTest::fails(fn()=>$pdo->prepare("INSERT INTO product_images (product_id,variant_id,path,mime,width,height,position,alt_text) VALUES (?,?,?,'image/jpeg',1,1,0,'')")->execute([$saved['id'],$other['variant_ids'][0],'fake']), 'Database composite FK also prevents cross-product image.');
+CommerceTest::finish('Catalog and values');

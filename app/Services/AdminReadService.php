@@ -1,0 +1,288 @@
+<?php
+
+/** Bounded staff table projections; all mutations remain in domain services. */
+final class AdminReadService
+{
+    public const TABLES = [
+        'coupons'=>['Coupons','admin.pricing.edit',['code'=>'Code','kind'=>'Type','value'=>'Discount','used_count'=>'Uses','usage_limit'=>'Usage limit','enabled'=>'Enabled']],
+        'products'=>['Products','admin.products.view',['name'=>'Material','category_name'=>'Category','brand_name'=>'Brand','status'=>'Status','price'=>'From (INR)','updated_at'=>'Updated']],
+        'categories'=>['Categories','admin.products.view',['name'=>'Category','slug'=>'Slug','parent_name'=>'Parent','enabled'=>'Enabled']],
+        'brands'=>['Brands','admin.products.view',['name'=>'Brand','slug'=>'Slug','enabled'=>'Enabled']],
+        'inventory'=>['Inventory','admin.inventory.view',['name'=>'Material','sku'=>'SKU','sell_unit'=>'Unit','on_hand'=>'On hand','reserved'=>'Reserved','available'=>'Available']],
+        'orders'=>['Orders','admin.orders.view',['order_number'=>'Order','customer'=>'Customer','status'=>'Status','total'=>'Total (INR)','payment_status'=>'Payment','created'=>'Placed (UTC)']],
+        'customers'=>['Customers','admin.customers.view',['name'=>'Name','email'=>'Email','status'=>'Active','email_verify'=>'Verified']],
+        'enquiries'=>['Store visit enquiries','admin.orders.view',['customer_name'=>'Name','contact'=>'Contact','product_name'=>'Material','note'=>'Note','created'=>'Received (UTC)']],
+    ];
+    public function __construct(private PDO $pdo) {}
+    public static function definition(string $table): array
+    {
+        if (!isset(self::TABLES[$table])) throw new RequestRejected(404,'not_found','Table not found.');
+        return self::TABLES[$table];
+    }
+    public static function decimal(int|string|null $value, int $places): string
+    {
+        if ($value===null) return '—';
+        $number=(int)$value;$scale=10**$places;
+        return intdiv($number,$scale).'.'.str_pad((string)($number%$scale),$places,'0',STR_PAD_LEFT);
+    }
+    public function table(int $actor, string $table, array $input): array
+    {
+        $definition=self::definition($table);CommerceAccess::requirePermission($definition[1],$actor);
+        $draw=CommerceValues::integer($input['draw']??0,0,2147483647,'draw');
+        $start=CommerceValues::integer($input['start']??0,0,1000000,'start');
+        $length=CommerceValues::integer($input['length']??20,1,100,'length');
+        $search=$input['search']['value']??$input['q']??'';
+        $search=CommerceValues::text($search,80,'search',true);
+        $config=match($table) {
+            'coupons'=>['coupons p','p.id,p.code,p.kind,p.value,p.used_count,p.usage_limit,p.enabled',['p.code','p.kind','p.value','p.used_count','p.usage_limit','p.enabled'],['p.code']],
+            'products'=>['products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id',
+                'p.id,p.name,c.name AS category_name,b.name AS brand_name,p.status,p.updated_at,(SELECT MIN(v.unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS price',
+                ['p.name','c.name','b.name','p.status','price','p.updated_at'],['p.name','p.slug','c.name','b.name'], "p.id IN (SELECT product_id FROM product_variants WHERE sku LIKE ? ESCAPE '!')"],
+            'categories'=>['categories p LEFT JOIN categories c ON c.id=p.parent_id','p.id,p.name,p.slug,c.name AS parent_name,p.enabled',['p.name','p.slug','c.name','p.enabled'],['p.name','p.slug']],
+            'brands'=>['brands p','p.id,p.name,p.slug,p.enabled',['p.name','p.slug','p.enabled'],['p.name','p.slug']],
+            'inventory'=>['inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id','v.id,p.name,v.sku,v.sell_unit,i.on_hand_milli AS on_hand,i.reserved_milli AS reserved,(i.on_hand_milli-i.reserved_milli) AS available',
+                ['p.name','v.sku','v.sell_unit','i.on_hand_milli','i.reserved_milli','available'],['p.name','v.sku']],
+            'orders'=>['orders o JOIN users_tbl u ON u.id=o.user_id','o.id,o.order_number,u.name AS customer,o.status,o.total_minor AS total,o.payment_status,o.created_at AS created',
+                ['o.order_number','u.name','o.status','o.total_minor','o.payment_status','o.created_at'],['o.order_number','u.name','u.email','o.status','o.payment_status']],
+            'customers'=>['users_tbl p','p.id,p.name,p.email,p.status,p.email_verify',['p.name','p.email','p.status','p.email_verify'],['p.name','p.email']],
+            'enquiries'=>['store_visit_enquiries p LEFT JOIN products pr ON pr.id=p.product_id','p.id,p.customer_name,p.contact,pr.name AS product_name,p.note,p.created_at AS created',
+                ['p.customer_name','p.contact','pr.name','p.note','p.created_at'],['p.customer_name','p.contact','pr.name','p.note']],
+        };
+        [$from,$columns,$sorts,$searches]=$config;$where=[];$args=[];
+        // Staff are not listed as customers. No password/token/address columns are projected.
+        if ($table==='customers') $where[]="NOT EXISTS (SELECT 1 FROM user_roles ur JOIN role_permissions rp ON rp.role_id=ur.role_id JOIN permissions perm ON perm.id=rp.permission_id WHERE ur.user_id=p.id AND perm.permission_key LIKE 'admin.%')";
+        $base=$where?' WHERE '.implode(' AND ',$where):'';
+        $total=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM '.$from.$base)->fetchColumn();
+        if ($search!=='') {
+            $like='%'.str_replace(['!','%','_'],['!!','!%','!_'],$search).'%';$terms=[];
+            foreach($searches as $column){$terms[]="$column LIKE ? ESCAPE '!'";$args[]=$like;}
+            if(isset($config[4])){$terms[]=$config[4];$args[]=$like;}
+            $where[]='('.implode(' OR ',$terms).')';
+        }
+        $where=$where?' WHERE '.implode(' AND ',$where):'';
+        $filtered=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM '.$from.$where,$args)->fetchColumn();
+        $order=$input['order'][0]??['column'=>0,'dir'=>'asc'];
+        $column=CommerceValues::integer($order['column']??0,0,count($sorts)-1,'sort_column');
+        $direction=$order['dir']??'asc';if(!in_array($direction,['asc','desc'],true))CommerceValues::invalid('sort_direction');
+        $id=match($table){'inventory'=>'v.id','orders'=>'o.id',default=>'p.id'};
+        $rows=CommerceDatabase::query($this->pdo,"SELECT $columns FROM $from$where ORDER BY {$sorts[$column]} $direction,$id ASC LIMIT $length OFFSET $start",$args)->fetchAll();
+        foreach($rows as &$row){
+            $row['id']=(string)$row['id'];
+            if($table==='coupons')$row['value']=($row['kind']==='fixed'?'INR ':'').self::decimal($row['value'],2).($row['kind']==='percent'?'%':'');
+            foreach(['price','total'] as $field)if(array_key_exists($field,$row))$row[$field]=self::decimal($row[$field],2);
+            foreach(['on_hand','reserved','available'] as $field)if(isset($row[$field]))$row[$field]=self::decimal($row[$field],3);
+            if(isset($row['created']))$row['created']=gmdate('Y-m-d H:i',(int)$row['created']);
+        }unset($row);
+        return ['draw'=>$draw,'recordsTotal'=>$total,'recordsFiltered'=>$filtered,'data'=>$rows];
+    }
+    /** Bounded product projection used by the optional card-grid view. */
+    public function productCards(int $actor,array $input):array
+    {
+        CommerceAccess::requirePermission('admin.products.view',$actor);
+        $draw=CommerceValues::integer($input['draw']??0,0,2147483647,'draw');
+        $start=CommerceValues::integer($input['start']??0,0,1000000,'start');
+        $length=CommerceValues::integer($input['length']??20,1,100,'length');
+        $search=CommerceValues::text($input['search']['value']??$input['q']??'',80,'search',true);
+        $from='products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id';
+        $where='';$args=[];
+        if($search!==''){
+            $like='%'.str_replace(['!','%','_'],['!!','!%','!_'],$search).'%';
+            $where=" WHERE (p.name LIKE ? ESCAPE '!' OR p.slug LIKE ? ESCAPE '!' OR c.name LIKE ? ESCAPE '!' OR b.name LIKE ? ESCAPE '!' OR EXISTS (SELECT 1 FROM product_variants sv WHERE sv.product_id=p.id AND sv.sku LIKE ? ESCAPE '!'))";
+            $args=[$like,$like,$like,$like,$like];
+        }
+        $total=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM '.$from)->fetchColumn();
+        $filtered=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM '.$from.$where,$args)->fetchColumn();
+        $sql="SELECT p.id,p.name,p.slug,p.status,c.name AS category_name,b.name AS brand_name,
+            (SELECT v.sku FROM product_variants v WHERE v.product_id=p.id ORDER BY v.enabled DESC,v.id LIMIT 1) AS sku,
+            (SELECT MIN(v.unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS min_price,
+            (SELECT MAX(v.unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS max_price,
+            (SELECT pi.path FROM product_images pi WHERE pi.product_id=p.id ORDER BY pi.position,pi.id LIMIT 1) AS image_path
+            FROM $from$where ORDER BY p.updated_at DESC,p.id DESC LIMIT $length OFFSET $start";
+        $rows=CommerceDatabase::query($this->pdo,$sql,$args)->fetchAll();
+        foreach($rows as &$row){
+            $row['id']=(string)$row['id'];
+            $row['min_price']=$row['min_price']===null?null:self::decimal($row['min_price'],2);
+            $row['max_price']=$row['max_price']===null?null:self::decimal($row['max_price'],2);
+        }unset($row);
+        return ['draw'=>$draw,'recordsTotal'=>$total,'recordsFiltered'=>$filtered,'data'=>$rows];
+    }
+    public function stock(int $actor,int $id): array
+    {
+        CommerceAccess::requirePermission('admin.inventory.view',$actor);
+        $row=CommerceDatabase::query($this->pdo,'SELECT i.*,v.sku,v.sell_unit,v.qty_increment_milli,p.name FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE i.variant_id=?',[$id])->fetch();
+        if(!$row)throw new RequestRejected(404,'not_found','Stock not found.');return $row;
+    }
+    public function reports(int $actorId,string $from,string $to):array
+    {
+        CommerceAccess::requirePermission('admin.analytics.view',$actorId);
+        $zone=new DateTimeZone('UTC');$dates=[];
+        foreach([$from,$to] as $value){
+            $date=DateTimeImmutable::createFromFormat('!Y-m-d',$value,$zone);
+            if(!$date||$date->format('Y-m-d')!==$value)CommerceValues::invalid('date');$dates[]=$date->getTimestamp();
+        }
+        [$start,$last]=$dates;$end=$last+86400;
+        if($last<$start||$end-$start>93*86400)CommerceValues::invalid('date_range');
+        $sales=CommerceDatabase::query($this->pdo,"SELECT COUNT(*) AS order_count,COALESCE(SUM(total_minor),0) AS revenue_minor FROM orders WHERE payment_status='paid' AND created_at>=? AND created_at<?",[$start,$end])->fetch();
+        $coupons=CommerceDatabase::query($this->pdo,'SELECT c.code,c.used_count,c.usage_limit,COUNT(r.id) AS range_uses,SUM(r.amount_minor) AS discount_minor FROM coupon_redemptions r JOIN coupons c ON c.id=r.coupon_id WHERE r.created_at>=? AND r.created_at<? GROUP BY c.id,c.code,c.used_count,c.usage_limit ORDER BY discount_minor DESC,c.id LIMIT 100',[$start,$end])->fetchAll();
+        // Order pipeline across every status in range (not only paid), using idx_order_status_time.
+        $statuses=CommerceDatabase::query($this->pdo,"SELECT status,COUNT(*) AS order_count,COALESCE(SUM(total_minor),0) AS value_minor FROM orders WHERE created_at>=? AND created_at<? GROUP BY status ORDER BY order_count DESC,status",[$start,$end])->fetchAll();
+        // Best sellers by paid revenue in range, aggregated over the immutable order-item snapshots.
+        $topProducts=CommerceDatabase::query($this->pdo,"SELECT oi.name,SUM(oi.qty_milli) AS qty_milli,SUM(oi.line_total_minor) AS revenue_minor,COUNT(DISTINCT oi.order_id) AS order_count
+            FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.payment_status='paid' AND o.created_at>=? AND o.created_at<?
+            GROUP BY oi.product_id,oi.name ORDER BY revenue_minor DESC,oi.name LIMIT 20",[$start,$end])->fetchAll();
+        // Current operational stock state (point-in-time, not range): enabled variants within five increments of empty.
+        $lowStock=CommerceDatabase::query($this->pdo,"SELECT v.id AS variant_id,p.name,v.sku,v.sell_unit,v.qty_increment_milli,(i.on_hand_milli-i.reserved_milli) AS available_milli
+            FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id
+            WHERE v.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli*5
+            ORDER BY available_milli ASC,p.name LIMIT 50")->fetchAll();
+        $sales['revenue_minor']=CommerceValues::integer($sales['revenue_minor'],0,PHP_INT_MAX,'revenue_minor');
+        foreach($coupons as &$row)$row['discount_minor']=CommerceValues::integer($row['discount_minor'],0,PHP_INT_MAX,'discount_minor');unset($row);
+        foreach($statuses as &$row)$row['value_minor']=CommerceValues::integer($row['value_minor'],0,PHP_INT_MAX,'value_minor');unset($row);
+        foreach($topProducts as &$row){$row['revenue_minor']=CommerceValues::integer($row['revenue_minor'],0,PHP_INT_MAX,'revenue_minor');$row['qty_milli']=CommerceValues::integer($row['qty_milli'],0,PHP_INT_MAX,'qty_milli');}unset($row);
+        return compact('from','to','sales','coupons','statuses','topProducts','lowStock');
+    }
+    /** Real, bounded analytics for one of the supported UTC periods. */
+    public function analyticsDashboard(int $actorId,int $days):array
+    {
+        CommerceAccess::requirePermission('admin.analytics.view',$actorId);
+        if(!in_array($days,[7,30,90],true))CommerceValues::invalid('days');
+        $utc=new DateTimeZone('UTC');$today=new DateTimeImmutable('today',$utc);
+        $to=$today->format('Y-m-d');$from=$today->modify('-'.($days-1).' days')->format('Y-m-d');
+        $previousTo=(new DateTimeImmutable($from,$utc))->modify('-1 day')->format('Y-m-d');
+        $previousFrom=(new DateTimeImmutable($previousTo,$utc))->modify('-'.($days-1).' days')->format('Y-m-d');
+        $current=$this->reports($actorId,$from,$to);
+        $fromEpoch=(new DateTimeImmutable($from.' 00:00:00',$utc))->getTimestamp();
+        $untilEpoch=(new DateTimeImmutable($to.' 00:00:00',$utc))->modify('+1 day')->getTimestamp();
+        $previousFromEpoch=(new DateTimeImmutable($previousFrom.' 00:00:00',$utc))->getTimestamp();
+        $previousUntilEpoch=$fromEpoch;
+        $orderCount=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM orders WHERE created_at>=? AND created_at<?',[$fromEpoch,$untilEpoch])->fetchColumn();
+        $previousOrderCount=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM orders WHERE created_at>=? AND created_at<?',[$previousFromEpoch,$previousUntilEpoch])->fetchColumn();
+        $previousRevenue=(int)CommerceDatabase::query($this->pdo,"SELECT COALESCE(SUM(total_minor),0) FROM orders WHERE payment_status='paid' AND created_at>=? AND created_at<?",[$previousFromEpoch,$previousUntilEpoch])->fetchColumn();
+        $metrics=CommerceDatabase::query($this->pdo,'SELECT COALESCE(SUM(views),0) AS views,COALESCE(SUM(add_to_carts),0) AS add_to_carts,COALESCE(SUM(orders_net),0) AS orders_net FROM product_daily_metrics WHERE metric_date>=? AND metric_date<=?',[$from,$to])->fetch();
+        $previousMetrics=CommerceDatabase::query($this->pdo,'SELECT COALESCE(SUM(views),0) AS views,COALESCE(SUM(orders_net),0) AS orders_net FROM product_daily_metrics WHERE metric_date>=? AND metric_date<=?',[$previousFrom,$previousTo])->fetch();
+        $views=max(0,(int)$metrics['views']);$ordersNet=max(0,(int)$metrics['orders_net']);
+        $previousViews=max(0,(int)$previousMetrics['views']);
+        $revenue=(int)$current['sales']['revenue_minor'];
+        $activeProducts=(int)CommerceDatabase::query($this->pdo,"SELECT COUNT(*) FROM products WHERE status='active'")->fetchColumn();
+        $lowStock=(int)CommerceDatabase::query($this->pdo,"SELECT COUNT(*) FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE v.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli*5")->fetchColumn();
+        $daily=CommerceDatabase::query($this->pdo,"SELECT (created_at-(created_at%86400)) AS day_epoch,COUNT(*) AS order_count,
+            SUM(CASE WHEN payment_status='paid' THEN 1 ELSE 0 END) AS paid_order_count,
+            COALESCE(SUM(CASE WHEN payment_status='paid' THEN total_minor ELSE 0 END),0) AS revenue_minor
+            FROM orders WHERE created_at>=? AND created_at<? GROUP BY (created_at-(created_at%86400)) ORDER BY day_epoch",[$fromEpoch,$untilEpoch])->fetchAll();
+        $categories=CommerceDatabase::query($this->pdo,"SELECT c.id,c.name,COALESCE(SUM(oi.line_total_minor),0) AS revenue_minor,
+            COUNT(DISTINCT oi.order_id) AS order_count,COALESCE(SUM(oi.qty_milli),0) AS qty_milli
+            FROM order_items oi JOIN orders o ON o.id=oi.order_id JOIN products p ON p.id=oi.product_id JOIN categories c ON c.id=p.category_id
+            WHERE o.payment_status='paid' AND o.created_at>=? AND o.created_at<?
+            GROUP BY c.id,c.name ORDER BY revenue_minor DESC,c.name LIMIT 10",[$fromEpoch,$untilEpoch])->fetchAll();
+        $recentOrders=CommerceDatabase::query($this->pdo,"SELECT o.id,o.order_number,o.status,o.total_minor,o.created_at
+            FROM orders o WHERE o.payment_status='paid' AND o.created_at>=? AND o.created_at<?
+            ORDER BY o.total_minor DESC,o.created_at DESC,o.id DESC LIMIT 8",[$fromEpoch,$untilEpoch])->fetchAll();
+        foreach($categories as &$row){$row['revenue_minor']=CommerceValues::integer($row['revenue_minor'],0,PHP_INT_MAX,'revenue_minor');$row['qty_milli']=CommerceValues::integer($row['qty_milli'],0,PHP_INT_MAX,'qty_milli');}unset($row);
+        foreach($recentOrders as &$row){$row['total_minor']=CommerceValues::integer($row['total_minor'],0,PHP_INT_MAX,'total_minor');$row['created_at']=gmdate('Y-m-d H:i',(int)$row['created_at']);}unset($row);
+        foreach($current['coupons'] as &$row){$row['discount_minor']=CommerceValues::integer($row['discount_minor'],0,PHP_INT_MAX,'discount_minor');$row['range_uses']=(int)$row['range_uses'];$row['used_count']=(int)$row['used_count'];$row['usage_limit']=$row['usage_limit']===null?null:(int)$row['usage_limit'];}unset($row);
+        $stateExpr=$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='sqlite'
+            ?"CASE WHEN json_valid(address_snapshot) THEN json_extract(address_snapshot,'$.state') ELSE NULL END"
+            :"CASE WHEN JSON_VALID(address_snapshot) THEN JSON_UNQUOTE(JSON_EXTRACT(address_snapshot,'$.state')) ELSE NULL END";
+        $stateRows=CommerceDatabase::query($this->pdo,"SELECT $stateExpr AS state_name,COUNT(*) AS order_count,COALESCE(SUM(total_minor),0) AS revenue_minor
+            FROM orders WHERE payment_status='paid' AND created_at>=? AND created_at<? AND $stateExpr IS NOT NULL AND TRIM($stateExpr)<>''
+            GROUP BY state_name ORDER BY revenue_minor DESC,state_name",[$fromEpoch,$untilEpoch])->fetchAll();
+        $stateCodes=[
+            'andaman and nicobar islands'=>'IN-AN','andhra pradesh'=>'IN-AP','arunachal pradesh'=>'IN-AR','assam'=>'IN-AS','bihar'=>'IN-BR',
+            'chandigarh'=>'IN-CH','chhattisgarh'=>'IN-CT','dadra and nagar haveli'=>'IN-DN','daman and diu'=>'IN-DD','delhi'=>'IN-DL','national capital territory of delhi'=>'IN-DL',
+            'goa'=>'IN-GA','gujarat'=>'IN-GJ','haryana'=>'IN-HR','himachal pradesh'=>'IN-HP','jammu and kashmir'=>'IN-JK','jammu kashmir'=>'IN-JK','jharkhand'=>'IN-JH',
+            'karnataka'=>'IN-KA','kerala'=>'IN-KL','madhya pradesh'=>'IN-MP','maharashtra'=>'IN-MH','manipur'=>'IN-MN','meghalaya'=>'IN-ML','mizoram'=>'IN-MZ','nagaland'=>'IN-NL',
+            'odisha'=>'IN-OR','orissa'=>'IN-OR','punjab'=>'IN-PB','rajasthan'=>'IN-RJ','sikkim'=>'IN-SK','tamil nadu'=>'IN-TN','tripura'=>'IN-TR',
+            'uttar pradesh'=>'IN-UP','uttarakhand'=>'IN-UT','uttaranchal'=>'IN-UT','west bengal'=>'IN-WB','puducherry'=>'IN-PY','pondicherry'=>'IN-PY',
+            'dadra and nagar haveli and daman and diu'=>null,'telangana'=>null,'lakshadweep'=>null,
+        ];
+        $regionTotals=[];$regionMap=[];
+        foreach($stateRows as $row){
+            $name=trim((string)$row['state_name']);$normalized=trim(preg_replace('/[^a-z0-9]+/',' ',strtolower($name))??'');
+            $code=preg_match('/\AIN-[A-Z]{2}\z/i',$name)?strtoupper($name):($stateCodes[$normalized]??null);
+            $key=$code??('name:'.$normalized);
+            if(!isset($regionTotals[$key]))$regionTotals[$key]=['name'=>$code?($normalized==='orissa'?'Odisha':($normalized==='uttaranchal'?'Uttarakhand':$name)):$name,'map_code'=>$code,'order_count'=>0,'revenue_minor'=>0];
+            $regionTotals[$key]['order_count']+=(int)$row['order_count'];$regionTotals[$key]['revenue_minor']+=(int)$row['revenue_minor'];
+            if($code)$regionMap[$code]=($regionMap[$code]??0)+(int)$row['revenue_minor'];
+        }
+        $regionTotals=array_values($regionTotals);usort($regionTotals,static fn($a,$b)=>$b['revenue_minor']<=>$a['revenue_minor']?:strcmp($a['name'],$b['name']));
+        $dailyMetrics=CommerceDatabase::query($this->pdo,'SELECT metric_date,COALESCE(SUM(views),0) AS views,COALESCE(SUM(orders_net),0) AS orders_net FROM product_daily_metrics WHERE metric_date>=? AND metric_date<=? GROUP BY metric_date ORDER BY metric_date',[$from,$to])->fetchAll();
+        $trend=[];$byDate=[];
+        foreach($daily as $row){$date=gmdate('Y-m-d',(int)$row['day_epoch']);$byDate[$date]=['orders'=>(int)$row['order_count'],'paid_orders'=>(int)$row['paid_order_count'],'revenue_minor'=>(int)$row['revenue_minor'],'views'=>0,'orders_net'=>0];}
+        foreach($dailyMetrics as $row){$date=(string)$row['metric_date'];$byDate[$date]??=['orders'=>0,'paid_orders'=>0,'revenue_minor'=>0,'views'=>0,'orders_net'=>0];$byDate[$date]['views']=max(0,(int)$row['views']);$byDate[$date]['orders_net']=max(0,(int)$row['orders_net']);}
+        $afterTo=(new DateTimeImmutable($to,$utc))->modify('+1 day');
+        for($day=new DateTimeImmutable($from,$utc);$day<$afterTo;$day=$day->modify('+1 day')){
+            $date=$day->format('Y-m-d');$row=$byDate[$date]??['orders'=>0,'paid_orders'=>0,'revenue_minor'=>0,'views'=>0,'orders_net'=>0];
+            $trend[]=['date'=>$date,'orders'=>$row['orders'],'paid_orders'=>$row['paid_orders'],'revenue_minor'=>(string)$row['revenue_minor'],'views'=>$row['views'],'orders_net'=>$row['orders_net']];
+        }
+        $checkpoint=CommerceDatabase::query($this->pdo,'SELECT updated_at FROM analytics_checkpoint ORDER BY id LIMIT 1')->fetchColumn();
+        $pending=(new MetricsService($this->pdo))->pending();
+        $tiles=[
+            'orders_total'=>$orderCount,'orders_paid'=>(int)$current['sales']['order_count'],'revenue_minor'=>$revenue,
+            'aov_minor'=>intdiv($revenue,max(1,(int)$current['sales']['order_count'])),'views'=>$views,
+            'add_to_carts'=>max(0,(int)$metrics['add_to_carts']),'conversion_bps'=>(int)round($ordersNet/max(1,$views)*10000),
+            'active_products'=>$activeProducts,'low_stock'=>$lowStock,'orders_net'=>$ordersNet,
+        ];
+        $growth=[
+            'orders'=>self::percentChange($orderCount,$previousOrderCount),
+            'revenue'=>self::percentChange($revenue,$previousRevenue),
+            'views'=>self::percentChange($views,$previousViews),
+        ];
+        return ['period'=>['days'=>$days,'from'=>$from,'to'=>$to], 'tiles'=>$tiles,'growth'=>$growth,
+            'trend'=>$trend,'statuses'=>$current['statuses'],'topProducts'=>$current['topProducts'],
+            'categories'=>$categories,'coupons'=>$current['coupons'],'recentOrders'=>$recentOrders,
+            'lowStockRows'=>$current['lowStock'],'regionTotals'=>$regionTotals,'regionMap'=>$regionMap,
+            'metricsUpdatedAt'=>$checkpoint?(int)$checkpoint:0,'pendingMetrics'=>$pending];
+    }
+    /** Product-level view, cancellation-aware order and paid-revenue totals plus a 30-day chart. */
+    public function productAnalytics(int $actorId,int $productId):array
+    {
+        CommerceAccess::requirePermission('admin.products.view',$actorId);
+        $product=CommerceDatabase::query($this->pdo,'SELECT id FROM products WHERE id=?',[$productId])->fetch();
+        if(!$product)throw new RequestRejected(404,'not_found','Product not found.');
+        $utc=new DateTimeZone('UTC');$today=new DateTimeImmutable('today',$utc);$from=$today->modify('-29 days')->format('Y-m-d');$to=$today->format('Y-m-d');
+        $fromEpoch=(new DateTimeImmutable($from.' 00:00:00',$utc))->getTimestamp();$untilEpoch=$today->modify('+1 day')->getTimestamp();
+        $metricRows=CommerceDatabase::query($this->pdo,'SELECT metric_date,COALESCE(SUM(views),0) AS views,COALESCE(SUM(orders_net),0) AS orders_net FROM product_daily_metrics WHERE product_id=? AND metric_date>=? AND metric_date<=? GROUP BY metric_date ORDER BY metric_date',[$productId,$from,$to])->fetchAll();
+        $revenueRows=CommerceDatabase::query($this->pdo,"SELECT (o.created_at-(o.created_at%86400)) AS day_epoch,COALESCE(SUM(oi.line_total_minor),0) AS revenue_minor FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE oi.product_id=? AND o.payment_status='paid' AND o.created_at>=? AND o.created_at<? GROUP BY (o.created_at-(o.created_at%86400))",[$productId,$fromEpoch,$untilEpoch])->fetchAll();
+        $byDate=[];
+        foreach($metricRows as $row)$byDate[(string)$row['metric_date']]=['views'=>max(0,(int)$row['views']),'orders'=>max(0,(int)$row['orders_net']),'revenue_minor'=>0];
+        foreach($revenueRows as $row){$date=gmdate('Y-m-d',(int)$row['day_epoch']);$byDate[$date]??=['views'=>0,'orders'=>0,'revenue_minor'=>0];$byDate[$date]['revenue_minor']=(int)$row['revenue_minor'];}
+        $trend=[];$views=0;$orders=0;$revenue=0;
+        for($day=new DateTimeImmutable($from,$utc);$day<=$today;$day=$day->modify('+1 day')){
+            $date=$day->format('Y-m-d');$row=$byDate[$date]??['views'=>0,'orders'=>0,'revenue_minor'=>0];
+            $views+=$row['views'];$orders+=$row['orders'];$revenue+=$row['revenue_minor'];
+            $trend[]=['date'=>$date,'views'=>$row['views'],'orders'=>$row['orders'],'revenue_minor'=>(string)$row['revenue_minor']];
+        }
+        return ['views'=>$views,'orders'=>$orders,'revenue_minor'=>$revenue,
+            'conversion_bps'=>(int)round($orders/max(1,$views)*10000),'trend'=>$trend,'from'=>$from,'to'=>$to];
+    }
+    private static function percentChange(int $current,int $previous):?string
+    {
+        if($previous===0)return $current===0?'0.0':null;
+        return number_format((($current-$previous)/$previous)*100,1,'.','');
+    }
+    /** Open work across the modules a staff account can reach; counts link to the screen that clears them. */
+    public function attention(array $actor): array
+    {
+        $permissions=$actor['permissions'];$items=[];
+        $add=function(string $permission,string $label,string $module,string $hint,string $sql)use(&$items,$permissions):void{
+            if(!in_array($permission,$permissions,true))return;
+            $items[]=['label'=>$label,'module'=>$module,'hint'=>$hint,'count'=>(int)CommerceDatabase::query($this->pdo,$sql)->fetchColumn()];
+        };
+        // NEXT keys are exactly the non-terminal order statuses (placed…outForDelivery); constant, so safe to inline.
+        $open="'".implode("','",array_keys(OrderStates::NEXT))."'";
+        $add('admin.orders.view','Orders to fulfil','orders','Active orders not yet delivered',"SELECT COUNT(*) FROM orders WHERE status IN ($open)");
+        $add('admin.products.view','Reviews to moderate','product-reviews','Customer reviews awaiting approval',"SELECT COUNT(*) FROM product_reviews WHERE status='pending'");
+        $add('admin.orders.view','Store visit enquiries','enquiries','Showroom visit leads from the website',"SELECT COUNT(*) FROM store_visit_enquiries");
+        $add('admin.inventory.view','Out of stock variants','inventory','Enabled variants with nothing sellable',"SELECT COUNT(*) FROM inventory i JOIN product_variants v ON v.id=i.variant_id WHERE v.enabled=1 AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli");
+        return $items;
+    }
+    public function overview(array $actor): array
+    {
+        $cards=[];
+        foreach(['products'=>['Materials','products'],'inventory'=>['Stock variants','inventory'],'orders'=>['Orders','orders'],'customers'=>['Customers','users_tbl']] as $module=>[$label,$table]){
+            if(!in_array(self::TABLES[$module][1],$actor['permissions'],true))continue;
+            $where=$module==='customers'?" WHERE NOT EXISTS (SELECT 1 FROM user_roles ur JOIN role_permissions rp ON rp.role_id=ur.role_id JOIN permissions perm ON perm.id=rp.permission_id WHERE ur.user_id=users_tbl.id AND perm.permission_key LIKE 'admin.%')":'';
+            $cards[]=['label'=>$label,'count'=>(int)CommerceDatabase::query($this->pdo,"SELECT COUNT(*) FROM $table$where")->fetchColumn(),'module'=>$module];
+        }return $cards;
+    }
+}

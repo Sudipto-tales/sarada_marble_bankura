@@ -3,18 +3,19 @@
 // This file is both the CLI launcher and the development-server router.
 if (PHP_SAPI === 'cli-server') {
     $path = rawurldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/');
+    if (preg_match('~(?:^|/)\.|^/(?:config|core|vendor|database|docs|tests|app|logs|cache|storage|imports|var|bin)(?:/|$)|^/(?:vayu$|composer\.)|\.(?:php[0-9]?|phtml|phar|sqlite3?|db|log|sql|bak|ini|env)(?:/|$)~i', $path)
+        && $path !== '/index.php') {
+        http_response_code(404);
+        echo 'Not found';
+        return;
+    }
     $file = realpath(__DIR__ . $path);
     $assets = realpath(__DIR__ . '/assets');
     if ($file && $assets && is_file($file)
         && str_starts_with($file, $assets . DIRECTORY_SEPARATOR)
         && in_array(strtolower(pathinfo($file, PATHINFO_EXTENSION)),
-            ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'map'], true)) {
+            ['css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'map', 'pdf', 'json'], true)) {
         return false;
-    }
-    if (preg_match('~^/(?:\.|config(?:/|$)|core(?:/|$)|vendor(?:/|$)|database(?:/|$)|docs(?:/|$)|app(?:/|$)|vayu$|composer\.)~i', $path)) {
-        http_response_code(404);
-        echo 'Not found';
-        return;
     }
     $_SERVER['SCRIPT_NAME'] = '/index.php';
     require __DIR__ . '/index.php';
@@ -29,16 +30,162 @@ if (PHP_SAPI !== 'cli') {
 $command = $argv[1] ?? 'help';
 if (in_array($command, ['help', '--help', '-h'], true)) {
     echo "Vayu development server\n\nUsage: php vayu run [--host=127.0.0.1] [--port=8000]\n\nStop with Ctrl+C.\n";
-    echo "Create a console account: php vayu developer:create you@example.com\n";
+    echo "Apply pending migrations: php vayu migrate\nCreate a console account: php vayu developer:create you@example.com\n";
+    echo "Daily UTC health snapshot: php vayu developer:report [--date=YYYY-MM-DD]\n";
+    echo "Create commerce staff: php vayu commerce:create you@example.com [admin|catalog_manager|operations|viewer]\n";
+    echo "Inspect old orphan images: php vayu catalog:images:clean [--delete]\n";
+    echo "Seed development demo catalog: php vayu demo:seed --actor-id=ID\n";
+    echo "Import bundled Kajaria catalog (draft, hidden): php vayu catalog:import --actor-id=ID\n";
+    echo "Bounded worker: php vayu queue:work --queues=emails,maintenance --max=20 --max-seconds=30\nRetry one failed job: php vayu queue:retry --failed-id=123\n";
+    echo "Aggregate analytics: php vayu analytics:aggregate [--batch=200] [--max-seconds=20]\nPrune old processed events: php vayu analytics:purge --retention-days=90 [--batch=500]\n";
+    echo "Rebuild recommendations: php vayu recommend:rebuild\n";
     exit(0);
 }
+if ($command === 'demo:seed') {
+    try {
+        if (count($argv) !== 3 || !preg_match('/\A--actor-id=([1-9][0-9]*)\z/', $argv[2], $match)) {
+            throw new RuntimeException('Usage: php vayu demo:seed --actor-id=ID');
+        }
+        require __DIR__ . '/config/bootstarp.php';
+        require __DIR__ . '/database/seeders/DemoCatalogSeeder.php';
+        $result = (new DemoCatalogSeeder($pdo))->run(CommerceValues::id($match[1]));
+        echo json_encode($result, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n";
+        exit(0);
+    } catch (Throwable $error) {
+        fwrite(STDERR, "Demo seeding failed. Use: php vayu demo:seed --actor-id=ID. Requires development/test environment, applied migrations, bundled textures and active staff with catalog-edit/inventory-adjust grants. Existing records are preserved; rerun after correcting the prerequisite.\n");
+        exit(1);
+    }
+}
+if ($command === 'catalog:import') {
+    try {
+        if (count($argv) !== 3 || !preg_match('/\A--actor-id=([1-9][0-9]*)\z/', $argv[2], $match)) {
+            throw new RuntimeException('Usage: php vayu catalog:import --actor-id=ID');
+        }
+        require __DIR__ . '/config/bootstarp.php';
+        require __DIR__ . '/database/seeders/KajariaCatalogSeeder.php';
+        $result = (new KajariaCatalogSeeder($pdo))->run(CommerceValues::id($match[1]));
+        echo json_encode($result, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n";
+        exit(0);
+    } catch (Throwable $error) {
+        fwrite(STDERR, "Kajaria import failed. Use: php vayu catalog:import --actor-id=ID. Requires applied migrations, the bundled Website/database/seeders/kajaria dataset and an active staff account with the catalog-edit grant. Products are created hidden (draft, no price); existing records are preserved, so rerun after correcting the prerequisite.\n");
+        exit(1);
+    }
+}
+if ($command === 'developer:report') {
+    try {
+        if (count($argv)>3 || (isset($argv[2]) && !preg_match('/\A--date=(\d{4}-\d{2}-\d{2})\z/',$argv[2],$match))) throw new InvalidArgumentException();
+        require __DIR__.'/config/bootstarp.php';
+        $day=$match[1] ?? gmdate('Y-m-d',time()-86400);
+        echo json_encode((new DeveloperKnowledge($pdo))->daily($day),JSON_THROW_ON_ERROR|JSON_PRETTY_PRINT)."\n";
+        exit(0);
+    } catch (Throwable $error) {
+        fwrite(STDERR,"Daily report failed. Use a completed UTC date (--date=YYYY-MM-DD), apply migrations and check database availability.\n");exit(1);
+    }
+}
+if ($command === 'migrate') {
+    if (count($argv) !== 2) {
+        fwrite(STDERR, "Usage: php vayu migrate\n");
+        exit(1);
+    }
+    try {
+        require __DIR__ . '/config/cli.php';
+        require __DIR__ . '/config/migrate.php';
+        (new MigrationRunner($pdo, __DIR__ . '/database/migrations'))->run();
+        exit(0);
+    } catch (Throwable $e) {
+        $message = $e instanceof MigrationRunException ? $e->getMessage()
+            : 'Migration setup failed. Check database configuration and installed PDO drivers.';
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+}
+if ($command === 'catalog:images:clean') {
+    if (count($argv)>3 || (isset($argv[2]) && $argv[2]!=='--delete')) {
+        fwrite(STDERR, "Usage: php vayu catalog:images:clean [--delete]\n"); exit(1);
+    }
+    try {
+        require __DIR__ . '/config/cli.php';
+        require_once __DIR__ . '/config/bootstarp.php';
+        $result=(new ProductImageService($pdo))->reconcile(($argv[2]??'')==='--delete');
+        echo json_encode($result,JSON_THROW_ON_ERROR)."\n";exit(0);
+    } catch(Throwable $error) {fwrite(STDERR,"Image maintenance failed. Check private storage and database availability.\n");exit(1);}
+}
+if ($command === 'commerce:create') {
+    try {
+        require __DIR__ . '/config/cli.php';
+        require_once __DIR__ . '/core/CommerceAccess.php';
+        if (count($argv) < 3 || count($argv) > 4)
+            throw new CommerceProvisioningRejected('Usage: php vayu commerce:create EMAIL [admin|catalog_manager|operations|viewer]');
+        $tty = function_exists('stream_isatty') && stream_isatty(STDIN);
+        if ($tty) { echo 'Password (12 to 72 bytes): '; shell_exec('stty -echo'); }
+        try {
+            $line = fgets(STDIN, 1024);
+            if ($line === false) throw new CommerceProvisioningRejected('No password received on stdin. Run the command in a terminal and enter your password at the prompt.');
+            $password = rtrim($line, "\r\n");
+        }
+        finally { if ($tty) { shell_exec('stty echo'); echo "\n"; } }
+        $id = CommerceAccess::provision($argv[2], $password, $argv[3] ?? 'admin');
+        echo "Commerce staff account created (ID {$id}).\n";
+        exit(0);
+    } catch (CommerceProvisioningRejected $e) {
+        fwrite(STDERR, 'Staff account creation failed. ' . $e->getMessage() . "\n");
+        exit(1);
+    } catch (Throwable $e) {
+        fwrite(STDERR, "Staff account creation failed. Check database availability and run php vayu migrate before retrying.\n");
+        exit(1);
+    }
+}
+if ($command === 'recommend:rebuild') {
+    try {
+        if (count($argv) !== 2) throw new InvalidArgumentException();
+        require __DIR__.'/config/bootstarp.php';
+        echo json_encode((new RecommendationService($pdo))->rebuild(),JSON_THROW_ON_ERROR)."\n";exit(0);
+    } catch(Throwable $e) {fwrite(STDERR,"Recommendation rebuild failed. Check migrations and database configuration. Usage: php vayu recommend:rebuild\n");exit(1);}
+}
+if (in_array($command,['analytics:aggregate','analytics:purge'],true)) {
+    try {
+        require __DIR__.'/config/bootstarp.php';$options=[];
+        foreach(array_slice($argv,2) as $option) {
+            if(!preg_match('/\A--([a-z-]+)=(.*)\z/',$option,$match)||isset($options[$match[1]]))throw new InvalidArgumentException();
+            $options[$match[1]]=$match[2];
+        }
+        $metrics=new MetricsService($pdo);
+        if($command==='analytics:aggregate') {
+            if(array_diff(array_keys($options),['batch','max-seconds']))throw new InvalidArgumentException();
+            $stats=$metrics->aggregate(CommerceValues::integer($options['batch']??200,1,1000,'batch'),CommerceValues::integer($options['max-seconds']??20,1,300,'max_seconds'));
+        } else {
+            if(array_diff(array_keys($options),['retention-days','batch','max-seconds']))throw new InvalidArgumentException();
+            if(!isset($options['retention-days']))throw new InvalidArgumentException();
+            $stats=$metrics->purge(CommerceValues::integer($options['retention-days'],1,3650,'retention_days'),CommerceValues::integer($options['batch']??500,1,1000,'batch'),CommerceValues::integer($options['max-seconds']??20,1,300,'max_seconds'));
+        }
+        echo json_encode($stats,JSON_THROW_ON_ERROR)."\n";exit(0);
+    } catch(Throwable $e) {fwrite(STDERR,"Analytics command failed. Check migrations and database configuration. Usage: php vayu analytics:aggregate [--batch=N] [--max-seconds=N]; php vayu analytics:purge --retention-days=N [--batch=N] [--max-seconds=N]\n");exit(1);}
+}
+if (in_array($command,['queue:work','queue:retry'],true)) {
+    try {
+        require __DIR__.'/config/bootstarp.php';$options=[];
+        foreach(array_slice($argv,2) as $option) {
+            if(!preg_match('/\A--([a-z-]+)=(.*)\z/',$option,$match)||isset($options[$match[1]]))throw new InvalidArgumentException();
+            $options[$match[1]]=$match[2];
+        }
+        if($command==='queue:retry') {
+            if(array_keys($options)!==['failed-id'])throw new InvalidArgumentException();
+            $id=(new Queue($pdo))->retryFailed(CommerceValues::id($options['failed-id']));echo "Failed job replay recorded (job ID $id).\n";
+        } else {
+            if(array_diff(array_keys($options),['queues','max','max-seconds']))throw new InvalidArgumentException();
+            $stats=(new QueueWorker($pdo))->run(explode(',',$options['queues']??'emails'),CommerceValues::integer($options['max']??20,1,100,'max'),CommerceValues::integer($options['max-seconds']??30,1,300,'max_seconds'));
+            echo json_encode($stats,JSON_THROW_ON_ERROR)."\n";
+        }exit(0);
+    } catch(Throwable $e) {fwrite(STDERR,"Queue command failed. Check migrations, enabled queues, limits and database configuration.\n");exit(1);}
+}
 if ($command === 'developer:create') {
-    require __DIR__ . '/vendor/autoload.php';
-    Dotenv\Dotenv::createImmutable(__DIR__)->safeLoad();
-    require __DIR__ . '/config/env.php';
-    require __DIR__ . '/config/config.php';
-    require __DIR__ . '/config/db.php';
-    require __DIR__ . '/core/DeveloperAccess.php';
+    try {
+        require __DIR__ . '/config/cli.php';
+        require_once __DIR__ . '/core/DeveloperAccess.php';
+    } catch (Throwable $e) {
+        fwrite(STDERR, "Console setup failed. Check database configuration and installed PDO drivers.\n");
+        exit(1);
+    }
     echo "Enter a password (at least 12 characters; input is visible): ";
     $password = rtrim(fgets(STDIN) ?: '', "\r\n");
     try {

@@ -1,0 +1,627 @@
+{
+  "version": "kajaria:v1",
+  "brand_slug": "kajaria",
+  "brand_name": "Kajaria",
+  "products": [
+    {
+      "slug": "12251-riser",
+      "name": "Kajaria 12251 | Riser",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12251 | Riser. Size: 20x120 cm. Finish: Matt. Colour: Grey. Application: Stairs.",
+      "alt": "12251 | Riser — Kajaria tile",
+      "tags": "kajaria tiles matt grey",
+      "images": [
+        {
+          "file": "12251-riser-0.webp",
+          "width": 800,
+          "height": 573
+        },
+        {
+          "file": "12251-riser-1.webp",
+          "width": 800,
+          "height": 573
+        }
+      ]
+    },
+    {
+      "slug": "12252-riser",
+      "name": "Kajaria 12252 | Riser",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12252 | Riser. Size: 20x120 cm. Finish: Matt. Colour: Cream. Application: Stairs.",
+      "alt": "12252 | Riser — Kajaria tile",
+      "tags": "kajaria tiles matt cream",
+      "images": [
+        {
+          "file": "12252-riser-0.webp",
+          "width": 800,
+          "height": 599
+        },
+        {
+          "file": "12252-riser-1.webp",
+          "width": 800,
+          "height": 133
+        }
+      ]
+    },
+    {
+      "slug": "12253-riser",
+      "name": "Kajaria 12253 | Riser",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12253 | Riser. Size: 20x120 cm. Finish: Matt. Colour: Grey. Application: Stairs.",
+      "alt": "12253 | Riser — Kajaria tile",
+      "tags": "kajaria tiles matt grey",
+      "images": [
+        {
+          "file": "12253-riser-0.webp",
+          "width": 800,
+          "height": 578
+        },
+        {
+          "file": "12253-riser-1.webp",
+          "width": 1004,
+          "height": 800
+        },
+        {
+          "file": "12253-riser-2.webp",
+          "width": 761,
+          "height": 800
+        },
+        {
+          "file": "12253-riser-3.webp",
+          "width": 800,
+          "height": 134
+        }
+      ]
+    },
+    {
+      "slug": "12254-riser",
+      "name": "Kajaria 12254 | Riser",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12254 | Riser. Size: 20x120 cm. Finish: Matt. Colour: Black. Application: Stairs.",
+      "alt": "12254 | Riser — Kajaria tile",
+      "tags": "kajaria tiles matt black",
+      "images": [
+        {
+          "file": "12254-riser-0.webp",
+          "width": 800,
+          "height": 598
+        },
+        {
+          "file": "12254-riser-1.webp",
+          "width": 1079,
+          "height": 800
+        },
+        {
+          "file": "12254-riser-2.webp",
+          "width": 800,
+          "height": 134
+        }
+      ]
+    },
+    {
+      "slug": "12255-riser",
+      "name": "Kajaria 12255 | Riser",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12255 | Riser. Size: 20x120 cm. Finish: Matt. Colour: Green. Application: Stairs.",
+      "alt": "12255 | Riser — Kajaria tile",
+      "tags": "kajaria tiles matt green",
+      "images": [
+        {
+          "file": "12255-riser-0.webp",
+          "width": 688,
+          "height": 800
+        },
+        {
+          "file": "12255-riser-1.webp",
+          "width": 800,
+          "height": 134
+        }
+      ]
+    },
+    {
+      "slug": "12351-step",
+      "name": "Kajaria 12351 | Step",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12351 | Step. Size: 30x120 cm. Finish: Matt. Colour: Grey. Application: Stairs.",
+      "alt": "12351 | Step — Kajaria tile",
+      "tags": "kajaria tiles matt grey",
+      "images": [
+        {
+          "file": "12351-step-0.webp",
+          "width": 800,
+          "height": 573
+        },
+        {
+          "file": "12351-step-1.webp",
+          "width": 800,
+          "height": 197
+        }
+      ]
+    },
+    {
+      "slug": "12352-step",
+      "name": "Kajaria 12352 | Step",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12352 | Step. Size: 30x120 cm. Finish: Matt. Colour: Beige. Application: Stairs.",
+      "alt": "12352 | Step — Kajaria tile",
+      "tags": "kajaria tiles matt beige",
+      "images": [
+        {
+          "file": "12352-step-0.webp",
+          "width": 800,
+          "height": 599
+        },
+        {
+          "file": "12352-step-1.webp",
+          "width": 800,
+          "height": 197
+        }
+      ]
+    },
+    {
+      "slug": "12353-step",
+      "name": "Kajaria 12353 | Step",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12353 | Step. Size: 30x120 cm. Finish: Matt. Colour: Grey. Application: Stairs.",
+      "alt": "12353 | Step — Kajaria tile",
+      "tags": "kajaria tiles matt grey",
+      "images": [
+        {
+          "file": "12353-step-0.webp",
+          "width": 931,
+          "height": 800
+        },
+        {
+          "file": "12353-step-1.webp",
+          "width": 1004,
+          "height": 800
+        },
+        {
+          "file": "12353-step-2.webp",
+          "width": 761,
+          "height": 800
+        },
+        {
+          "file": "12353-step-3.webp",
+          "width": 800,
+          "height": 200
+        }
+      ]
+    },
+    {
+      "slug": "12354-step",
+      "name": "Kajaria 12354 | Step",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12354 | Step. Size: 30x120 cm. Finish: Matt. Colour: Brown. Application: Stairs.",
+      "alt": "12354 | Step — Kajaria tile",
+      "tags": "kajaria tiles matt brown",
+      "images": [
+        {
+          "file": "12354-step-0.webp",
+          "width": 931,
+          "height": 800
+        },
+        {
+          "file": "12354-step-1.webp",
+          "width": 800,
+          "height": 598
+        },
+        {
+          "file": "12354-step-2.webp",
+          "width": 1079,
+          "height": 800
+        },
+        {
+          "file": "12354-step-3.webp",
+          "width": 800,
+          "height": 200
+        }
+      ]
+    },
+    {
+      "slug": "12355-step",
+      "name": "Kajaria 12355 | Step",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12355 | Step. Size: 30x120 cm. Finish: Matt. Colour: Green. Application: Stairs.",
+      "alt": "12355 | Step — Kajaria tile",
+      "tags": "kajaria tiles matt green",
+      "images": [
+        {
+          "file": "12355-step-0.webp",
+          "width": 688,
+          "height": 800
+        },
+        {
+          "file": "12355-step-1.webp",
+          "width": 800,
+          "height": 200
+        }
+      ]
+    },
+    {
+      "slug": "12356-step",
+      "name": "Kajaria 12356 | Step",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12356 | Step. Size: 30x120 cm. Finish: Matt. Colour: Grey. Application: Stairs.",
+      "alt": "12356 | Step — Kajaria tile",
+      "tags": "kajaria tiles matt grey",
+      "images": [
+        {
+          "file": "12356-step-0.webp",
+          "width": 800,
+          "height": 525
+        },
+        {
+          "file": "12356-step-1.webp",
+          "width": 850,
+          "height": 800
+        },
+        {
+          "file": "12356-step-2.webp",
+          "width": 800,
+          "height": 578
+        },
+        {
+          "file": "12356-step-3.webp",
+          "width": 800,
+          "height": 200
+        }
+      ]
+    },
+    {
+      "slug": "12357-step",
+      "name": "Kajaria 12357 | Step",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12357 | Step. Size: 30x120 cm. Finish: Matt. Colour: White. Application: Stairs.",
+      "alt": "12357 | Step — Kajaria tile",
+      "tags": "kajaria tiles matt white",
+      "images": [
+        {
+          "file": "12357-step-0.webp",
+          "width": 800,
+          "height": 519
+        },
+        {
+          "file": "12357-step-1.webp",
+          "width": 850,
+          "height": 800
+        },
+        {
+          "file": "12357-step-2.webp",
+          "width": 800,
+          "height": 200
+        }
+      ]
+    },
+    {
+      "slug": "12358-step",
+      "name": "Kajaria 12358 | Step",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 12358 | Step. Size: 30x120 cm. Finish: Matt. Colour: Black. Application: Stairs.",
+      "alt": "12358 | Step — Kajaria tile",
+      "tags": "kajaria tiles matt black",
+      "images": [
+        {
+          "file": "12358-step-0.webp",
+          "width": 686,
+          "height": 800
+        },
+        {
+          "file": "12358-step-1.webp",
+          "width": 800,
+          "height": 200
+        }
+      ]
+    },
+    {
+      "slug": "4012-a",
+      "name": "Kajaria 4012 A",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 4012 A. Size: 40x40 cm-12mm. Finish: Matt. Colour: Grey. Application: Floor Tile.",
+      "alt": "4012 A — Kajaria tile",
+      "tags": "kajaria tiles matt grey",
+      "images": [
+        {
+          "file": "4012-a-0.webp",
+          "width": 696,
+          "height": 800
+        },
+        {
+          "file": "4012-a-1.webp",
+          "width": 800,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "slug": "4017-c",
+      "name": "Kajaria 4017 C",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 4017 C. Size: 40x40 cm-12mm. Finish: Matt. Colour: Silver. Application: Floor Tile.",
+      "alt": "4017 C — Kajaria tile",
+      "tags": "kajaria tiles matt silver",
+      "images": [
+        {
+          "file": "4017-c-0.webp",
+          "width": 817,
+          "height": 800
+        },
+        {
+          "file": "4017-c-1.webp",
+          "width": 800,
+          "height": 798
+        }
+      ]
+    },
+    {
+      "slug": "4024-f",
+      "name": "Kajaria 4024 F",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 4024 F. Size: 40x40 cm-12mm. Finish: Matt. Colour: Grey. Application: Floor Tile.",
+      "alt": "4024 F — Kajaria tile",
+      "tags": "kajaria tiles matt grey",
+      "images": [
+        {
+          "file": "4024-f-0.webp",
+          "width": 1117,
+          "height": 800
+        },
+        {
+          "file": "4024-f-1.webp",
+          "width": 800,
+          "height": 802
+        }
+      ]
+    },
+    {
+      "slug": "4041-l",
+      "name": "Kajaria 4041 L",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 4041 L. Size: 40x40 cm-12mm. Finish: Matt. Colour: Cream, Brown. Application: Floor Tile.",
+      "alt": "4041 L — Kajaria tile",
+      "tags": "kajaria tiles matt cream brown",
+      "images": [
+        {
+          "file": "4041-l-0.webp",
+          "width": 640,
+          "height": 800
+        },
+        {
+          "file": "4041-l-1.webp",
+          "width": 800,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "slug": "4054-r",
+      "name": "Kajaria 4054 R",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 4054 R. Size: 40x40 cm-12mm. Finish: Matt. Colour: Cream, Brown. Application: Floor Tile.",
+      "alt": "4054 R — Kajaria tile",
+      "tags": "kajaria tiles matt cream brown",
+      "images": [
+        {
+          "file": "4054-r-0.webp",
+          "width": 856,
+          "height": 800
+        },
+        {
+          "file": "4054-r-1.webp",
+          "width": 800,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "slug": "4061-u",
+      "name": "Kajaria 4061 U",
+      "category_slug": "polished-vitrified-tiles",
+      "category_name": "Polished Vitrified Tiles",
+      "description": "Kajaria Polished Vitrified Tiles — 4061 U. Size: 40x40 cm-12mm. Finish: Matt. Colour: Multicolor. Application: Floor Tile.",
+      "alt": "4061 U — Kajaria tile",
+      "tags": "kajaria tiles matt multicolor",
+      "images": [
+        {
+          "file": "4061-u-0.webp",
+          "width": 640,
+          "height": 800
+        },
+        {
+          "file": "4061-u-1.webp",
+          "width": 800,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "slug": "abbey-crema",
+      "name": "Kajaria Abbey Crema",
+      "category_slug": "glazed-vitrified-tiles",
+      "category_name": "Glazed Vitrified Tiles",
+      "description": "Kajaria Glazed Vitrified Tiles — Abbey Crema. Size: 15x60 cm. Finish: Stone. Colour: Cream. Application: Wall Tile, Floor Tile.",
+      "alt": "Abbey Crema — Kajaria tile",
+      "tags": "kajaria tiles stone cream",
+      "images": [
+        {
+          "file": "abbey-crema-0.webp",
+          "width": 1000,
+          "height": 250
+        },
+        {
+          "file": "abbey-crema-1.webp",
+          "width": 700,
+          "height": 175
+        },
+        {
+          "file": "abbey-crema-2.webp",
+          "width": 700,
+          "height": 175
+        },
+        {
+          "file": "abbey-crema-3.webp",
+          "width": 700,
+          "height": 175
+        }
+      ]
+    },
+    {
+      "slug": "abbey-gris",
+      "name": "Kajaria Abbey Gris",
+      "category_slug": "glazed-vitrified-tiles",
+      "category_name": "Glazed Vitrified Tiles",
+      "description": "Kajaria Glazed Vitrified Tiles — Abbey Gris. Size: 15x60 cm. Finish: Stone. Colour: Grey. Application: Wall Tile, Floor Tile.",
+      "alt": "Abbey Gris — Kajaria tile",
+      "tags": "kajaria tiles stone grey",
+      "images": [
+        {
+          "file": "abbey-gris-0.webp",
+          "width": 1000,
+          "height": 250
+        },
+        {
+          "file": "abbey-gris-1.webp",
+          "width": 700,
+          "height": 175
+        },
+        {
+          "file": "abbey-gris-2.webp",
+          "width": 700,
+          "height": 175
+        },
+        {
+          "file": "abbey-gris-3.webp",
+          "width": 700,
+          "height": 175
+        }
+      ]
+    },
+    {
+      "slug": "admiral-brown",
+      "name": "Kajaria Admiral Brown",
+      "category_slug": "glazed-vitrified-tiles",
+      "category_name": "Glazed Vitrified Tiles",
+      "description": "Kajaria Glazed Vitrified Tiles — Admiral Brown. Size: 120x240 cm. Finish: Polish. Colour: Brown. Application: Wall Tile, Floor Tile.",
+      "alt": "Admiral Brown — Kajaria tile",
+      "tags": "kajaria tiles polish brown",
+      "images": [
+        {
+          "file": "admiral-brown-0.webp",
+          "width": 989,
+          "height": 800
+        },
+        {
+          "file": "admiral-brown-1.webp",
+          "width": 1200,
+          "height": 614
+        },
+        {
+          "file": "admiral-brown-2.webp",
+          "width": 1200,
+          "height": 614
+        },
+        {
+          "file": "admiral-brown-3.webp",
+          "width": 1200,
+          "height": 614
+        },
+        {
+          "file": "admiral-brown-4.webp",
+          "width": 1200,
+          "height": 614
+        }
+      ]
+    },
+    {
+      "slug": "agate-decor-polished",
+      "name": "Kajaria Agate Decor Polished",
+      "category_slug": "ceramic-wall-tiles",
+      "category_name": "Ceramic Wall Tiles",
+      "description": "Kajaria Ceramic Wall Tiles — Agate Decor Polished. Size: 30x60 cm. Finish: Polished. Colour: Black. Application: Wall Tile, Floor Tile.",
+      "alt": "Agate Decor Polished — Kajaria tile",
+      "tags": "kajaria tiles polished black",
+      "images": [
+        {
+          "file": "agate-decor-polished-0.webp",
+          "width": 539,
+          "height": 800
+        },
+        {
+          "file": "agate-decor-polished-1.webp",
+          "width": 1000,
+          "height": 762
+        },
+        {
+          "file": "agate-decor-polished-2.webp",
+          "width": 3000,
+          "height": 1500
+        },
+        {
+          "file": "agate-decor-polished-3.webp",
+          "width": 3000,
+          "height": 1500
+        },
+        {
+          "file": "agate-decor-polished-4.webp",
+          "width": 3000,
+          "height": 1500
+        },
+        {
+          "file": "agate-decor-polished-5.webp",
+          "width": 3000,
+          "height": 1500
+        }
+      ]
+    },
+    {
+      "slug": "akoya-crema",
+      "name": "Kajaria Akoya Crema",
+      "category_slug": "glazed-vitrified-tiles",
+      "category_name": "Glazed Vitrified Tiles",
+      "description": "Kajaria Glazed Vitrified Tiles — Akoya Crema. Size: 60x60 cm. Finish: Matt. Colour: Cream. Application: Floor Tile.",
+      "alt": "Akoya Crema — Kajaria tile",
+      "tags": "kajaria tiles matt cream",
+      "images": [
+        {
+          "file": "akoya-crema-0.webp",
+          "width": 1500,
+          "height": 1500
+        }
+      ]
+    },
+    {
+      "slug": "akrom-white-3",
+      "name": "Kajaria Akrom White",
+      "category_slug": "gres-tiles",
+      "category_name": "Gres Tiles",
+      "description": "Kajaria Gres Tiles — Akrom White. Size: 80x160 cm. Finish: HD Polished. Colour: White. Application: Floor Tile.",
+      "alt": "Akrom White — Kajaria tile",
+      "tags": "kajaria tiles hd polished white",
+      "images": [
+        {
+          "file": "akrom-white-3-0.webp",
+          "width": 2000,
+          "height": 1000
+        }
+      ]
+    }
+  ]
+}

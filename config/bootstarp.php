@@ -1,25 +1,10 @@
 <?php
 
-// Load Composer autoload and dotenv if available
-$vendorAutoload = __DIR__ . '/../vendor/autoload.php';
-if (file_exists($vendorAutoload)) {
-    require_once $vendorAutoload;
-
-    if (class_exists('Dotenv\\Dotenv')) {
-        $dotenv = Dotenv\Dotenv::createImmutable(dirname(__DIR__));
-        $dotenv->safeLoad();
-    }
-}
-
-require_once __DIR__ . '/env.php';
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/runtime.php';
 require_once __DIR__ . '/framework.php';
-require_once __DIR__ . '/db.php';
-
-// Load all core files dynamically
-foreach (glob(__BASEDIR__ . '/core/*.php') as $filename) {
-    require_once $filename;
-}
+require_once __DIR__ . '/../core/ClassLoader.php';
+ClassLoader::register(require __DIR__ . '/classes.php', __BASEDIR__);
+require_once __DIR__ . '/../core/Helpers.php';
 
 // Function to load view files dynamically
 function load_view($path, $data = []) {

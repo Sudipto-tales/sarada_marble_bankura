@@ -1,0 +1,5 @@
+<?php $title = 'Set a new password | Maa Sarada'; require __DIR__ . '/header.php'; $csrf = RequestSecurity::csrfToken(); ?>
+<div class="page-intro"><div><span class="eyebrow">YOUR MAA SARADA</span><h1>Set a new password.</h1><p>If an account exists for <?= $e($email) ?>, a 6-digit code is on its way. Enter it with your new password.</p></div></div>
+<form class="panel" method="post" action="<?= $u('account/reset') ?>"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="email" value="<?= $e($email) ?>"><label>6-digit code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label><label>New password<input name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required></label><p>Use a password of 12–72 bytes.</p><button>Update password</button></form>
+<form method="post" action="<?= $u('account/forgot') ?>"><input type="hidden" name="csrf" value="<?= $e($csrf) ?>"><input type="hidden" name="email" value="<?= $e($email) ?>"><button class="button secondary">Send a new code</button></form>
+<?php require __DIR__ . '/footer.php'; ?>

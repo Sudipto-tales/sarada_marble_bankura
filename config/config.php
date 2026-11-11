@@ -22,6 +22,9 @@ if (($_SERVER['HTTP_HOST'] ?? '') === 'localhost') {
 
 $frontendRoutes = require __DIR__ . '/../app/view.php';
 $apiRoutes = require __DIR__ . '/../api/gateway.php';
+if (array_intersect_key($frontendRoutes, $apiRoutes)) {
+    throw new LogicException('A route key was registered by both providers.');
+}
 $routes = array_merge($frontendRoutes, $apiRoutes);
 
 ?>

@@ -1,0 +1,73 @@
+<?php
+require __DIR__ . '/support/CommerceTest.php';
+$pdo = CommerceTest::open();
+$check = [CommerceTest::class, 'check'];
+$before = [(int)$pdo->query('SELECT COUNT(*) FROM roles')->fetchColumn(), (int)$pdo->query('SELECT COUNT(*) FROM permissions')->fetchColumn(), (int)$pdo->query('SELECT COUNT(*) FROM role_permissions')->fetchColumn()];
+$check($before[0] === 6 && $before[1] === 14, 'Exact initial commerce role/grant definitions exist.');
+$check((int)$pdo->query('SELECT COUNT(*) FROM users_tbl')->fetchColumn() === 0, 'Migrations seed no usable accounts/passwords.');
+(new CommerceIdentity($pdo))->up();
+$check($before === [(int)$pdo->query('SELECT COUNT(*) FROM roles')->fetchColumn(), (int)$pdo->query('SELECT COUNT(*) FROM permissions')->fetchColumn(), (int)$pdo->query('SELECT COUNT(*) FROM role_permissions')->fetchColumn()], 'Repeated seeds preserve unique roles/permissions/pivots.');
+$customer = CommerceTest::user('legacy@example.test');
+$pdo->exec("UPDATE users_tbl SET role = 'admin' WHERE id = $customer");
+$check(!CommerceAccess::can('admin.products.view', $customer), 'Legacy admin string grants no commerce privileges.');
+CommerceTest::rejects(fn() => CommerceAccess::requirePermission('admin.products.edit', $customer), 403, 'Customer cannot perform staff writes.');
+CommerceTest::fails(fn() => CommerceAccess::provision('bad', 'short'), 'Provisioning validates credentials.');
+CommerceTest::fails(fn() => CommerceAccess::provision('evil@example.test', 'Disposable-Staff-Password', 'developer'), 'Developer role cannot provision commerce access.');
+$admin = CommerceAccess::provision(' ADMIN@EXAMPLE.TEST ', 'Disposable-Staff-Password');
+$row = $pdo->query("SELECT * FROM users_tbl WHERE id = $admin")->fetch();
+$check($row['email'] === 'admin@example.test' && password_verify('Disposable-Staff-Password', $row['password']) && $row['password'] !== 'Disposable-Staff-Password', 'Operator provisioning normalizes email and hashes password.');
+$check(count(CommerceAccess::actor($admin)['permissions']) === 12 && !CommerceAccess::can('admin.access.edit', $admin), 'Admin has every operational grant but not staff-access management.');
+$root = CommerceAccess::provision('root@example.test', 'Disposable-Root-Password', 'superadmin');
+$check(count(CommerceAccess::actor($root)['permissions']) === 14 && CommerceAccess::can('admin.access.edit', $root) && CommerceAccess::isSuperadmin($root) && !CommerceAccess::isSuperadmin($admin), 'Only superadmin owns staff-access management.');
+$viewer = CommerceAccess::provision('viewer@example.test', 'Disposable-Viewer-Password', 'viewer');
+$check(CommerceAccess::can('admin.products.view', $viewer) && !CommerceAccess::can('admin.products.edit', $viewer), 'View grant does not imply edit.');
+CommerceTest::rejects(fn() => CommerceAccess::requirePermission('admin.products.edit', $viewer), 403, 'Insufficient staff grant denies mutation.');
+$pdo->prepare('DELETE FROM user_roles WHERE user_id = ?')->execute([$viewer]);
+$check(!CommerceAccess::can('admin.products.view', $viewer), 'Role revocation applies on the next check.');
+$pdo->exec("UPDATE users_tbl SET status = 0 WHERE id = $admin");
+$check(CommerceAccess::actor($admin) === null, 'Disabled staff cannot retain grants.');
+$pdo->exec("UPDATE users_tbl SET status = 1, locked_until = '2099-01-01 00:00:00' WHERE id = $admin");
+$check(CommerceAccess::actor($admin) === null, 'Locked staff is denied.');
+$pdo->exec("UPDATE users_tbl SET locked_until = NULL, email_verify = 0 WHERE id = $admin");
+$check(CommerceAccess::actor($admin) === null, 'Unverified staff is denied.');
+$pdo->exec("UPDATE users_tbl SET email_verify = 1 WHERE id = $admin");
+$usersBefore = (int)$pdo->query('SELECT COUNT(*) FROM users_tbl')->fetchColumn();
+CommerceTest::fails(fn() => CommerceAccess::provision('admin@example.test', 'Disposable-Duplicate-Password'), 'Duplicate email provisioning fails.');
+$check((int)$pdo->query('SELECT COUNT(*) FROM users_tbl')->fetchColumn() === $usersBefore, 'Failed provisioning rolls back account/pivot.');
+CommerceTest::fails(fn() => $pdo->exec('INSERT INTO user_roles (user_id, role_id) VALUES (999999, 1)'), 'User-role FK rejects orphan identity.');
+CommerceTest::fails(fn() => $pdo->exec("INSERT INTO user_roles (user_id, role_id) SELECT user_id, role_id FROM user_roles WHERE user_id = $admin"), 'Unique pivot rejects duplicate role assignment.');
+$_SERVER['REMOTE_ADDR'] = '127.0.0.1';
+DeveloperAccess::session();
+DeveloperAccess::provision('developer@example.test', 'Disposable-Developer-Password');
+$developer = $pdo->query('SELECT id FROM developer_accounts')->fetchColumn();
+$_SESSION['developer_id'] = $developer; $_SESSION['developer_seen'] = time();
+$check(CommerceAccess::actor() === null && DeveloperAccess::identity() !== null, 'Developer identity never implies commerce identity.');
+$_SESSION['user_id'] = $customer; unset($_SESSION['developer_id']);
+$check(CommerceAccess::actor()['permissions'] === [] && DeveloperAccess::identity() === null, 'Commerce identity never implies Developer access.');
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'cli-staff@example.test', 'operations'], "Disposable-CLI-Staff-Password\n");
+$check($code === 0 && $err === '' && !str_contains($out, 'Disposable-CLI-Staff-Password'), 'CLI provisions staff through stdin without echoing password.');
+$id = (int)$pdo->query("SELECT id FROM users_tbl WHERE email = 'cli-staff@example.test'")->fetchColumn();
+$check(CommerceAccess::can('admin.orders.edit', $id) && !CommerceAccess::can('admin.settings.edit', $id), 'CLI-selected role receives only exact grants.');
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'short@example.test'], "short\n");
+$check($code !== 0 && !str_contains($err, 'SQLSTATE'), 'Invalid CLI provisioning fails with safe nonzero output.');
+foreach ([11, 73] as $length) {
+    $secret = str_repeat('x', $length);
+    [$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', "invalid-$length@example.test"], $secret . "\n");
+    $check($code !== 0 && str_contains($err, '12 to 72 bytes') && !str_contains($out . $err, $secret), 'Invalid password length has a specific safe diagnostic.');
+}
+foreach ([12, 72] as $length) {
+    [$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', "boundary-$length@example.test"], str_repeat('y', $length) . "\n");
+    $check($code === 0 && $err === '', 'Both valid password byte boundaries provision successfully.');
+}
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'admin@example.test'], "Disposable-Duplicate-Password\n");
+$check($code !== 0 && str_contains($err, 'email already exists') && !str_contains($err, 'SQLSTATE'), 'Duplicate email gives an actionable safe diagnostic.');
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'empty@example.test']);
+$check($code !== 0 && str_contains($err, 'No password received'), 'EOF is diagnosed separately from password length.');
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'role@example.test', 'developer'], "Disposable-Role-Password\n");
+$check($code !== 0 && str_contains($err, 'Role must be'), 'Unsupported role gives an actionable diagnostic.');
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create']);
+$check($code !== 0 && str_contains($err, 'Usage:'), 'Missing arguments show usage before reading stdin.');
+[$code, $out, $err] = CommerceTest::command(['vayu', 'commerce:create', 'missing@example.test'], "Disposable-Missing-Password\n",
+    ['DB_TYPE' => 'sqlite', 'DB_DATABASE' => CommerceTest::$temp . '/unmigrated.sqlite']);
+$check($code !== 0 && str_contains($err, 'php vayu migrate') && !str_contains($err, 'SQLSTATE'), 'Unmigrated database fails safely with migration instructions.');
+CommerceTest::finish('Commerce identity');

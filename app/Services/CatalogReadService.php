@@ -1,0 +1,57 @@
+<?php
+
+final class CatalogReadService
+{
+    private ProductService $products;
+    public function __construct(private PDO $pdo,private ?Cache $cache=null) {$this->products=new ProductService($pdo);$this->cache??=new Cache();}
+    public static function filters(array $input):array
+    {
+        $filters=['page'=>CommerceValues::integer($input['page']??1,1,1000,'page'),'per_page'=>CommerceValues::integer($input['per_page']??12,1,50,'per_page'),'sort'=>$input['sort']??'featured'];
+        if(!is_string($filters['sort'])||!in_array($filters['sort'],['featured','newest','price_low','price_high','rating_high'],true))CommerceValues::invalid('sort');
+        foreach(['category','brand'] as $field)if(isset($input[$field])&&$input[$field]!=='')$filters[$field]=CommerceValues::slug($input[$field]);
+        if(isset($input['q'])&&$input['q']!=='')$filters['q']=CommerceValues::text($input['q'],80,'q');
+        foreach(['min_price_minor','max_price_minor'] as $field)if(isset($input[$field])&&$input[$field]!=='')$filters[$field]=CommerceValues::integer($input[$field],0,CommerceValues::MAX_MONEY,$field);
+        foreach (['min_price'=>'min_price_minor','max_price'=>'max_price_minor'] as $human=>$minor) {
+            if (isset($input[$human]) && $input[$human] !== '') $filters[$minor] = CommerceValues::decimal($input[$human], 2, CommerceValues::MAX_MONEY, $human);
+        }
+        if(isset($filters['min_price_minor'],$filters['max_price_minor'])&&$filters['min_price_minor']>$filters['max_price_minor'])CommerceValues::invalid('price_range');
+        if (isset($input['finish']) && $input['finish'] !== '') $filters['finish'] = CommerceValues::text($input['finish'], 80, 'finish');
+        if (isset($input['in_stock']) && $input['in_stock'] !== '') $filters['in_stock'] = CommerceValues::flag($input['in_stock'], 'in_stock');
+        if (isset($input['min_rating']) && $input['min_rating'] !== '') $filters['min_rating'] = CommerceValues::integer($input['min_rating'], 1, 5, 'min_rating');
+        ksort($filters);return $filters;
+    }
+    private function read(array $parameters,callable $loader):array
+    {
+        return DeveloperTrace::span(__METHOD__, fn()=>$this->readObserved($parameters,$loader));
+    }
+    private function readObserved(array $parameters,callable $loader):array
+    {
+        // Never publish from a transaction snapshot or write a file while holding SQL locks.
+        if($this->pdo->inTransaction())return $loader();
+        try {$version=(int)CommerceDatabase::query($this->pdo,"SELECT version FROM catalog_versions WHERE namespace='catalog'")->fetchColumn();}
+        catch(PDOException $e){return $loader();}
+        if($version<1)return $loader();
+        $parameters+=['contract'=>'public-v2-pdp','currency'=>'INR','locale'=>'en-IN'];
+        $cached=DeveloperTrace::span('Cache::get',fn()=>$this->cache->get($version,$parameters));if($cached!==null)return $cached;
+        $result=$loader();DeveloperTrace::span('Cache::put',fn()=>$this->cache->put($version,$parameters,$result));return $result;
+    }
+    public function listing(array $input=[]):array
+    {
+        return DeveloperTrace::span(__METHOD__,function () use ($input): array {
+            $filters=DeveloperTrace::span('CatalogReadService::filters',fn()=>self::filters($input));
+            return $this->read(['resource'=>'listing',...$filters],fn()=>$this->products->listing($filters));
+        });
+    }
+    public function detail(string $slug):array
+    {
+        return DeveloperTrace::span(__METHOD__, function () use ($slug): array {
+            $slug=CommerceValues::slug($slug);return $this->read(['resource'=>'detail','slug'=>$slug],fn()=>$this->products->detail($slug));
+        });
+    }
+    public function visualizerMaterials(?int $selectedId = null): array
+    {
+        if ($selectedId !== null) $selectedId = CommerceValues::id($selectedId);
+        // This small picker reads committed SQL directly; catalog cache DTOs remain unchanged.
+        return $this->products->visualizerMaterials($selectedId);
+    }
+}

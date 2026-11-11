@@ -1,0 +1,10 @@
+<?php $module='customers';$title='Customer security';$description=$customer?$customer['name'].' · '.$customer['email']:'Find a customer';require __DIR__.'/header.php';
+$when=static fn($epoch)=>gmdate('Y-m-d H:i',(int)$epoch).' UTC'; ?>
+<section class="panel"><div class="panel-heading"><div><h2>Find a customer</h2><p>Open a customer by their ID to review trusted devices.</p></div></div>
+<form method="get" action="<?= $u('admin/customer') ?>" class="form-grid"><label class="field" for="field-id"><span>Customer ID</span><input id="field-id" name="id" type="number" min="1" value="<?= $e($customer['id']??'') ?>" required></label><div class="form-actions"><button class="button">Open customer</button><a class="button secondary" href="<?= $u('admin/customers') ?>">Customer list</a></div></form></section>
+<?php if($customer): ?>
+<section class="panel"><div class="panel-heading"><div><h2><?= $e($customer['name']) ?></h2><p><?= $e($customer['email']) ?> · <?= ((int)$customer['status']===1?'Active':'Disabled') ?> · <?= ((int)$customer['email_verify']===1?'Verified':'Pending') ?></p></div><span class="pill"><?= count($devices) ?> trusted device<?= count($devices)===1?'':'s' ?></span></div>
+<?php if($devices): ?><table class="data-table"><thead><tr><th>Added (UTC)</th><th>Last used (UTC)</th><th>Expires (UTC)</th><th>PIN</th></tr></thead><tbody><?php foreach($devices as $d): ?><tr><td><?= $e($when($d['created_at'])) ?></td><td><?= $e($when($d['last_used_at'])) ?></td><td><?= $e($when($d['expires_at'])) ?></td><td><?= $d['pin_hash']!==null?'Set':'—' ?></td></tr><?php endforeach; ?></tbody></table>
+<?php if($can('admin.customers.view')): ?><form method="post" action="<?= $u('admin/customer/devices') ?>" onsubmit="return confirm('Revoke all trusted devices for this customer?')"><?php $hidden(['csrf'=>$csrf,'id'=>$customer['id'],'operation_key'=>$key()]); ?><div class="form-actions"><button class="button">Revoke all trusted devices</button></div></form><?php endif; ?>
+<?php else: ?><p class="notice">This customer has no active trusted devices.</p><?php endif; ?></section>
+<?php endif; require __DIR__.'/footer.php'; ?>

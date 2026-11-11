@@ -1,0 +1,512 @@
+<?php
+
+final class ProductService
+{
+    public function __construct(private PDO $pdo) {}
+    private function query(string $sql, array $values = []): PDOStatement { return DeveloperTrace::span(__METHOD__,fn()=>CommerceDatabase::query($this->pdo,$sql,$values)); }
+
+    public static function advanceVersion(PDO $pdo): void
+    {
+        if (!$pdo->inTransaction()) throw new LogicException('Catalog version must advance inside its mutation transaction.');
+        if (CommerceDatabase::query($pdo,"UPDATE catalog_versions SET version = version + 1 WHERE namespace = 'catalog'")->rowCount() !== 1) {
+            throw new RuntimeException('Catalog version is unavailable.');
+        }
+    }
+
+    private function variants(array $rows): array
+    {
+        $validated = []; $skus = [];
+        if (count($rows)>20) CommerceValues::invalid('variants');
+        foreach ($rows as $row) {
+            if (!is_array($row)) CommerceValues::invalid('variants');
+            $sku = strtoupper(CommerceValues::text($row['sku'] ?? null,80,'sku'));
+            if (!preg_match('/\A[A-Z0-9][A-Z0-9_.-]{0,79}\z/',$sku) || isset($skus[$sku])) CommerceValues::invalid('sku');
+            $skus[$sku] = true;
+            $unit = $row['sell_unit'] ?? null;
+            if (!in_array($unit,['sqft','slab','box'],true)) CommerceValues::invalid('sell_unit');
+            $increment = CommerceValues::integer($row['qty_increment_milli'] ?? null,1,1000000,'qty_increment_milli');
+            if ($unit !== 'sqft' && $increment % 1000 !== 0) CommerceValues::invalid('qty_increment_milli');
+            $variant = ['id'=>isset($row['id']) ? CommerceValues::id($row['id']) : null,'sku'=>$sku,
+                'finish'=>CommerceValues::text($row['finish'] ?? '',80,'finish',true),'sell_unit'=>$unit,
+                'qty_increment_milli'=>$increment,'unit_price_minor'=>CommerceValues::integer($row['unit_price_minor'] ?? null,0,CommerceValues::MAX_MONEY,'unit_price_minor'),
+                'enabled'=>CommerceValues::flag($row['enabled'] ?? 1,'enabled')];
+            foreach (['coverage_sqft_milli','thickness_mm_milli','length_mm_milli','width_mm_milli'] as $field) {
+                $variant[$field] = isset($row[$field]) && $row[$field] !== '' ? CommerceValues::integer($row[$field],1,1000000000,$field) : null;
+            }
+            if (array_key_exists('original_price_minor', $row)) {
+                $variant['original_price_minor'] = $row['original_price_minor'] === null || $row['original_price_minor'] === '' ? null : CommerceValues::integer($row['original_price_minor'], 0, CommerceValues::MAX_MONEY, 'original_price_minor');
+                if ($variant['original_price_minor'] !== null && $variant['original_price_minor'] < $variant['unit_price_minor']) CommerceValues::invalid('original_price_minor');
+            }
+            $validated[] = $variant;
+        }
+        return $validated;
+    }
+
+    public function save(int $actorId, array $input, int $expectedRevision, string $operationKey): array
+    {
+        CommerceAccess::requirePermission('admin.products.edit',$actorId);
+        $operationKey = CommerceValues::key($operationKey);
+        $id = isset($input['id']) ? CommerceValues::id($input['id']) : null;
+        $status = $input['status'] ?? 'draft';
+        if (!in_array($status,['draft','active','archived'],true)) CommerceValues::invalid('status');
+        $data = ['slug'=>CommerceValues::slug($input['slug'] ?? null),'name'=>CommerceValues::text($input['name'] ?? null,190,'name'),
+            'description'=>CommerceValues::text($input['description'] ?? '',10000,'description',true),
+            'tags'=>CommerceValues::text($input['tags'] ?? '',1000,'tags',true),'category_id'=>CommerceValues::id($input['category_id'] ?? null,'category_id'),
+            'brand_id'=>isset($input['brand_id']) && $input['brand_id'] !== '' ? CommerceValues::id($input['brand_id'],'brand_id') : null,
+            'status'=>$status,'featured'=>CommerceValues::flag($input['featured'] ?? 0,'featured'),
+            'advance_bps'=>($input['advance_bps'] ?? null) === null ? null : CommerceValues::integer($input['advance_bps'],0,10000,'advance_bps')];
+        if (!is_array($input['variants'] ?? null)) CommerceValues::invalid('variants');
+        $variants = $this->variants($input['variants']);
+        $details = isset($input['details']) ? ProductDetailService::validate($input['details']) : null;
+        if ($status === 'active' && !array_filter($variants,static fn(array $row):bool => (bool)$row['enabled'])) CommerceValues::invalid('variants');
+        try {
+            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$data,$variants,$details,$expectedRevision,$operationKey):array {
+                CommerceAccess::requirePermission('admin.products.edit',$actorId);
+                $lock = CommerceDatabase::lock($this->pdo);
+                $existing = $id ? $this->query('SELECT * FROM products WHERE id = ?' . $lock,[$id])->fetch() : null;
+                if ($id && !$existing) throw new RequestRejected(404,'not_found','Product not found.');
+                if ($expectedRevision !== ($existing ? (int)$existing['revision'] : 0)) throw new RequestRejected(409,'revision_conflict','Product changed. Reload before saving.');
+                $current = $id ? $this->query('SELECT * FROM product_variants WHERE product_id = ? ORDER BY id LIMIT 101' . $lock,[$id])->fetchAll() : [];
+                if (count($current)>100) CommerceValues::invalid('variants');
+                $known = array_column($current,null,'id');
+                $stockRows = [];
+                if ($known) {
+                    $variantIds = array_keys($known); $stockMarks = implode(',',array_fill(0,count($variantIds),'?'));
+                    $stockRows = array_column($this->query("SELECT * FROM inventory WHERE variant_id IN ($stockMarks) ORDER BY variant_id".$lock,$variantIds)->fetchAll(),null,'variant_id');
+                }
+                $category = $this->query('SELECT * FROM categories WHERE id = ?',[$data['category_id']])->fetch();
+                $brand = $data['brand_id'] ? $this->query('SELECT * FROM brands WHERE id = ?',[$data['brand_id']])->fetch() : null;
+                if (!$category || ($data['brand_id'] && !$brand)) CommerceValues::invalid('category_or_brand');
+                if ($data['status'] === 'active' && (!(int)$category['enabled'] || ($brand && !(int)$brand['enabled']))) CommerceValues::invalid('category_or_brand');
+                $now = gmdate('Y-m-d\TH:i:s\Z');
+                if ($id) {
+                    $this->query('UPDATE products SET slug=?, name=?, description=?, tags=?, category_id=?, brand_id=?, status=?, featured=?, advance_bps=?, revision=revision+1, updated_at=? WHERE id=?',array_merge(array_values($data),[$now,$id]));
+                } else {
+                    $this->query('INSERT INTO products (slug,name,description,tags,category_id,brand_id,status,featured,advance_bps,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',array_merge(array_values($data),[$now,$now]));
+                    $id = (int)$this->pdo->lastInsertId();
+                }
+                $kept = []; $seen = [];
+                foreach ($variants as $variant) {
+                    $variantId = $variant['id'];
+                    if ($variantId && (!isset($known[$variantId]) || isset($seen[$variantId]))) CommerceValues::invalid('variant_id');
+                    if ($variantId) $seen[$variantId] = true;
+                    $values = [$variant['sku'],$variant['finish'],$variant['thickness_mm_milli'],$variant['length_mm_milli'],$variant['width_mm_milli'],
+                        $variant['sell_unit'],$variant['qty_increment_milli'],$variant['coverage_sqft_milli'],$variant['unit_price_minor'],$variant['enabled']];
+                    if ($variantId) {
+                        $old = $known[$variantId];
+                        $stock = $stockRows[$variantId] ?? null;
+                        if ($old['sell_unit']!==$variant['sell_unit'] || (int)($old['coverage_sqft_milli']??0)!==(int)($variant['coverage_sqft_milli']??0)) {
+                            $history=$this->query('SELECT id FROM inventory_movements WHERE variant_id=? ORDER BY id LIMIT 1'.$lock,[$variantId])->fetchColumn();
+                            if ($history || ($stock && ((int)$stock['on_hand_milli']>0 || (int)$stock['reserved_milli']>0))) {
+                                throw new RequestRejected(409,'unit_change_conflict','A variant with stock history cannot change its sell unit or coverage.');
+                            }
+                        }
+                        $this->query('UPDATE product_variants SET sku=?,finish=?,thickness_mm_milli=?,length_mm_milli=?,width_mm_milli=?,sell_unit=?,qty_increment_milli=?,coverage_sqft_milli=?,unit_price_minor=?,enabled=?,revision=revision+1 WHERE id=?',array_merge($values,[$variantId]));
+                    } else {
+                        if (count($known)+count(array_filter($kept,static fn(int $item):bool => !isset($known[$item]))) >=100) CommerceValues::invalid('variants');
+                        $this->query('INSERT INTO product_variants (sku,finish,thickness_mm_milli,length_mm_milli,width_mm_milli,sell_unit,qty_increment_milli,coverage_sqft_milli,unit_price_minor,enabled,product_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',array_merge($values,[$id]));
+                        $variantId = (int)$this->pdo->lastInsertId();
+                        InventoryService::initialize($this->pdo,$variantId);
+                    }
+                    if (array_key_exists('original_price_minor', $variant)) {
+                        $this->query('DELETE FROM variant_reference_prices WHERE variant_id=?', [$variantId]);
+                        if ($variant['original_price_minor'] !== null) $this->query('INSERT INTO variant_reference_prices (variant_id,original_price_minor) VALUES (?,?)', [$variantId,$variant['original_price_minor']]);
+                    }
+                    $this->query('DELETE FROM variant_reference_prices WHERE variant_id=? AND original_price_minor<?', [$variantId,$variant['unit_price_minor']]);
+                    $kept[] = $variantId;
+                }
+                foreach ($known as $variantId=>$old) if (!in_array((int)$variantId,$kept,true)) $this->query('UPDATE product_variants SET enabled=0, revision=revision+1 WHERE id=?',[$variantId]);
+                if ($details !== null) (new ProductDetailService($this->pdo))->saveInside($id, $details);
+                self::advanceVersion($this->pdo);
+                $revision = ($existing ? (int)$existing['revision'] : 0)+1;
+                StaffAudit::record($this->pdo,$actorId,'product.save','product',$id,$operationKey,
+                    ['revision'=>$revision,'status'=>$data['status'],'slug'=>$data['slug'],'variant_ids'=>$kept]);
+                return ['id'=>$id,'revision'=>$revision,'variant_ids'=>$kept];
+            });
+        } catch (Throwable $e) {
+            if (CommerceDatabase::uniqueConflict($e)) throw new RequestRejected(409,'catalog_conflict','A product slug or variant SKU already exists.');
+            throw $e;
+        }
+    }
+
+    public function archive(int $actorId, int $id, int $expectedRevision, string $key): array
+    {
+        CommerceAccess::requirePermission('admin.products.edit',$actorId); $key=CommerceValues::key($key);
+        return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$expectedRevision,$key):array {
+            CommerceAccess::requirePermission('admin.products.edit',$actorId);
+            $product=$this->query('SELECT * FROM products WHERE id=?'.CommerceDatabase::lock($this->pdo),[$id])->fetch();
+            if (!$product) throw new RequestRejected(404,'not_found','Product not found.');
+            if ((int)$product['revision']!==$expectedRevision) throw new RequestRejected(409,'revision_conflict','Product changed.');
+            $this->query("UPDATE products SET status='archived', revision=revision+1, updated_at=? WHERE id=?",[gmdate('Y-m-d\TH:i:s\Z'),$id]);
+            self::advanceVersion($this->pdo);
+            StaffAudit::record($this->pdo,$actorId,'product.archive','product',$id,$key,['status'=>'archived','revision'=>$expectedRevision+1]);
+            return ['id'=>$id,'revision'=>$expectedRevision+1];
+        });
+    }
+
+    public function saveCategory(int $actorId, array $input, string $key): int
+    {
+        CommerceAccess::requirePermission('admin.products.edit',$actorId); $key=CommerceValues::key($key);
+        $id=isset($input['id'])?CommerceValues::id($input['id']):null;
+        $slug=CommerceValues::slug($input['slug']??null); $name=CommerceValues::text($input['name']??null,190,'name');
+        $enabled=CommerceValues::flag($input['enabled']??1,'enabled');
+        $parent=isset($input['parent_id'])&&$input['parent_id']!==''?CommerceValues::id($input['parent_id']):null;
+        $hasTax=array_key_exists('tax_bps',$input);$tax=$hasTax&&$input['tax_bps']!==null&&$input['tax_bps']!==''?CommerceValues::integer($input['tax_bps'],0,10000,'tax_bps'):null;
+        $hasAdvance=array_key_exists('advance_bps',$input);$advance=$hasAdvance&&$input['advance_bps']!==null&&$input['advance_bps']!==''?CommerceValues::integer($input['advance_bps'],0,10000,'advance_bps'):null;
+        try {
+            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$parent,$hasTax,$tax,$hasAdvance,$advance,$key):int {
+                CommerceAccess::requirePermission('admin.products.edit',$actorId);
+                if (!$this->query('SELECT id FROM catalog_hierarchy_lock WHERE id=1'.CommerceDatabase::lock($this->pdo))->fetchColumn()) {
+                    throw new RuntimeException('Category tree lock is unavailable.');
+                }
+                if($hasTax||$hasAdvance){
+                    $prior=$this->query('SELECT target_id FROM admin_activity_log WHERE operation_key=?'.CommerceDatabase::lock($this->pdo),[$key])->fetch();
+                    if($prior){
+                        $target=(int)$prior['target_id'];
+                        if($id!==null&&$id!==$target)throw new RequestRejected(409,'audit_key_conflict','Operation key has different inputs.');
+                        $replay=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasTax)$replay['tax_bps']=$tax;if($hasAdvance)$replay['advance_bps']=$advance;
+                        StaffAudit::record($this->pdo,$actorId,'category.save','category',$target,$key,$replay);
+                        return $target; // A repeated GST/advance edit must not restore a superseded rate.
+                    }
+                }
+                if ($id && !$this->query('SELECT id FROM categories WHERE id=?',[$id])->fetchColumn()) throw new RequestRejected(404,'not_found','Category not found.');
+                $cursor=$parent; $visited=[];
+                while ($cursor) {
+                    if ($cursor===$id || isset($visited[$cursor]) || count($visited)>=30) CommerceValues::invalid('parent_id');
+                    $visited[$cursor]=true;
+                    $node=$this->query('SELECT id,parent_id FROM categories WHERE id=?',[$cursor])->fetch();
+                    if (!$node) CommerceValues::invalid('parent_id');
+                    $cursor=$node['parent_id']===null?null:(int)$node['parent_id'];
+                }
+                if ($id) $this->query('UPDATE categories SET slug=?,name=?,enabled=?,parent_id=? WHERE id=?',[$slug,$name,$enabled,$parent,$id]);
+                else { $this->query('INSERT INTO categories (slug,name,enabled,parent_id) VALUES (?,?,?,?)',[$slug,$name,$enabled,$parent]); $id=(int)$this->pdo->lastInsertId(); }
+                if($hasTax)$this->query('UPDATE categories SET tax_bps=? WHERE id=?',[$tax,$id]);
+                if($hasAdvance)$this->query('UPDATE categories SET advance_bps=? WHERE id=?',[$advance,$id]);
+                self::advanceVersion($this->pdo);
+                $changes=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasTax)$changes['tax_bps']=$tax;if($hasAdvance)$changes['advance_bps']=$advance;
+                StaffAudit::record($this->pdo,$actorId,'category.save','category',$id,$key,$changes);
+                return $id;
+            });
+        } catch (Throwable $e) { if (CommerceDatabase::uniqueConflict($e)) throw new RequestRejected(409,'catalog_conflict','Category slug already exists.'); throw $e; }
+    }
+
+    public function saveBrand(int $actorId, array $input, string $key): int
+    {
+        CommerceAccess::requirePermission('admin.products.edit',$actorId); $key=CommerceValues::key($key);
+        $id=isset($input['id'])?CommerceValues::id($input['id']):null; $slug=CommerceValues::slug($input['slug']??null);
+        $name=CommerceValues::text($input['name']??null,190,'name'); $enabled=CommerceValues::flag($input['enabled']??1,'enabled');
+        // A logo is only rewritten when the caller uploaded one or asked to clear it; otherwise it is left alone.
+        $logo=array_key_exists('logo_path',$input)?$input['logo_path']:false;
+        if ($logo!==false && $logo!==null && !preg_match('#\Aassets/brands/[a-f0-9]{32}\.png\z#',(string)$logo)) CommerceValues::invalid('logo_path');
+        try {
+            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$logo,$key):int {
+                CommerceAccess::requirePermission('admin.products.edit',$actorId);
+                if ($id && !$this->query('SELECT id FROM brands WHERE id=?'.CommerceDatabase::lock($this->pdo),[$id])->fetchColumn()) throw new RequestRejected(404,'not_found','Brand not found.');
+                if ($id) {
+                    $this->query('UPDATE brands SET slug=?,name=?,enabled=? WHERE id=?',[$slug,$name,$enabled,$id]);
+                    if ($logo!==false) $this->query('UPDATE brands SET logo_path=? WHERE id=?',[$logo,$id]);
+                } else {
+                    $this->query('INSERT INTO brands (slug,name,enabled,logo_path) VALUES (?,?,?,?)',[$slug,$name,$enabled,$logo===false?null:$logo]); $id=(int)$this->pdo->lastInsertId();
+                }
+                self::advanceVersion($this->pdo);
+                StaffAudit::record($this->pdo,$actorId,'brand.save','brand',$id,$key,['name'=>$name,'slug'=>$slug,'enabled'=>$enabled,'logo'=>$logo===false?'unchanged':($logo===null?'cleared':'replaced')]);
+                return $id;
+            });
+        } catch (Throwable $e) { if (CommerceDatabase::uniqueConflict($e)) throw new RequestRejected(409,'catalog_conflict','Brand slug already exists.'); throw $e; }
+    }
+
+    public function addImage(int $actorId, int $productId, array $image, string $key): int
+    {
+        CommerceAccess::requirePermission('admin.products.edit',$actorId); $key=CommerceValues::key($key);
+        $path=$image['path']??null; $mime=$image['mime']??null;
+        $formats=['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
+        if (!is_string($path)||!isset($formats[$mime])||!preg_match('~\Aassets/products/[a-f0-9]{32}\.' . $formats[$mime] . '\z~',$path)) CommerceValues::invalid('image');
+        $width=CommerceValues::integer($image['width']??null,1,6000,'width'); $height=CommerceValues::integer($image['height']??null,1,6000,'height');
+        $alt=CommerceValues::text($image['alt_text']??'',190,'alt_text',true); $position=CommerceValues::integer($image['position']??0,0,1000,'position');
+        $variant=isset($image['variant_id'])?CommerceValues::id($image['variant_id']):null;
+        return CommerceDatabase::transaction($this->pdo,function() use($actorId,$productId,$variant,$path,$mime,$width,$height,$alt,$position,$key):int {
+            CommerceAccess::requirePermission('admin.products.edit',$actorId);
+            if (!$this->query('SELECT id FROM products WHERE id=?'.CommerceDatabase::lock($this->pdo),[$productId])->fetchColumn()) throw new RequestRejected(404,'not_found','Product not found.');
+            if ($variant && !$this->query('SELECT id FROM product_variants WHERE id=? AND product_id=?',[$variant,$productId])->fetchColumn()) CommerceValues::invalid('variant_id');
+            if ((int)$this->query('SELECT COUNT(*) FROM product_images WHERE product_id=?',[$productId])->fetchColumn()>=12) CommerceValues::invalid('images');
+            $this->query('INSERT INTO product_images (product_id,variant_id,path,mime,width,height,position,alt_text) VALUES (?,?,?,?,?,?,?,?)',[$productId,$variant,$path,$mime,$width,$height,$position,$alt]);
+            $id=(int)$this->pdo->lastInsertId(); self::advanceVersion($this->pdo);
+            StaffAudit::record($this->pdo,$actorId,'image.save','product',$productId,$key,['image_id'=>$id]);
+            return $id;
+        });
+    }
+
+    public function taxonomies(?int $staffId = null): array
+    {
+        if ($staffId!==null) CommerceAccess::requirePermission('admin.products.view',$staffId);
+        $where=$staffId===null?' WHERE enabled=1':'';
+        return ['categories'=>$this->query('SELECT * FROM categories'.$where.' ORDER BY name,id LIMIT 1000')->fetchAll(),
+            'brands'=>$this->query('SELECT * FROM brands'.$where.' ORDER BY name,id LIMIT 1000')->fetchAll()];
+    }
+
+    private function hydrate(array $products, bool $staff = false): array
+    {
+        return DeveloperTrace::span(__METHOD__,fn()=>$this->hydrateObserved($products,$staff));
+    }
+    private function hydrateObserved(array $products, bool $staff = false): array
+    {
+        if (!$products) return [];
+        $ids=array_column($products,'id'); $marks=implode(',',array_fill(0,count($ids),'?'));
+        $variants=$this->query("SELECT v.*,r.original_price_minor,i.on_hand_milli,i.reserved_milli,(i.on_hand_milli-i.reserved_milli) AS available_milli
+            FROM product_variants v LEFT JOIN variant_reference_prices r ON r.variant_id=v.id LEFT JOIN inventory i ON i.variant_id=v.id WHERE v.product_id IN ($marks)".($staff?'':' AND v.enabled=1').' ORDER BY v.product_id,v.id',$ids)->fetchAll();
+        $images=$this->query("SELECT * FROM product_images WHERE product_id IN ($marks) ORDER BY product_id,position,id",$ids)->fetchAll();
+        // One roll-up for the whole page so cards can show a rating without a query each.
+        $ratings=$this->query("SELECT r.product_id,COUNT(*) AS review_count,SUM(COALESCE(r.rating_tenths,r.rating*10)) AS sum_tenths
+            FROM product_reviews r JOIN users_tbl u ON u.id=r.user_id
+            WHERE r.product_id IN ($marks) AND r.status='approved' AND u.status=1 AND u.email_verify=1 GROUP BY r.product_id",$ids)->fetchAll();
+        $variantGroups=[]; $imageGroups=[]; $ratingGroups=[];
+        foreach ($variants as $variant) $variantGroups[$variant['product_id']][]=$variant;
+        foreach ($images as $image) $imageGroups[$image['product_id']][]=$image;
+        foreach ($ratings as $rating) $ratingGroups[$rating['product_id']]=$rating;
+        foreach ($products as &$product) {
+            $product['variants']=$variantGroups[$product['id']]??[]; $product['images']=$imageGroups[$product['id']]??[];
+            $rating=$ratingGroups[$product['id']]??null;
+            $product['review_count']=$rating?(int)$rating['review_count']:0;
+            $product['rating_tenths']=$rating&&(int)$rating['review_count']>0?CommerceValues::round((int)$rating['sum_tenths'],(int)$rating['review_count']):null;
+            $prices=array_column(array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled']),'unit_price_minor');
+            $product['min_price_minor']=$prices?min($prices):null;
+            $product['in_stock']=(bool)array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled'] && $row['available_milli']!==null && (int)$row['available_milli']>=(int)$row['qty_increment_milli']);
+        }
+        unset($product); return $products;
+    }
+
+    /** Bounded public selection, hydrated in bulk for wishlist/comparison. */
+    public function selection(array $ids): array
+    {
+        if (count($ids) > 100) CommerceValues::invalid('products');
+        $ids = array_values(array_unique(array_map([CommerceValues::class, 'id'], $ids)));
+        if (!$ids) return [];
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $rows = $this->query("SELECT p.*,c.name AS category_name,c.slug AS category_slug,b.name AS brand_name,b.slug AS brand_slug
+            FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+            WHERE p.id IN ($marks) AND p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1)
+            AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) ORDER BY p.id", $ids)->fetchAll();
+        return $this->hydrate($rows);
+    }
+    public function listing(array $filters = []): array { return DeveloperTrace::span(__METHOD__,fn()=>$this->listProducts($filters,null)); }
+    /** Bounded public texture picker, using only published products and eligible gallery photos. */
+    public function visualizerMaterials(?int $selectedId = null): array
+    {
+        if ($selectedId !== null) $selectedId = CommerceValues::id($selectedId);
+        $image = "SELECT pi.path FROM product_images pi WHERE pi.product_id=p.id
+            AND (pi.variant_id IS NULL OR EXISTS(SELECT 1 FROM product_variants vi WHERE vi.id=pi.variant_id AND vi.enabled=1))
+            ORDER BY pi.position,pi.id LIMIT 1";
+        return $this->query("SELECT p.id,p.name,p.slug,($image) AS image_path
+            FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+            WHERE p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1)
+            AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)
+            AND ($image) IS NOT NULL
+            ORDER BY CASE WHEN p.id=? THEN 0 ELSE 1 END,p.featured DESC,p.id DESC LIMIT 50", [$selectedId ?? 0])->fetchAll();
+    }
+    public function administration(int $actorId, array $filters = []): array
+    {
+        CommerceAccess::requirePermission('admin.products.view',$actorId); return $this->listProducts($filters,$actorId);
+    }
+    private function listProducts(array $filters, ?int $staffId): array
+    {
+        return DeveloperTrace::span(__METHOD__,fn()=>$this->listProductsObserved($filters,$staffId));
+    }
+    /** A category slug plus every descendant category id, so filtering a parent returns its sub-categories' products. */
+    private function categoryTreeIds(string $slug): array
+    {
+        $byParent=[]; $start=null;
+        foreach ($this->query('SELECT id,parent_id,slug FROM categories')->fetchAll() as $r) {
+            $byParent[(int)($r['parent_id']??0)][]=(int)$r['id'];
+            if ($r['slug']===$slug) $start=(int)$r['id'];
+        }
+        if ($start===null) return [-1]; // unknown slug matches nothing
+        $ids=[]; $seen=[]; $stack=[$start];
+        while ($stack) { $id=(int)array_pop($stack); if (isset($seen[$id])) continue; $seen[$id]=true; $ids[]=$id; foreach ($byParent[$id]??[] as $child) $stack[]=$child; }
+        return $ids;
+    }
+    /** A representative image for a category: the lead published product's image, searched across its sub-categories. */
+    public function categoryImage(string $slug): ?string
+    {
+        $ids=$this->categoryTreeIds(CommerceValues::slug($slug)); $in=implode(',',array_fill(0,count($ids),'?'));
+        $path=$this->query("SELECT pi.path FROM product_images pi JOIN products p ON p.id=pi.product_id
+            WHERE p.status='active' AND p.category_id IN ($in)
+            AND (pi.variant_id IS NULL OR EXISTS(SELECT 1 FROM product_variants vi WHERE vi.id=pi.variant_id AND vi.enabled=1))
+            AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)
+            ORDER BY p.featured DESC, p.id DESC LIMIT 1",$ids)->fetchColumn();
+        return $path===false?null:$path;
+    }
+    private function listProductsObserved(array $filters, ?int $staffId): array
+    {
+        // Public keyword search uses the two-stage ranked path (SRCH-01); staff/plain listing stays as-is.
+        if ($staffId === null && isset($filters['q']) && $filters['q'] !== '') return $this->searchRanked($filters);
+        $page=CommerceValues::integer($filters['page']??1,1,1000,'page'); $perPage=CommerceValues::integer($filters['per_page']??12,1,50,'per_page');
+        $clauses=[]; $values=[];
+        if ($staffId===null) $clauses[]="p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1) AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)";
+        if (isset($filters['brand'])&&$filters['brand']!=='') { $clauses[]='b.slug=?'; $values[]=CommerceValues::slug($filters['brand']); }
+        if (isset($filters['category'])&&$filters['category']!=='') {
+            $ids=$this->categoryTreeIds(CommerceValues::slug($filters['category']));
+            $clauses[]='p.category_id IN ('.implode(',',array_fill(0,count($ids),'?')).')'; foreach($ids as $cid)$values[]=$cid;
+        }
+        if (isset($filters['q'])&&$filters['q']!=='') {
+            $q=CommerceValues::text($filters['q'],80,'q'); $q='%'.str_replace(['!','%','_'],['!!','!%','!_'],$q).'%';
+            $clauses[]="(p.name LIKE ? ESCAPE '!' OR p.tags LIKE ? ESCAPE '!')"; $values[]=$q; $values[]=$q;
+        }
+        foreach (['min_price_minor'=>'>=','max_price_minor'=>'<='] as $name=>$compare) if (isset($filters[$name])&&$filters[$name]!=='') {
+            // Interpolate the validated integer (not a bound string): a string bind makes SQLite compare the
+            // subquery's INTEGER against TEXT, where every INTEGER sorts below TEXT and the filter passes all rows.
+            $limit=CommerceValues::integer($filters[$name],0,CommerceValues::MAX_MONEY,$name);
+            $clauses[]="(SELECT MIN(pv.unit_price_minor) FROM product_variants pv WHERE pv.product_id=p.id AND pv.enabled=1) $compare $limit";
+        }
+        if (isset($filters['finish']) && $filters['finish'] !== '') {
+            $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vf WHERE vf.product_id=p.id AND vf.enabled=1 AND vf.finish=?)';
+            $values[] = CommerceValues::text($filters['finish'], 80, 'finish');
+        }
+        if (isset($filters['in_stock']) && CommerceValues::flag($filters['in_stock'], 'in_stock') === 1) {
+            $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vs JOIN inventory i ON i.variant_id=vs.id WHERE vs.product_id=p.id AND vs.enabled=1 AND i.on_hand_milli-i.reserved_milli>=vs.qty_increment_milli)';
+        }
+        if (isset($filters['min_rating']) && $filters['min_rating'] !== '') {
+            // Stars (1..5) → tenths; interpolate the validated integer so SQLite compares AVG (REAL/NULL)
+            // numerically, not against a TEXT bind. Products with no approved reviews (NULL avg) are excluded.
+            $tenths = CommerceValues::integer($filters['min_rating'], 1, 5, 'min_rating') * 10;
+            $clauses[] = '('.self::RATING_AVG_SQL.") >= $tenths";
+        }
+        $sorts=['featured'=>'p.featured DESC,p.id DESC','newest'=>'p.id DESC','price_low'=>'(SELECT MIN(unit_price_minor) FROM product_variants WHERE product_id=p.id AND enabled=1) ASC,p.id ASC',
+            'price_high'=>'(SELECT MIN(unit_price_minor) FROM product_variants WHERE product_id=p.id AND enabled=1) DESC,p.id ASC',
+            // Highest average approved rating first; unrated products (NULL avg) sort last in both drivers.
+            'rating_high'=>'('.self::RATING_AVG_SQL.') DESC,p.id DESC'];
+        $sort=$filters['sort']??'featured'; if (!is_string($sort)||!isset($sorts[$sort])) CommerceValues::invalid('sort');
+        $from=' FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id';
+        $where=$clauses?' WHERE '.implode(' AND ',$clauses):'';
+        $total=(int)$this->query('SELECT COUNT(*)'.$from.$where,$values)->fetchColumn();
+        $offset=($page-1)*$perPage;
+        $rows=$this->query('SELECT p.*,c.name AS category_name,c.slug AS category_slug,b.name AS brand_name,b.slug AS brand_slug'.$from.$where.' ORDER BY '.$sorts[$sort]." LIMIT $perPage OFFSET $offset",$values)->fetchAll();
+        return ['items'=>$this->hydrate($rows,$staffId!==null),'page'=>$page,'per_page'=>$perPage,'total'=>$total,'pages'=>(int)ceil($total/$perPage)];
+    }
+    // Average approved rating (tenths, 0..50) for the outer product `p`, matching the hydrate() roll-up:
+    // only approved reviews from active, email-verified users count. NULL when a product has none.
+    private const RATING_AVG_SQL = "SELECT AVG(COALESCE(pr.rating_tenths,pr.rating*10)) FROM product_reviews pr "
+        . "JOIN users_tbl pu ON pu.id=pr.user_id WHERE pr.product_id=p.id AND pr.status='approved' AND pu.status=1 AND pu.email_verify=1";
+    private const CANDIDATE_CAP = 1000;
+    // Weights (per-million) for the ranked score: relevance .40, net sales_30d .20, rating .15, stock .10, featured .10, freshness .05.
+    private const WEIGHTS = ['relevance'=>400000,'sales'=>200000,'rating'=>150000,'stock'=>100000,'featured'=>100000,'freshness'=>50000];
+
+    /** Visibility + bounded filter clauses shared by the ranked search (keyword/sort handled separately). */
+    private function searchClauses(array $filters): array
+    {
+        $clauses = ["p.status='active'", 'c.enabled=1', '(p.brand_id IS NULL OR b.enabled=1)',
+            'EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)'];
+        $values = [];
+        if (isset($filters['brand']) && $filters['brand'] !== '') { $clauses[] = 'b.slug=?'; $values[] = CommerceValues::slug($filters['brand']); }
+        if (isset($filters['category']) && $filters['category'] !== '') {
+            $ids = $this->categoryTreeIds(CommerceValues::slug($filters['category']));
+            $clauses[] = 'p.category_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')'; foreach ($ids as $cid) $values[] = $cid;
+        }
+        foreach (['min_price_minor'=>'>=','max_price_minor'=>'<='] as $name => $cmp) if (isset($filters[$name]) && $filters[$name] !== '') {
+            // Interpolate the validated integer; a bound string breaks SQLite numeric comparison on the subquery.
+            $limit = CommerceValues::integer($filters[$name], 0, CommerceValues::MAX_MONEY, $name);
+            $clauses[] = "(SELECT MIN(pv.unit_price_minor) FROM product_variants pv WHERE pv.product_id=p.id AND pv.enabled=1) $cmp $limit";
+        }
+        if (isset($filters['finish']) && $filters['finish'] !== '') {
+            $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vf WHERE vf.product_id=p.id AND vf.enabled=1 AND vf.finish=?)';
+            $values[] = CommerceValues::text($filters['finish'], 80, 'finish');
+        }
+        if (isset($filters['in_stock']) && CommerceValues::flag($filters['in_stock'], 'in_stock') === 1) {
+            $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vs JOIN inventory i ON i.variant_id=vs.id WHERE vs.product_id=p.id AND vs.enabled=1 AND i.on_hand_milli-i.reserved_milli>=vs.qty_increment_milli)';
+        }
+        return [$clauses, $values];
+    }
+
+    /**
+     * SRCH-01 two-stage ranked keyword search. Stage 1 selects visible candidates (capped at 1000) with a
+     * lexical score — MySQL FULLTEXT `MATCH … AGAINST` natural-language relevance, SQLite a bounded escaped
+     * LIKE score. Stage 2 bulk-loads net sales_30d/rating/stock/featured/freshness, normalises each to [0,1]
+     * against the candidate set and sorts by a deterministic integer weighted score, then product id. Candidate
+     * caps make a large corpus approximate, so `capped`/`has_more` are exposed instead of a false exact total.
+     */
+    private function searchRanked(array $filters): array
+    {
+        $page = CommerceValues::integer($filters['page'] ?? 1, 1, 1000, 'page');
+        $perPage = CommerceValues::integer($filters['per_page'] ?? 12, 1, 50, 'per_page');
+        $q = CommerceValues::text($filters['q'], 80, 'q');
+        [$clauses, $values] = $this->searchClauses($filters);
+        $mysql = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql';
+        $from = ' FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id';
+        if ($mysql) {
+            $match = 'MATCH(p.name,p.description,p.tags) AGAINST(? IN NATURAL LANGUAGE MODE)';
+            $selectBinds = [$q]; $whereBinds = [$q];
+            $select = "SELECT p.id,($match) AS lex" . $from . ' WHERE ' . implode(' AND ', $clauses) . " AND $match ORDER BY lex DESC,p.id ASC LIMIT " . (self::CANDIDATE_CAP + 1);
+        } else {
+            // Bounded escaped LIKE scoring: name 3, tags 2, description 1. Never concatenate uncontrolled input.
+            $pattern = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $q) . '%';
+            $score = "((CASE WHEN p.name LIKE ? ESCAPE '!' THEN 3 ELSE 0 END)+(CASE WHEN p.tags LIKE ? ESCAPE '!' THEN 2 ELSE 0 END)+(CASE WHEN p.description LIKE ? ESCAPE '!' THEN 1 ELSE 0 END))";
+            $where = "(p.name LIKE ? ESCAPE '!' OR p.tags LIKE ? ESCAPE '!' OR p.description LIKE ? ESCAPE '!')";
+            $selectBinds = [$pattern, $pattern, $pattern]; $whereBinds = [$pattern, $pattern, $pattern];
+            $select = "SELECT p.id,$score AS lex" . $from . ' WHERE ' . implode(' AND ', $clauses) . " AND $where ORDER BY lex DESC,p.id ASC LIMIT " . (self::CANDIDATE_CAP + 1);
+        }
+        $candidates = $this->query($select, array_merge($selectBinds, $values, $whereBinds))->fetchAll();
+        $capped = count($candidates) > self::CANDIDATE_CAP;
+        if ($capped) array_pop($candidates);
+        if (!$candidates) return ['items'=>[], 'page'=>$page, 'per_page'=>$perPage, 'total'=>0, 'pages'=>0, 'capped'=>false, 'has_more'=>false, 'generation'=>$this->searchGeneration($q)];
+        $ids = array_map(static fn(array $r): int => (int) $r['id'], $candidates);
+        $lex = []; foreach ($candidates as $r) $lex[(int) $r['id']] = (float) $r['lex'];
+
+        // Stage 2 signals, bulk loaded for the candidate set only.
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $cutoff = gmdate('Y-m-d', CommerceDatabase::clock($this->pdo) - 30 * 86400);
+        $sales = []; foreach ($this->query("SELECT product_id,COALESCE(SUM(orders_net),0) AS s FROM product_daily_metrics WHERE product_id IN ($marks) AND metric_date>? GROUP BY product_id", array_merge($ids, [$cutoff]))->fetchAll() as $row) $sales[(int) $row['product_id']] = max(0, (int) $row['s']);
+        $rows = $this->query("SELECT p.*,c.name AS category_name,c.slug AS category_slug,b.name AS brand_name,b.slug AS brand_slug
+            FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE p.id IN ($marks)", $ids)->fetchAll();
+        $products = $this->hydrate($rows);
+
+        $maxLex = max($lex) ?: 0.0; $maxSales = $sales ? max($sales) : 0; $now = CommerceDatabase::clock($this->pdo);
+        foreach ($products as &$product) {
+            $id = (int) $product['id'];
+            $age = max(0, ($now - (int) strtotime((string) $product['created_at'])) / 86400);
+            $norm = [
+                'relevance' => $maxLex > 0 ? ($lex[$id] ?? 0) / $maxLex : 0.0,
+                'sales' => $maxSales > 0 ? ($sales[$id] ?? 0) / $maxSales : 0.0,
+                'rating' => $product['rating_tenths'] !== null ? $product['rating_tenths'] / 50 : 0.0,
+                'stock' => $product['in_stock'] ? 1.0 : 0.0,
+                'featured' => (int) $product['featured'] ? 1.0 : 0.0,
+                'freshness' => max(0.0, 1 - $age / 90),
+            ];
+            $sum = 0; foreach (self::WEIGHTS as $factor => $weight) $sum += (int) round(min(1.0, max(0.0, $norm[$factor])) * $weight);
+            $product['search_score'] = $sum;
+        }
+        unset($product);
+        // Deterministic order: score descending, then product id ascending for stable ties and pagination.
+        usort($products, static fn(array $a, array $b): int => $b['search_score'] <=> $a['search_score'] ?: (int) $a['id'] <=> (int) $b['id']);
+        $total = count($products); $pages = (int) ceil($total / $perPage);
+        return ['items'=>array_slice($products, ($page - 1) * $perPage, $perPage), 'page'=>$page, 'per_page'=>$perPage,
+            'total'=>$total, 'pages'=>$pages, 'capped'=>$capped, 'has_more'=>$page < $pages, 'generation'=>$this->searchGeneration($q)];
+    }
+
+    /** A stable generation token (catalog version + UTC day + normalised query) so pagination is consistent. */
+    private function searchGeneration(string $q): string
+    {
+        $version = (int) $this->query("SELECT version FROM catalog_versions WHERE namespace='catalog'")->fetchColumn();
+        return $version . '-' . gmdate('Y-m-d', CommerceDatabase::clock($this->pdo)) . '-' . substr(hash('sha256', mb_strtolower($q)), 0, 12);
+    }
+
+    public function detail(string $slug): array
+    {
+        return DeveloperTrace::span(__METHOD__,fn()=>$this->detailObserved($slug));
+    }
+    private function detailObserved(string $slug): array
+    {
+        $slug=CommerceValues::slug($slug);
+        $row=$this->query("SELECT p.*,c.name AS category_name,c.slug AS category_slug,b.name AS brand_name,b.slug AS brand_slug
+            FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
+            WHERE p.slug=? AND p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1)
+            AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)",[$slug])->fetch();
+        if (!$row) throw new RequestRejected(404,'not_found','Product not found.');
+        return $this->hydrate([$row])[0];
+    }
+    public function adminDetail(int $actorId, int $id): array
+    {
+        CommerceAccess::requirePermission('admin.products.view',$actorId);
+        $row=$this->query('SELECT * FROM products WHERE id=?',[$id])->fetch();
+        if (!$row) throw new RequestRejected(404,'not_found','Product not found.');
+        return $this->hydrate([$row],true)[0];
+    }
+}

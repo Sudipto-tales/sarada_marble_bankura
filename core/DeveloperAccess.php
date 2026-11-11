@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/RequestSecurity.php';
+
 /** Dedicated console identities; customer sessions never grant console access. */
 final class DeveloperAccess
 {
@@ -8,6 +10,7 @@ final class DeveloperAccess
         'apis' => ['API registry', 'Endpoints, contracts and request history', 'monitor.apis.read'],
         'server' => ['Server load', 'Runtime samples and infrastructure capacity', 'monitor.server.read'],
         'workflows' => ['Module flows', 'Commerce dependencies and correlated execution', 'monitor.workflows.read'],
+        'knowledge' => ['Knowledge lab', 'Module knowledge, API execution and daily health', 'monitor.workflows.read'],
         'incidents' => ['Incidents', 'Failures, investigations and recovery', 'monitor.incidents.read'],
         'activity' => ['Live activity', 'Request events and operational changes', 'monitor.events.read'],
         'access' => ['Roles & permissions', 'Console capabilities and access policy', 'monitor.access.read'],
@@ -16,10 +19,7 @@ final class DeveloperAccess
 
     public static function session(): void
     {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start(['use_strict_mode' => true, 'cookie_httponly' => true,
-                'cookie_samesite' => 'Lax', 'cookie_secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off']);
-        }
+        RequestSecurity::session();
         if (empty($_SESSION['developer_csrf'])) $_SESSION['developer_csrf'] = bin2hex(random_bytes(32));
     }
 

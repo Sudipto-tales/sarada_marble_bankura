@@ -1,5 +1,18 @@
+# Apache 2.4: deny private files before the existing-file rewrite bypass.
+Options -Indexes -MultiViews
+<FilesMatch "(?i)(^\.|^(?:vayu|composer\.(?:json|lock|phar)|.*\.(?:sqlite(?:3)?|db|log|sql|bak|ini|env|ya?ml))$|\.php$)">
+    Require all denied
+</FilesMatch>
+<Files "index.php">
+    Require all granted
+</Files>
+
 RewriteEngine On
-RewriteBase /
+RewriteRule (^|/)\. - [F,L]
+RewriteRule ^(?:config|core|vendor|database|docs|tests|app|logs|cache|storage|imports|var|bin)(?:/|$) - [F,L,NC]
+# Do not execute uploaded PHP or serve scripts outside the front controller.
+RewriteRule ^(?!index\.php$).*\.(?:php[0-9]?|phtml|phar)(?:/|$) - [F,L,NC]
+RewriteRule ^(?:vayu|composer\.(?:json|lock|phar))$ - [F,L,NC]
 RewriteRule ^index\.php$ - [L]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
