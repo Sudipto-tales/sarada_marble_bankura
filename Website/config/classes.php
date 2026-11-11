@@ -55,6 +55,7 @@ return [
     'PrivateStorage' => 'core/PrivateStorage.php',
     'Mailer' => 'core/Mailer.php',
     'Welcome' => 'app/bridge/Welcome.php',
+    'Setup' => 'app/bridge/Setup.php',
     'StorefrontProduct' => 'app/bridge/StorefrontProduct.php',
     'StorefrontController' => 'app/bridge/StorefrontController.php',
     'StorefrontProductController' => 'app/bridge/StorefrontProductController.php',

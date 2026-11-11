@@ -87,6 +87,7 @@ class ViewRouteProvider extends RouteProvider
             'admin/product/archive' => ['POST' => ['Admin', 'archiveProduct']],
             'admin/product/image' => ['POST' => ['Admin', 'image']],
             'admin/catalog/import' => ['POST' => ['Admin', 'importCatalog']],
+            'setup' => ['GET' => ['Setup', 'show'], 'POST' => ['Setup', 'run']],
             'admin/settings' => ['GET' => ['Admin', 'settings'],'POST'=>['Admin','saveSettings']],
             'admin/settings/otp' => ['POST'=>['Admin','saveOtp']],
             'admin/coupon' => ['GET'=>['Admin','couponForm'],'POST'=>['Admin','saveCoupon']],
