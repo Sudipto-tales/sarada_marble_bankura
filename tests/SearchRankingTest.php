@@ -46,8 +46,14 @@ $check(is_string($result['generation']) && $result['generation'] === $search(['q
 $none = $search(['q' => 'zzqqnomatch']);
 $check($none['total'] === 0 && $none['items'] === [] && $none['pages'] === 0 && $none['has_more'] === false, 'A query with no matches returns an empty ranked page.');
 
-// LIKE wildcards in the query are escaped, not treated as operators.
-$check($search(['q' => 'marble%'])['total'] === 0, 'A percent in the query is matched literally, not as a wildcard.');
+// Wildcards in the query are never treated as operators. SQLite escapes '%' in LIKE so it matches literally
+// (nothing); MySQL FULLTEXT natural-language mode tokenises the '%' away so it matches the same as the bare
+// term (and '%' is not a FULLTEXT operator). Either way a percent cannot act as a wildcard.
+if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+    $check($search(['q' => 'marble%'])['total'] === $search(['q' => 'marble'])['total'], 'A percent is tokenised away, not treated as a wildcard operator.');
+} else {
+    $check($search(['q' => 'marble%'])['total'] === 0, 'A percent in the query is matched literally, not as a wildcard.');
+}
 $check($search(['q' => 'granite'])['total'] === 6, 'A term in tags matches via the lexical fallback (the six granite-tagged products).');
 $check($search(['q' => 'slab'])['total'] === 1 && $order($search(['q' => 'slab']))[0] === 'm-full', 'A description-only term still matches via the lexical fallback.');
 

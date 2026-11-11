@@ -172,6 +172,19 @@ class Admin extends StorefrontController
             $_SESSION['admin_notice']='Product archived. Order history is preserved.';$this->redirect('admin/products');
         });
     }
+    public function importCatalog(): void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.products.edit');RequestSecurity::requireMutation();
+            require_once dirname(__DIR__,2).'/database/seeders/KajariaCatalogSeeder.php';
+            @set_time_limit(180);
+            try{$result=(new KajariaCatalogSeeder($this->pdo))->importFromAdmin((int)$actor['id']);}
+            catch(RequestRejected $e){throw $e;}
+            catch(Throwable $e){throw new RequestRejected(503,'import_failed','Catalog import could not complete: '.$e->getMessage().' Imported records are preserved; correct the cause and retry.');}
+            $_SESSION['admin_notice']='Kajaria catalog import complete — '.$result['created_products'].' added, '.$result['skipped_products'].' already present, '.$result['created_images'].' images copied. Imported products are hidden drafts; set prices and stock to publish them.';
+            $this->redirect('admin/products');
+        });
+    }
     public function saveTaxonomy(string $module): void
     {
         $this->handle(function()use($module):void{
