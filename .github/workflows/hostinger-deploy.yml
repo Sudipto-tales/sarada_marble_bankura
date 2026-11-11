@@ -47,6 +47,7 @@ jobs:
           for test in tests/*Test.php; do php "$test"; done
           php tests/FoundationTest.php --mysql
           php tests/DemoSeederTest.php --mysql
+          php tests/KajariaImportTest.php --mysql
           # Money/stock paths must be proven on MySQL, not only SQLite (ADV-BOOK-01 / DLV-PIN-01).
           php tests/OrderPlacementTest.php --mysql
           php tests/PaymentServiceTest.php --mysql
