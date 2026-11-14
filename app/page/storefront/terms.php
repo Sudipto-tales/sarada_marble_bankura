@@ -43,7 +43,7 @@
   <p>These terms are governed by the laws of India. Any dispute is subject to the jurisdiction of the courts of Bankura, West Bengal.</p>
 
   <h2>11. Contact</h2>
-  <p>Questions about these terms? Reach us through our <a href="https://maasaradamarble.com/contact">contact page</a>.</p>
+  <p>Questions about these terms? Email us at <a href="mailto:no-reply@maasaradamarbleandsanitation.com">no-reply@maasaradamarbleandsanitation.com</a> or reach us through our <a href="https://maasaradamarble.com/contact">contact page</a>.</p>
 
   <p class="note">This page is a general template and not legal advice. Please have it reviewed by a qualified professional before relying on it.</p>
 </article>

@@ -39,7 +39,7 @@ $materialLink = static fn(?array $p): string => $p ? $u('product/' . $p['slug'])
   <div class="off-head"><span class="off-eyebrow">Shop by category</span><h2>Where to begin.</h2></div>
   <div class="off-category-grid">
     <?php foreach ($categoryCards as $i => $category): $tags = ['Comfort meets style', 'Gather. Dine. Connect.', 'Your perfect retreat', 'Work in style']; ?>
-    <a class="off-category" href="<?= $u('category/' . $category['slug']) ?>">
+    <a class="off-category" href="<?= $u('type/' . $category['slug']) ?>">
       <img src="<?= $category['preview'] ? $u($category['preview']) : $a('assets/textures/marble/carrara_white.webp') ?>" alt="" loading="lazy">
       <span class="off-category-body"><strong><?= $e($category['name']) ?></strong><small><?= $e($tags[$i] ?? $category['material_count'] . ' materials') ?></small></span>
       <span class="off-arrow" aria-hidden="true">→</span>

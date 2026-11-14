@@ -12,6 +12,7 @@ $navigation=[
     ]],
     ['PRODUCTS',[
         ['Product List','admin/products','products','admin.products.view','products'],['Categories','admin/categories','categories','admin.products.view','categories'],
+        ['Category Types','admin/category-types','categories','admin.products.view','category-types'],
         ['Brands','admin/brands','brands','admin.products.view','brands'],['Inventory','admin/inventory','inventory','admin.inventory.view','inventory'],
     ]],
     ['ORDERS',[
@@ -33,6 +34,7 @@ $navPaths=[
     'analytics'=>'<path d="M3 3v18h18M7 14l4-4 4 3 6-7"/><path d="M17 6h4v4"/>',
     'products'=>'<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5M12 8v13"/>',
     'categories'=>'<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/>',
+    'category-types'=>'<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>',
     'brands'=>'<path d="M20.6 13.4 11 3.8A2.7 2.7 0 0 0 9.1 3H4a1 1 0 0 0-1 1v5.1c0 .7.3 1.4.8 1.9l9.6 9.6a2 2 0 0 0 2.8 0l4.4-4.4a2 2 0 0 0 0-2.8Z"/><circle cx="7.5" cy="7.5" r="1"/>',
     'inventory'=>'<rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M16 7h2M16 17h2"/>',
     'orders'=>'<path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M15 3v5h5M9 13h6M9 17h6"/>',

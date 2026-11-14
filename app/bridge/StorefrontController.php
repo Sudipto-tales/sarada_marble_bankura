@@ -27,6 +27,8 @@ abstract class StorefrontController extends BaseController
     protected function redirect(string $path): void { header('Location: ' . self::url($path), true, 303); }
     public static function url(string $path = ''): string
     {
+        // Product images hosted on Google Drive are already absolute; every other path is site-relative.
+        if (ProductService::remoteImage($path)) return $path;
         $base = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/.');
         return $base . '/' . ltrim($path, '/');
     }

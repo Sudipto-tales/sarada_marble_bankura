@@ -106,7 +106,7 @@ if(($argv[1]??'')==='inspect'){
   shopper=Client(port);shop=fields(shopper.request('/account/login')[2],'/account/login');shop.update(email='admin@admin-test.invalid',password='Disposable-Admin-Test-Password')
   check(shopper.request('/account/login','POST',shop)[0]==303,'Staff may also shop with the same account')
   check(shopper.request('/admin')[0]==303 and shopper.request('/admin/data/products')[0]==401,'A storefront login carries no staff console authority')
-  for module in ['products','categories','brands','inventory','orders','customers']:
+  for module in ['products','categories','category-types','brands','inventory','orders','customers']:
    check(admin.request('/admin/'+module)[0]==200,'Admin table renders: '+module)
    check(viewer.request('/admin/'+module)[0]==200,'Viewer table renders: '+module)
   result=json.loads(admin.request('/admin/data/products?length=10&start=50')[2]);check(result['recordsTotal']==55 and len(result['data'])==5,'Server table pages the entire catalog')
@@ -124,9 +124,19 @@ if(($argv[1]??'')==='inspect'){
   check(admin.request('/admin/taxonomy/categories','POST',{**data,'csrf':'bad'})[0]==403,'Taxonomy CSRF enforced')
   check(admin.request('/admin/taxonomy/categories','POST',{**data,'operation_key':secrets.token_hex(16)})[0]==409,'Duplicate category rejected')
   category_row=json.loads(admin.request('/admin/data/categories?'+urlencode({'search[value]':'floor-stones'}))[2])['data'][0]
-  category_edit=fields(admin.request('/admin/categories?edit='+category_row['id'])[2],'/admin/taxonomy/categories');category_edit.update(name='Floor Stone Collection',slug='floor-stones',enabled='1',parent_id=str(seed['category']))
+  category_edit=fields(admin.request('/admin/categories?edit='+category_row['id'])[2],'/admin/taxonomy/categories');category_edit.update(name='Floor Stone Collection',slug='floor-stones',enabled='1')
   check(admin.request('/admin/taxonomy/categories','POST',category_edit)[0]==303,'Category edit persists')
-  check(admin.request('/admin/taxonomy/categories','POST',{**category_edit,'operation_key':secrets.token_hex(16),'parent_id':category_row['id']})[0]==422,'Category self-parent cycle rejected')
+  # CAT-TYPE-01: the self-referential parent tree is retired, so a once-cyclic parent_id is now ignored, not rejected.
+  check(admin.request('/admin/taxonomy/categories','POST',{**category_edit,'operation_key':secrets.token_hex(16),'parent_id':category_row['id']})[0]==303,'Retired parent_id is accepted and ignored')
+  # CAT-TYPE-01: category types module — create a type, then classify the category under it.
+  tdata=fields(admin.request('/admin/category-types')[2],'/admin/taxonomy/category-types');tdata.update(name='Natural Stone',slug='natural-stone',enabled='1',position='0')
+  check(admin.request('/admin/taxonomy/category-types','POST',tdata)[0]==303,'Category type form saves')
+  check(viewer.request('/admin/taxonomy/category-types','POST',tdata)[0]==403,'Viewer category-type mutation denied')
+  check(admin.request('/admin/taxonomy/category-types','POST',{**tdata,'operation_key':secrets.token_hex(16)})[0]==409,'Duplicate category type rejected')
+  type_row=json.loads(admin.request('/admin/data/category-types?'+urlencode({'search[value]':'natural-stone'}))[2])['data'][0]
+  check(admin.request('/admin/taxonomy/categories','POST',{**category_edit,'operation_key':secrets.token_hex(16),'type_id':type_row['id']})[0]==303,'Category is classified under a type')
+  classified=json.loads(admin.request('/admin/data/categories?'+urlencode({'search[value]':'floor-stones'}))[2])['data'][0];check(classified['type_name']=='Natural Stone','Category table shows its type')
+  check(admin.request('/'+('type/natural-stone'))[0]==200,'Storefront type page renders')
   data=fields(admin.request('/admin/brands')[2],'/admin/taxonomy/brands');data.update(name='Original Stone',slug='original-stone',enabled='1');check(admin.request('/admin/taxonomy/brands','POST',data)[0]==303,'Brand form saves')
   brand_row=json.loads(admin.request('/admin/data/brands')[2])['data'][0]
   brand_edit=fields(admin.request('/admin/brands?edit='+brand_row['id'])[2],'/admin/taxonomy/brands');brand_edit.update(name='Original Stone Company',slug='original-stone',enabled='1')

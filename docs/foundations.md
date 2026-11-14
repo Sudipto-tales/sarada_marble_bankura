@@ -18,6 +18,16 @@ Install Composer dependencies to load a local .env file. Exported environment va
 
 The [runner](../config/migrate.php#L8) acquires a connection-level MySQL named lock or a SQLite file lock before reading the ledger. Lock wait is bounded to 10 seconds. Do not unlink a live SQLite lock file: all processes must refer to the same inode.
 
+After applying and verifying schema migrations, `php vayu migrate` also runs the idempotent Kajaria catalog seeder when an active staff account has `admin.products.edit`. Imported products stay drafts with no variants, prices, or stock. If no eligible staff exists yet, it prints a skip message; the protected `/setup` flow or `php vayu catalog:import --actor-id=auto` can import after staff provisioning. Seed failures return a nonzero command status and can be repaired and rerun without deleting migration ledger rows.
+
+The manifest is `database/seeders/kajaria/catalog.json`. Existing local-image entries remain supported. For a Drive image, use an entry such as:
+
+```json
+{"url":"https://drive.google.com/file/d/FILE_ID/view","mime":"image/webp","width":1200,"height":800}
+```
+
+Set the Drive file's access to **Anyone with the link / Viewer**. The seeder normalizes supported Drive share links or IDs to Google's public image URL and stores that URL in `product_images.path`; it does not fetch or copy the image during migration. Keep the image MIME and dimensions accurate. Public image display depends on Google continuing to serve the shared file.
+
 UsersTable remains the first legacy ledger identity. New filenames require numeric ordering prefixes, for example 0001_users_foundation.php defines UsersFoundation. Every migration extends Migration and implements actual rerunnable up behavior and a verify method that checks its required schema. Registration rejects missing/duplicate classes before executing DDL. The ledger has a unique migration identity.
 
 [UsersFoundation](../database/migrations/0001_users_foundation.php) explicitly repairs indexes for already-recorded user migrations. Existing identities and hashes are preserved. Incompatible columns, identity types, indexes, engines or collations cause a safe failure rather than a silent data rewrite. There are no seeded demo accounts.

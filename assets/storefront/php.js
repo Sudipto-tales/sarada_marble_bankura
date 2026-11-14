@@ -161,7 +161,7 @@
       html += '<div class="search-group"><p class="search-group-head">' + esc(cat) + '</p>';
       list.forEach(i => {
         const img = i.images && i.images[0];
-        const thumb = img ? '<img loading="lazy" src="' + esc(base + img.path) + '" alt="' + esc(img.alt_text) + '">' : '<span class="search-thumb-blank"></span>';
+        const thumb = img ? '<img loading="lazy" src="' + esc(/^https:\/\//.test(img.path) ? img.path : base + img.path) + '" alt="' + esc(img.alt_text) + '">' : '<span class="search-thumb-blank"></span>';
         const price = i.min_price_minor ? '<span class="search-price">From ' + money(i.min_price_minor) + '</span>' : '';
         html += '<a class="search-hit" role="option" href="' + esc(base + 'product/' + i.slug) + '">' + thumb +
           '<span class="search-hit-text"><span class="search-hit-name">' + esc(i.name) + '</span>' +

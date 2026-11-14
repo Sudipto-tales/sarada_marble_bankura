@@ -6,7 +6,8 @@ final class AdminReadService
     public const TABLES = [
         'coupons'=>['Coupons','admin.pricing.edit',['code'=>'Code','kind'=>'Type','value'=>'Discount','used_count'=>'Uses','usage_limit'=>'Usage limit','enabled'=>'Enabled']],
         'products'=>['Products','admin.products.view',['name'=>'Material','category_name'=>'Category','brand_name'=>'Brand','status'=>'Status','price'=>'From (INR)','updated_at'=>'Updated']],
-        'categories'=>['Categories','admin.products.view',['name'=>'Category','slug'=>'Slug','parent_name'=>'Parent','enabled'=>'Enabled']],
+        'categories'=>['Categories','admin.products.view',['name'=>'Category','slug'=>'Slug','type_name'=>'Type','enabled'=>'Enabled']],
+        'category-types'=>['Category types','admin.products.view',['name'=>'Type','slug'=>'Slug','position'=>'Order','enabled'=>'Enabled']],
         'brands'=>['Brands','admin.products.view',['name'=>'Brand','slug'=>'Slug','enabled'=>'Enabled']],
         'inventory'=>['Inventory','admin.inventory.view',['name'=>'Material','sku'=>'SKU','sell_unit'=>'Unit','on_hand'=>'On hand','reserved'=>'Reserved','available'=>'Available']],
         'orders'=>['Orders','admin.orders.view',['order_number'=>'Order','customer'=>'Customer','status'=>'Status','total'=>'Total (INR)','payment_status'=>'Payment','created'=>'Placed (UTC)']],
@@ -38,7 +39,8 @@ final class AdminReadService
             'products'=>['products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id',
                 'p.id,p.name,c.name AS category_name,b.name AS brand_name,p.status,p.updated_at,(SELECT MIN(v.unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS price',
                 ['p.name','c.name','b.name','p.status','price','p.updated_at'],['p.name','p.slug','c.name','b.name'], "p.id IN (SELECT product_id FROM product_variants WHERE sku LIKE ? ESCAPE '!')"],
-            'categories'=>['categories p LEFT JOIN categories c ON c.id=p.parent_id','p.id,p.name,p.slug,c.name AS parent_name,p.enabled',['p.name','p.slug','c.name','p.enabled'],['p.name','p.slug']],
+            'categories'=>['categories p LEFT JOIN category_types t ON t.id=p.type_id','p.id,p.name,p.slug,t.name AS type_name,p.enabled',['p.name','p.slug','t.name','p.enabled'],['p.name','p.slug']],
+            'category-types'=>['category_types p','p.id,p.name,p.slug,p.position,p.enabled',['p.name','p.slug','p.position','p.enabled'],['p.name','p.slug']],
             'brands'=>['brands p','p.id,p.name,p.slug,p.enabled',['p.name','p.slug','p.enabled'],['p.name','p.slug']],
             'inventory'=>['inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id','v.id,p.name,v.sku,v.sell_unit,i.on_hand_milli AS on_hand,i.reserved_milli AS reserved,(i.on_hand_milli-i.reserved_milli) AS available',
                 ['p.name','v.sku','v.sell_unit','i.on_hand_milli','i.reserved_milli','available'],['p.name','v.sku']],
@@ -134,12 +136,26 @@ final class AdminReadService
         $lowStock=CommerceDatabase::query($this->pdo,"SELECT v.id AS variant_id,p.name,v.sku,v.sell_unit,v.qty_increment_milli,(i.on_hand_milli-i.reserved_milli) AS available_milli
             FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id
             WHERE v.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli*5
-            ORDER BY available_milli ASC,p.name LIMIT 50")->fetchAll();
+            ORDER BY available_milli ASC,p.name,v.id LIMIT 50")->fetchAll();
         $sales['revenue_minor']=CommerceValues::integer($sales['revenue_minor'],0,PHP_INT_MAX,'revenue_minor');
         foreach($coupons as &$row)$row['discount_minor']=CommerceValues::integer($row['discount_minor'],0,PHP_INT_MAX,'discount_minor');unset($row);
         foreach($statuses as &$row)$row['value_minor']=CommerceValues::integer($row['value_minor'],0,PHP_INT_MAX,'value_minor');unset($row);
         foreach($topProducts as &$row){$row['revenue_minor']=CommerceValues::integer($row['revenue_minor'],0,PHP_INT_MAX,'revenue_minor');$row['qty_milli']=CommerceValues::integer($row['qty_milli'],0,PHP_INT_MAX,'qty_milli');}unset($row);
         return compact('from','to','sales','coupons','statuses','topProducts','lowStock');
+    }
+    /** Paginated operational low-stock list (point-in-time) for the analytics "Load more" control. Ordering matches reports() so pages join seamlessly. */
+    public function lowStockRows(int $actorId,int $offset,int $limit):array
+    {
+        CommerceAccess::requirePermission('admin.analytics.view',$actorId);
+        $offset=max(0,$offset);$limit=max(1,min(100,$limit));$fetch=$limit+1;
+        $rows=CommerceDatabase::query($this->pdo,"SELECT v.id AS variant_id,p.name,v.sku,v.sell_unit,(i.on_hand_milli-i.reserved_milli) AS available_milli
+            FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id
+            WHERE v.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli*5
+            ORDER BY available_milli ASC,p.name,v.id LIMIT $fetch OFFSET $offset")->fetchAll();
+        $hasMore=count($rows)>$limit;
+        if($hasMore)array_pop($rows);
+        $data=array_map(static fn(array $row):array=>['variant_id'=>(int)$row['variant_id'],'name'=>$row['name'],'sku'=>$row['sku'],'sell_unit'=>$row['sell_unit'],'available'=>self::decimal($row['available_milli'],3)],$rows);
+        return ['rows'=>$data,'hasMore'=>$hasMore,'nextOffset'=>$offset+count($data)];
     }
     /** Real, bounded analytics for one of the supported UTC periods. */
     public function analyticsDashboard(int $actorId,int $days):array

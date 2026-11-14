@@ -23,3 +23,13 @@ body[data-page=home] .h-categories{grid-template-columns:repeat(var(--category-c
 #footer .footer-grid h3{font-size:14px;font-weight:700;line-height:1.4;margin-bottom:14px}
 #footer .footer-grid a:not(.brand),#footer .footer-grid button{font-size:13px;font-weight:700;line-height:1.6;color:#fbfcfc;overflow-wrap:anywhere}
 #footer .footer-grid a:not(.brand){margin:6px 0}
+
+/* Shop AJAX filtering/pagination (product-listing.js): swap state + numbered pager. */
+#catalog-results{position:relative;transition:opacity .15s ease}
+#catalog-results.is-loading{opacity:.55;pointer-events:none}
+#catalog-results.is-loading::after{content:"";position:absolute;top:120px;left:50%;width:30px;height:30px;margin-left:-15px;border:3px solid var(--line,#d5dee0);border-top-color:var(--clay,#c47b53);border-radius:50%;animation:shop-spin .7s linear infinite}
+@keyframes shop-spin{to{transform:rotate(360deg)}}
+.pagination{flex-wrap:wrap;align-items:center}
+.pagination a.button.secondary{min-width:40px;padding:8px 12px}
+.pagination a.is-current{background:var(--clay);border-color:var(--clay);color:#fbfcfc;pointer-events:none}
+.pagination-gap{padding:0 4px;color:var(--muted,#6b7a7d)}

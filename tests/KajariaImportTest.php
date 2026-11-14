@@ -8,9 +8,11 @@ $manifest = json_decode((string)file_get_contents(dirname(__DIR__) . '/database/
 $expectedProducts = count($manifest['products']);
 $expectedImages = array_sum(array_map(static fn($p) => count($p['images']), $manifest['products']));
 
+$check(KajariaCatalogSeeder::autoActor($pdo) === null, 'Auto actor resolves to nobody before any staff exists.');
 $admin = CommerceAccess::provision('kajaria-import-admin@example.test', bin2hex(random_bytes(24)));
 $customer = CommerceTest::user('kajaria-import-customer@example.test');
 $seeder = new KajariaCatalogSeeder($pdo);
+$check(KajariaCatalogSeeder::autoActor($pdo) === $admin, 'Auto actor ignores customers and resolves the catalog-edit staff account.');
 $root = dirname(__DIR__);
 
 // Track copied image files for cleanup; the import writes into assets/products.
@@ -64,5 +66,47 @@ $check($resumed['created_products'] === 0 && $resumed['created_images'] === 1, '
 // The CLI command runs in a simulated production environment (unlike demo:seed).
 [$status, $out, $err] = CommerceTest::command(['vayu', 'catalog:import', '--actor-id=' . $admin], '', ['APP_ENV' => 'production']);
 $check($status === 0 && $err === '' && json_decode($out, true)['skipped_products'] === $expectedProducts, 'Production CLI import returns a repeatable summary.');
+
+// Deployment path: --actor-id=auto imports as the eligible staff account and prints counts only.
+[$status, $out, $err] = CommerceTest::command(['vayu', 'catalog:import', '--actor-id=auto'], '', ['APP_ENV' => 'production']);
+$auto = json_decode($out, true);
+$check($status === 0 && $err === '' && $auto['skipped_products'] === $expectedProducts && $auto['created_products'] === 0 && !isset($auto['products']),
+    'Auto-actor CLI import is a repeatable no-op with a compact summary.');
+
+// `migrate` runs the same idempotent catalog seed after applying/validating schema migrations.
+[$status, $out, $err] = CommerceTest::command(['vayu', 'migrate']);
+$check($status === 0 && $err === '' && str_contains($out, 'Catalog seed:') && str_contains($out, '"skipped_products":' . $expectedProducts),
+    'Migration command invokes the catalog seed when an eligible staff actor exists. ' . json_encode(compact('status', 'out', 'err')));
+
+// With no eligible staff (disabled account) the deployment step skips successfully and writes nothing.
+$pdo->prepare('UPDATE users_tbl SET status=0 WHERE id=?')->execute([$admin]);
+$before = (int)$pdo->query('SELECT COUNT(*) FROM products')->fetchColumn();
+[$status, $out, $err] = CommerceTest::command(['vayu', 'catalog:import', '--actor-id=auto'], '', ['APP_ENV' => 'production']);
+$check($status === 0 && $err === '' && str_starts_with($out, 'Kajaria import skipped: no staff yet')
+    && (int)$pdo->query('SELECT COUNT(*) FROM products')->fetchColumn() === $before, 'Auto-actor CLI import skips cleanly without eligible staff.');
+[$status, $out, $err] = CommerceTest::command(['vayu', 'migrate']);
+$check($status === 0 && $err === '' && str_contains($out, 'Catalog seed skipped: no staff account')
+    && (int)$pdo->query('SELECT COUNT(*) FROM products')->fetchColumn() === $before, 'Migrate leaves catalog data untouched until staff is provisioned.');
+[$status] = CommerceTest::command(['vayu', 'catalog:import', '--actor-id=' . $admin], '', ['APP_ENV' => 'production']);
+$check($status === 1, 'An explicitly named ineligible actor still fails.');
+$pdo->prepare('UPDATE users_tbl SET status=1 WHERE id=?')->execute([$admin]);
+[$status] = CommerceTest::command(['vayu', 'catalog:import', '--actor-id=0'], '', ['APP_ENV' => 'production']);
+$check($status === 1, 'Malformed actor arguments are refused.');
+
+// URL manifest entries store a canonical public Drive image URL without downloading it.
+$manifestPath = dirname(__DIR__) . '/database/seeders/kajaria/catalog.json';
+$originalManifest = file_get_contents($manifestPath);
+$urlManifest = $manifest;
+$urlManifest['products'][0]['images'][] = ['url' => 'https://drive.google.com/file/d/abcdefghijklmnopqrstuvwx/view',
+    'mime' => 'image/webp', 'width' => 800, 'height' => 573];
+try {
+    file_put_contents($manifestPath, json_encode($urlManifest, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n");
+    $urlResult = $seeder->run($admin);
+    $remoteUrl = ProductService::driveImage($urlManifest['products'][0]['images'][count($urlManifest['products'][0]['images']) - 1]['url']);
+    $check($urlResult['created_images'] === 1 && (int)$pdo->query('SELECT COUNT(*) FROM product_images WHERE path=' . $pdo->quote($remoteUrl))->fetchColumn() === 1,
+        'Seeder stores a normalized public Drive URL directly without fetching image bytes.');
+} finally {
+    file_put_contents($manifestPath, $originalManifest);
+}
 
 CommerceTest::finish('Kajaria catalog import');

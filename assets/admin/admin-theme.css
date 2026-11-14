@@ -414,3 +414,39 @@ main#admin-main { width: 100%; max-width: none; min-height: 80vh; margin: 0; pad
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+/* Rounded, content-sized cards across the staff workspace. */
+#admin-main .card,
+#admin-main .panel,
+#admin-main .metric-card,
+#admin-main .quick-card,
+#admin-main .admin-grid-card,
+#admin-main .product-grid-card,
+#admin-main .analytics-stat,
+#admin-main .analytics-region-panel,
+#admin-main .analytics-freshness-panel {
+  height: auto;
+  min-height: 0;
+  border-radius: .875rem;
+}
+#admin-main .panel,
+#admin-main .metric-card,
+#admin-main .quick-card,
+#admin-main .admin-grid-card,
+#admin-main .product-grid-card,
+#admin-main .analytics-stat,
+#admin-main .analytics-region-panel,
+#admin-main .analytics-freshness-panel {
+  border: 1px solid #e9ebf2;
+}
+#admin-main .card.h-100 { height: auto !important; }
+.admin-record-grid,
+.product-grid,
+.metric-grid,
+.quick-grid,
+.analytics-stat-grid,
+.analytics-chart-grid,
+.analytics-detail-grid { align-items: start; }
+.widget-flat,
+.admin-grid-card,
+.product-grid-card { border-radius: .875rem; }
