@@ -150,11 +150,14 @@ final class ProductService
         $id=isset($input['id'])?CommerceValues::id($input['id']):null;
         $slug=CommerceValues::slug($input['slug']??null); $name=CommerceValues::text($input['name']??null,190,'name');
         $enabled=CommerceValues::flag($input['enabled']??1,'enabled');
-        $parent=isset($input['parent_id'])&&$input['parent_id']!==''?CommerceValues::id($input['parent_id']):null;
+        // Category type (CAT-TYPE-01) supersedes the former parent tree. NULL leaves the category unclassified;
+        // absent (no type_id key) leaves an existing category's type untouched.
+        $hasType=array_key_exists('type_id',$input);
+        $type=$hasType&&$input['type_id']!==null&&$input['type_id']!==''?CommerceValues::id($input['type_id']):null;
         $hasTax=array_key_exists('tax_bps',$input);$tax=$hasTax&&$input['tax_bps']!==null&&$input['tax_bps']!==''?CommerceValues::integer($input['tax_bps'],0,10000,'tax_bps'):null;
         $hasAdvance=array_key_exists('advance_bps',$input);$advance=$hasAdvance&&$input['advance_bps']!==null&&$input['advance_bps']!==''?CommerceValues::integer($input['advance_bps'],0,10000,'advance_bps'):null;
         try {
-            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$parent,$hasTax,$tax,$hasAdvance,$advance,$key):int {
+            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$hasType,$type,$hasTax,$tax,$hasAdvance,$advance,$key):int {
                 CommerceAccess::requirePermission('admin.products.edit',$actorId);
                 if (!$this->query('SELECT id FROM catalog_hierarchy_lock WHERE id=1'.CommerceDatabase::lock($this->pdo))->fetchColumn()) {
                     throw new RuntimeException('Category tree lock is unavailable.');
@@ -164,30 +167,46 @@ final class ProductService
                     if($prior){
                         $target=(int)$prior['target_id'];
                         if($id!==null&&$id!==$target)throw new RequestRejected(409,'audit_key_conflict','Operation key has different inputs.');
-                        $replay=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasTax)$replay['tax_bps']=$tax;if($hasAdvance)$replay['advance_bps']=$advance;
+                        $replay=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasType)$replay['type_id']=$type;if($hasTax)$replay['tax_bps']=$tax;if($hasAdvance)$replay['advance_bps']=$advance;
                         StaffAudit::record($this->pdo,$actorId,'category.save','category',$target,$key,$replay);
                         return $target; // A repeated GST/advance edit must not restore a superseded rate.
                     }
                 }
                 if ($id && !$this->query('SELECT id FROM categories WHERE id=?',[$id])->fetchColumn()) throw new RequestRejected(404,'not_found','Category not found.');
-                $cursor=$parent; $visited=[];
-                while ($cursor) {
-                    if ($cursor===$id || isset($visited[$cursor]) || count($visited)>=30) CommerceValues::invalid('parent_id');
-                    $visited[$cursor]=true;
-                    $node=$this->query('SELECT id,parent_id FROM categories WHERE id=?',[$cursor])->fetch();
-                    if (!$node) CommerceValues::invalid('parent_id');
-                    $cursor=$node['parent_id']===null?null:(int)$node['parent_id'];
+                if ($type!==null && !$this->query('SELECT id FROM category_types WHERE id=?',[$type])->fetchColumn()) CommerceValues::invalid('type_id');
+                if ($id) {
+                    $this->query('UPDATE categories SET slug=?,name=?,enabled=? WHERE id=?',[$slug,$name,$enabled,$id]);
+                    if($hasType)$this->query('UPDATE categories SET type_id=? WHERE id=?',[$type,$id]);
+                } else {
+                    $this->query('INSERT INTO categories (slug,name,enabled,type_id) VALUES (?,?,?,?)',[$slug,$name,$enabled,$type]); $id=(int)$this->pdo->lastInsertId();
                 }
-                if ($id) $this->query('UPDATE categories SET slug=?,name=?,enabled=?,parent_id=? WHERE id=?',[$slug,$name,$enabled,$parent,$id]);
-                else { $this->query('INSERT INTO categories (slug,name,enabled,parent_id) VALUES (?,?,?,?)',[$slug,$name,$enabled,$parent]); $id=(int)$this->pdo->lastInsertId(); }
                 if($hasTax)$this->query('UPDATE categories SET tax_bps=? WHERE id=?',[$tax,$id]);
                 if($hasAdvance)$this->query('UPDATE categories SET advance_bps=? WHERE id=?',[$advance,$id]);
                 self::advanceVersion($this->pdo);
-                $changes=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasTax)$changes['tax_bps']=$tax;if($hasAdvance)$changes['advance_bps']=$advance;
+                $changes=['name'=>$name,'slug'=>$slug,'enabled'=>$enabled];if($hasType)$changes['type_id']=$type;if($hasTax)$changes['tax_bps']=$tax;if($hasAdvance)$changes['advance_bps']=$advance;
                 StaffAudit::record($this->pdo,$actorId,'category.save','category',$id,$key,$changes);
                 return $id;
             });
         } catch (Throwable $e) { if (CommerceDatabase::uniqueConflict($e)) throw new RequestRejected(409,'catalog_conflict','Category slug already exists.'); throw $e; }
+    }
+
+    public function saveCategoryType(int $actorId, array $input, string $key): int
+    {
+        CommerceAccess::requirePermission('admin.products.edit',$actorId); $key=CommerceValues::key($key);
+        $id=isset($input['id'])?CommerceValues::id($input['id']):null; $slug=CommerceValues::slug($input['slug']??null);
+        $name=CommerceValues::text($input['name']??null,190,'name'); $enabled=CommerceValues::flag($input['enabled']??1,'enabled');
+        $position=CommerceValues::integer($input['position']??0,0,100000,'position');
+        try {
+            return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$position,$key):int {
+                CommerceAccess::requirePermission('admin.products.edit',$actorId);
+                if ($id && !$this->query('SELECT id FROM category_types WHERE id=?'.CommerceDatabase::lock($this->pdo),[$id])->fetchColumn()) throw new RequestRejected(404,'not_found','Category type not found.');
+                if ($id) $this->query('UPDATE category_types SET slug=?,name=?,enabled=?,position=? WHERE id=?',[$slug,$name,$enabled,$position,$id]);
+                else { $this->query('INSERT INTO category_types (slug,name,enabled,position) VALUES (?,?,?,?)',[$slug,$name,$enabled,$position]); $id=(int)$this->pdo->lastInsertId(); }
+                self::advanceVersion($this->pdo);
+                StaffAudit::record($this->pdo,$actorId,'category_type.save','category_type',$id,$key,['name'=>$name,'slug'=>$slug,'enabled'=>$enabled,'position'=>$position]);
+                return $id;
+            });
+        } catch (Throwable $e) { if (CommerceDatabase::uniqueConflict($e)) throw new RequestRejected(409,'catalog_conflict','Category type slug already exists.'); throw $e; }
     }
 
     public function saveBrand(int $actorId, array $input, string $key): int
@@ -197,7 +216,7 @@ final class ProductService
         $name=CommerceValues::text($input['name']??null,190,'name'); $enabled=CommerceValues::flag($input['enabled']??1,'enabled');
         // A logo is only rewritten when the caller uploaded one or asked to clear it; otherwise it is left alone.
         $logo=array_key_exists('logo_path',$input)?$input['logo_path']:false;
-        if ($logo!==false && $logo!==null && !preg_match('#\Aassets/brands/[a-f0-9]{32}\.png\z#',(string)$logo)) CommerceValues::invalid('logo_path');
+        if ($logo!==false && $logo!==null && !preg_match('#\Aassets/brands/[a-f0-9]{32}\.(jpg|png|webp)\z#',(string)$logo)) CommerceValues::invalid('logo_path');
         try {
             return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$slug,$name,$enabled,$logo,$key):int {
                 CommerceAccess::requirePermission('admin.products.edit',$actorId);
@@ -241,6 +260,7 @@ final class ProductService
         if ($staffId!==null) CommerceAccess::requirePermission('admin.products.view',$staffId);
         $where=$staffId===null?' WHERE enabled=1':'';
         return ['categories'=>$this->query('SELECT * FROM categories'.$where.' ORDER BY name,id LIMIT 1000')->fetchAll(),
+            'category_types'=>$this->query('SELECT * FROM category_types'.$where.' ORDER BY position,name,id LIMIT 1000')->fetchAll(),
             'brands'=>$this->query('SELECT * FROM brands'.$where.' ORDER BY name,id LIMIT 1000')->fetchAll()];
     }
 
@@ -335,6 +355,18 @@ final class ProductService
             ORDER BY p.featured DESC, p.id DESC LIMIT 1",$ids)->fetchColumn();
         return $path===false?null:$path;
     }
+    /** A representative image for a category type: the lead published product across all its categories. */
+    public function categoryTypeImage(string $slug): ?string
+    {
+        $slug=CommerceValues::slug($slug);
+        $path=$this->query("SELECT pi.path FROM product_images pi JOIN products p ON p.id=pi.product_id
+            JOIN categories c ON c.id=p.category_id JOIN category_types ct ON ct.id=c.type_id
+            WHERE p.status='active' AND ct.slug=?
+            AND (pi.variant_id IS NULL OR EXISTS(SELECT 1 FROM product_variants vi WHERE vi.id=pi.variant_id AND vi.enabled=1))
+            AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)
+            ORDER BY p.featured DESC, p.id DESC LIMIT 1",[$slug])->fetchColumn();
+        return $path===false?null:$path;
+    }
     private function listProductsObserved(array $filters, ?int $staffId): array
     {
         // Public keyword search uses the two-stage ranked path (SRCH-01); staff/plain listing stays as-is.
@@ -346,6 +378,9 @@ final class ProductService
         if (isset($filters['category'])&&$filters['category']!=='') {
             $ids=$this->categoryTreeIds(CommerceValues::slug($filters['category']));
             $clauses[]='p.category_id IN ('.implode(',',array_fill(0,count($ids),'?')).')'; foreach($ids as $cid)$values[]=$cid;
+        }
+        if (isset($filters['type'])&&$filters['type']!=='') {
+            $clauses[]='EXISTS(SELECT 1 FROM category_types ct WHERE ct.id=c.type_id AND ct.slug=?)'; $values[]=CommerceValues::slug($filters['type']);
         }
         if (isset($filters['q'])&&$filters['q']!=='') {
             $q=CommerceValues::text($filters['q'],80,'q'); $q='%'.str_replace(['!','%','_'],['!!','!%','!_'],$q).'%';
@@ -400,6 +435,9 @@ final class ProductService
         if (isset($filters['category']) && $filters['category'] !== '') {
             $ids = $this->categoryTreeIds(CommerceValues::slug($filters['category']));
             $clauses[] = 'p.category_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')'; foreach ($ids as $cid) $values[] = $cid;
+        }
+        if (isset($filters['type']) && $filters['type'] !== '') {
+            $clauses[] = 'EXISTS(SELECT 1 FROM category_types ct WHERE ct.id=c.type_id AND ct.slug=?)'; $values[] = CommerceValues::slug($filters['type']);
         }
         foreach (['min_price_minor'=>'>=','max_price_minor'=>'<='] as $name => $cmp) if (isset($filters[$name]) && $filters[$name] !== '') {
             // Interpolate the validated integer; a bound string breaks SQLite numeric comparison on the subquery.

@@ -8,11 +8,13 @@ class StorefrontProduct extends StorefrontController
             $catalog = new CatalogReadService($this->pdo);
             $products = $catalog->listing(['per_page' => 50]);
             $productService = new ProductService($this->pdo);
-            $categories = array_values(array_filter($productService->taxonomies()['categories'], static fn(array $c): bool => $c['parent_id'] === null));
+            $taxonomies = $productService->taxonomies();
+            $categories = $taxonomies['categories']; // real categories power the footer shortcuts
+            // CAT-TYPE-01: the home "shop by" cards browse by category type, each linking to its type page.
             $categoryCards = [];
-            foreach ($categories as $category) {
-                $preview = $catalog->listing(['category'=>$category['slug'], 'per_page'=>1]);
-                $categoryCards[] = $category + ['material_count'=>$preview['total'], 'preview'=>$productService->categoryImage($category['slug'])];
+            foreach ($taxonomies['category_types'] as $type) {
+                $preview = $catalog->listing(['type'=>$type['slug'], 'per_page'=>1]);
+                $categoryCards[] = $type + ['material_count'=>$preview['total'], 'preview'=>$productService->categoryTypeImage($type['slug'])];
             }
             $testimonial = null;
             foreach (array_slice($products['items'], 0, 8) as $material) {
@@ -41,9 +43,9 @@ class StorefrontProduct extends StorefrontController
             $products = $catalog->listing(['per_page' => 50]);
             $productService = new ProductService($this->pdo);
             $categoryCards = [];
-            foreach (array_slice(array_values(array_filter($productService->taxonomies()['categories'], static fn(array $c): bool => $c['parent_id'] === null)), 0, 4) as $category) {
-                $preview = $catalog->listing(['category' => $category['slug'], 'per_page' => 1]);
-                $categoryCards[] = $category + ['material_count' => $preview['total'], 'preview' => $productService->categoryImage($category['slug'])];
+            foreach (array_slice($productService->taxonomies()['category_types'], 0, 4) as $type) {
+                $preview = $catalog->listing(['type' => $type['slug'], 'per_page' => 1]);
+                $categoryCards[] = $type + ['material_count' => $preview['total'], 'preview' => $productService->categoryTypeImage($type['slug'])];
             }
             $this->respond('app/page/storefront/offers.php', compact('products', 'categoryCards'));
         });
@@ -55,14 +57,30 @@ class StorefrontProduct extends StorefrontController
             $this->respond('app/page/storefront/catalogue.php');
         });
     }
-    public function listing(?string $slug = null): void
+    public function listing(?string $slug = null): void { $this->renderListing($slug, 'category'); }
+    /** CAT-TYPE-01: browse a whole category type (/type/<slug>); reuses the shop template and facets. */
+    public function typeListing(string $slug): void { $this->renderListing($slug, 'type'); }
+    private function renderListing(?string $slug, string $dimension): void
     {
-        $this->handle(function () use ($slug): void {
-            $filters = CatalogReadService::filters($slug === null ? $_GET : array_replace($_GET, ['category' => $slug]));
+        $this->handle(function () use ($slug, $dimension): void {
+            $input = $slug === null ? $_GET : array_replace($_GET, [$dimension => $slug]);
+            // Shop default page size is 20 materials; the customer cannot override it from the form.
+            if (!isset($input['per_page']) || $input['per_page'] === '') $input['per_page'] = 20;
+            $filters = CatalogReadService::filters($input);
             $taxonomies = (new ProductService($this->pdo))->taxonomies();
-            if ($slug !== null && !in_array($slug, array_column($taxonomies['categories'], 'slug'), true)) throw new RequestRejected(404, 'not_found', 'Category not found.');
-            $this->respond('app/page/storefront/product_listing.php', ['products' => (new CatalogReadService($this->pdo))->listing($filters),
-                'filters' => $filters, 'categories' => $taxonomies['categories'], 'brands' => $taxonomies['brands']]);
+            // A path slug must name a real category/type (404); a bogus query filter just returns no results.
+            if ($slug !== null && $dimension === 'category' && !in_array($slug, array_column($taxonomies['categories'], 'slug'), true)) throw new RequestRejected(404, 'not_found', 'Category not found.');
+            if ($slug !== null && $dimension === 'type' && !in_array($slug, array_column($taxonomies['category_types'], 'slug'), true)) throw new RequestRejected(404, 'not_found', 'Category type not found.');
+            $products = (new CatalogReadService($this->pdo))->listing($filters);
+            // Progressive enhancement: product-listing.js fetches with ?partial=1 to swap just the
+            // results block. Everything else serves the full page, so JS-off customers are unaffected.
+            if (!empty($_GET['partial'])) {
+                $this->respond('app/page/storefront/product_listing_fragment.php', compact('products', 'filters'));
+                return;
+            }
+            $this->respond('app/page/storefront/product_listing.php', ['products' => $products,
+                'filters' => $filters, 'categories' => $taxonomies['categories'], 'types' => $taxonomies['category_types'],
+                'brands' => $taxonomies['brands'], 'pageScripts' => ['product-listing.js']]);
         });
     }
     public function detail(string $slug): void

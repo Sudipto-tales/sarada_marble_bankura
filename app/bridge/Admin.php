@@ -47,7 +47,7 @@ class Admin extends StorefrontController
     private function submitted(callable $save,callable $retry): void
     {
         RequestSecurity::requireMutation();
-        try{$path=$save();$_SESSION['admin_notice']='Changes saved successfully.';$this->redirect($path);}
+        try{$result=$save();$path=is_array($result)?$result['path']:$result;$_SESSION['admin_notice']=is_array($result)?($result['notice']??'Changes saved successfully.'):'Changes saved successfully.';$this->redirect($path);}
         catch(RequestRejected $e){
             if(!in_array($e->status,[422,409,503],true))throw $e;
             http_response_code($e->status);$this->errors['form']=$e->getMessage();
@@ -97,12 +97,12 @@ class Admin extends StorefrontController
         $input=['start'=>($page-1)*20,'length'=>20,'q'=>$_GET['q']??''];
         $result=(new AdminReadService($this->pdo))->table($actor['id'],$module,$input);
         $taxonomy=null;$values=$this->values;
-        if(in_array($module,['categories','brands'],true)&&isset($_GET['edit'])){
+        if(in_array($module,['categories','category-types','brands'],true)&&isset($_GET['edit'])){
             $id=CommerceValues::id($_GET['edit']);$table=$module;
             $taxonomy=CommerceDatabase::query($this->pdo,"SELECT * FROM $table WHERE id=?",[$id])->fetch();
             if(!$taxonomy)throw new RequestRejected(404,'not_found','Record not found.');
         }
-        $taxonomies=in_array($module,['categories','brands'],true)?(new ProductService($this->pdo))->taxonomies($actor['id']):null;
+        $taxonomies=in_array($module,['categories','category-types','brands'],true)?(new ProductService($this->pdo))->taxonomies($actor['id']):null;
         $this->render('table',compact('module','definition','result','page','taxonomy','values','taxonomies'));
     }
     public function data(string $module): void
@@ -139,6 +139,15 @@ class Admin extends StorefrontController
             echo json_encode($dashboard,JSON_THROW_ON_ERROR|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
         },true);
     }
+    public function analyticsLowStock():void
+    {
+        $this->handle(function():void{
+            $actor=CommerceAccess::requirePermission('admin.analytics.view');
+            $offset=CommerceValues::integer($_GET['offset']??0,0,1000000,'offset');
+            $payload=(new AdminReadService($this->pdo))->lowStockRows($actor['id'],$offset,20);
+            echo json_encode($payload,JSON_THROW_ON_ERROR|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
+        },true);
+    }
     public function productForm(): void { $this->handle(fn()=> $this->productPage()); }
     private function productPage(): void
     {
@@ -159,8 +168,21 @@ class Admin extends StorefrontController
             $this->submitted(function()use($actor){
                 $form=AdminCatalogForm::product($_POST);
                 if($form['errors']){$this->errors=$form['errors'];throw new RequestRejected(422,'invalid_input','Check the highlighted fields.');}
+                $items=self::submittedImageItems();
+                if($items&&!ProductImageService::available())throw new RequestRejected(503,'image_decoder_unavailable','Image handling needs PHP Imagick or GD and the fileinfo extension. Ask the server operator to enable one of those image extensions.');
                 $saved=(new ProductService($this->pdo))->save($actor['id'],$form['data'],CommerceValues::integer($_POST['revision']??null,0,PHP_INT_MAX,'revision'),CommerceValues::key($_POST['operation_key']??null));
-                return 'admin/product?id='.$saved['id'];
+                $productId=(int)$saved['id'];$added=0;$failure=null;
+                if($items){
+                    $service=new ProductImageService($this->pdo);$base=['alt_text'=>$_POST['alt_text']??'','variant_id'=>''];$key=CommerceValues::key($_POST['operation_key']??null);
+                    foreach($items as $n=>$item){
+                        try{$input=$base+['position'=>$n];if(isset($item['file']))$service->upload($actor['id'],$productId,$item['file'],$input,$key.':f'.$n);else $service->uploadFromUrl($actor['id'],$productId,$item['url'],$input,$key.':u'.$n);$added++;}
+                        catch(RequestRejected $e){$failure=$e->getMessage();break;}
+                        catch(Throwable $e){$failure='A photo could not be saved. The product was saved; open it and try adding the remaining photos again.';break;}
+                    }
+                }
+                $notice='Product saved'.($added?' with '.$added.' photo'.($added===1?'':'s'):'').'.';
+                if($failure)$notice.=' '.$failure.' Open the product to add any remaining photos.';
+                return ['path'=>'admin/product?id='.$productId,'notice'=>$notice];
             },fn()=> $this->productPage());
         });
     }
@@ -189,7 +211,7 @@ class Admin extends StorefrontController
     {
         $this->handle(function()use($module):void{
             $actor=CommerceAccess::requirePermission('admin.products.edit');
-            if(!in_array($module,['categories','brands'],true))throw new RequestRejected(404,'not_found','Record not found.');
+            if(!in_array($module,['categories','category-types','brands'],true))throw new RequestRejected(404,'not_found','Record not found.');
             $this->submitted(function()use($actor,$module){
                 $input=$_POST;if(($input['id']??'')==='')unset($input['id']);$input['enabled']=$input['enabled']??0;
                 if($module==='categories'&&array_key_exists('tax_rate',$input))$input['tax_bps']=$input['tax_rate']===''?null:CommerceValues::decimal($input['tax_rate'],2,10000,'tax_rate');
@@ -203,7 +225,7 @@ class Admin extends StorefrontController
                         $stored=$images->brandLogo($actor['id'],$upload);$input['logo_path']=$stored;
                     } elseif(($_POST['logo_clear']??'')==='1') $input['logo_path']=null;
                 }
-                $service=new ProductService($this->pdo);$method=$module==='categories'?'saveCategory':'saveBrand';
+                $service=new ProductService($this->pdo);$method=['categories'=>'saveCategory','category-types'=>'saveCategoryType','brands'=>'saveBrand'][$module];
                 try{$service->$method($actor['id'],$input,CommerceValues::key($_POST['operation_key']??null));}
                 catch(Throwable $e){if($images&&$stored)$images->discard($stored);throw $e;}
                 return 'admin/'.$module;
@@ -254,11 +276,44 @@ class Admin extends StorefrontController
             $this->submitted(function()use($actor){
                 $id=CommerceValues::id($_POST['id']??null);$key=CommerceValues::key($_POST['operation_key']??null);
                 $service=new ProductImageService($this->pdo);
-                if(($_POST['action']??'')==='remove')$service->remove($actor['id'],$id,CommerceValues::id($_POST['image_id']??null),$key);
-                else $service->upload($actor['id'],$id,$_FILES['image']??[],$_POST,$key);
+                if(($_POST['action']??'')==='remove'){$service->remove($actor['id'],$id,CommerceValues::id($_POST['image_id']??null),$key);return 'admin/product?id='.$id;}
+                // Accept several files (image[]) and/or several URLs (one per line); each becomes one gallery image.
+                $items=self::submittedImageItems();
+                if(!$items)CommerceValues::invalid('image');
+                $existing=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM product_images WHERE product_id=?',[$id])->fetchColumn();
+                if(count($items)>12-$existing)throw new RequestRejected(422,'image_limit','A product can have up to 12 photos. Remove a photo or reduce the number being added.');
+                $base=['alt_text'=>$_POST['alt_text']??'','variant_id'=>$_POST['variant_id']??''];
+                $position=CommerceValues::integer($_POST['position']??0,0,1000,'position');
+                foreach($items as $n=>$item){
+                    $input=$base+['position'=>min(1000,$position+$n)];
+                    if(isset($item['file']))$service->upload($actor['id'],$id,$item['file'],$input,$key.':f'.$n);
+                    else $service->uploadFromUrl($actor['id'],$id,$item['url'],$input,$key.':u'.$n);
+                }
                 return 'admin/product?id='.$id;
             },function():void{$this->values=null;$this->productPage();});
         });
+    }
+    /** Flatten PHP's $_FILES entry (single or `image[]` array shape) into a list of per-file arrays,
+        dropping empty slots so a partially filled multi-file picker does not error. */
+    private static function normalizeUploads($field): array
+    {
+        if(!is_array($field)||!isset($field['error']))return [];
+        if(!is_array($field['error']))return $field['error']===UPLOAD_ERR_NO_FILE?[]:[$field];
+        $out=[];
+        foreach($field['error'] as $i=>$error){
+            if($error===UPLOAD_ERR_NO_FILE)continue;
+            $out[]=['name'=>$field['name'][$i]??'','type'=>$field['type'][$i]??'','tmp_name'=>$field['tmp_name'][$i]??'','error'=>$error,'size'=>$field['size'][$i]??0];
+        }
+        return $out;
+    }
+    /** Collect all selected files and one-public-image-URL-per-line input without silently truncating. */
+    private static function submittedImageItems(): array
+    {
+        $files=self::normalizeUploads($_FILES['image']??[]);
+        $urls=array_values(array_filter(array_map('trim',preg_split('/\R/',(string)($_POST['image_urls']??''))),static fn(string $u):bool=>$u!==''));
+        $items=array_merge(array_map(static fn(array $f):array=>['file'=>$f],$files),array_map(static fn(string $u):array=>['url'=>$u],$urls));
+        if(count($items)>12)throw new RequestRejected(422,'image_limit','A product can have up to 12 photos. Reduce the number being added.');
+        return $items;
     }
     public function customerForm(): void { $this->handle(fn()=> $this->customerPage()); }
     private function customerPage(): void

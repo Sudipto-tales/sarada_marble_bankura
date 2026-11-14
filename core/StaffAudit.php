@@ -8,6 +8,7 @@ final class StaffAudit
     private const ACTIONS = [
         'product.save' => ['admin.products.edit', 'product'], 'product.archive' => ['admin.products.edit', 'product'],
         'category.save' => ['admin.products.edit', 'category'], 'brand.save' => ['admin.products.edit', 'brand'],
+        'category_type.save' => ['admin.products.edit', 'category_type'],
         'image.save' => ['admin.products.edit', 'product'], 'image.remove' => ['admin.products.edit', 'product'],
         'inventory.adjust' => ['admin.inventory.adjust', 'variant'], 'order.transition' => ['admin.orders.edit', 'order'],
         'order.balance' => ['admin.orders.edit', 'order'],
@@ -20,7 +21,7 @@ final class StaffAudit
         'delivery.zone' => ['admin.settings.edit', 'delivery_zone'], 'delivery.pincodes' => ['admin.settings.edit', 'delivery_zone'],
         'delivery.pincode_remove' => ['admin.settings.edit', 'delivery_pincode'],
     ];
-    private const FIELDS = ['revision', 'status', 'enabled', 'featured', 'slug', 'sku', 'name', 'category_id', 'brand_id',
+    private const FIELDS = ['revision', 'status', 'enabled', 'featured', 'slug', 'sku', 'name', 'category_id', 'type_id', 'position', 'brand_id',
         'variant_ids', 'unit_price_minor', 'on_hand_milli', 'reserved_milli', 'delta_milli', 'reason', 'role', 'role_id',
         'payment_mode', 'payment_status', 'advance_bps', 'shipping_minor', 'tax_bps', 'cod_enabled', 'pricing_enabled', 'factor_ppm', 'min_minor', 'max_minor',
         'sell_unit', 'qty_increment_milli', 'coverage_sqft_milli', 'image_id', 'rule_type', 'starts_at', 'ends_at',
