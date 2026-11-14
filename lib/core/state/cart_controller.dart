@@ -51,12 +51,13 @@ class CartController extends SafeNotifier {
   double sqFtOf(String productId) =>
       _items.where((i) => i.productId == productId).fold(0.0, (s, i) => s + i.sqFt);
 
-  Future<void> add(
+  Future<bool> add(
     Product product, {
     double sqFt = 50,
     CartSource source = CartSource.catalog,
     String? note,
   }) async {
+    if (!canAdd(product, sqFt)) return false;
     _cache[product.id] = product;
     final i = _items.indexWhere((e) => e.productId == product.id);
     if (i >= 0) {
@@ -67,12 +68,17 @@ class CartController extends SafeNotifier {
     }
     _persist();
     notifyListeners();
+    return true;
   }
+
+  bool canAdd(Product product, double sqFt) =>
+      _validQuantity(product, sqFtOf(product.id) + sqFt);
 
   /// Used by the calculator / visualizer bridge: set an exact area rather than
   /// accumulating one.
-  Future<void> setQuantity(Product product, double sqFt,
+  Future<bool> setQuantity(Product product, double sqFt,
       {CartSource source = CartSource.catalog, String? note}) async {
+    if (!_validQuantity(product, sqFt)) return false;
     _cache[product.id] = product;
     final i = _items.indexWhere((e) => e.productId == product.id);
     final item = CartItem(
@@ -84,15 +90,36 @@ class CartController extends SafeNotifier {
     }
     _persist();
     notifyListeners();
+    return true;
   }
 
-  void updateSqFt(String productId, double sqFt) {
+  bool updateSqFt(String productId, double sqFt) {
     final i = _items.indexWhere((e) => e.productId == productId);
-    if (i < 0) return;
+    if (i < 0) return false;
     if (sqFt <= 0) {
       _items.removeAt(i);
     } else {
+      final product = _cache[productId];
+      if (product == null || !_validQuantity(product, sqFt)) return false;
       _items[i] = _items[i].copyWith(sqFt: sqFt);
+    }
+    _persist();
+    notifyListeners();
+    return true;
+  }
+
+  /// Remove only the quantities captured by a completed cart checkout. This
+  /// preserves any quantity the shopper added while payment was in progress.
+  void consume(List<CartItem> purchasedItems) {
+    for (final purchased in purchasedItems) {
+      final i = _items.indexWhere((e) => e.productId == purchased.productId);
+      if (i < 0) continue;
+      final remaining = _items[i].sqFt - purchased.sqFt;
+      if (remaining <= 0) {
+        _items.removeAt(i);
+      } else {
+        _items[i] = _items[i].copyWith(sqFt: remaining);
+      }
     }
     _persist();
     notifyListeners();
@@ -147,6 +174,9 @@ class CartController extends SafeNotifier {
   double get total => taxableAmount + deliveryFee + tax;
 
   double get totalSqFt => _items.fold(0.0, (s, i) => s + i.sqFt);
+
+  bool _validQuantity(Product product, double quantity) =>
+      quantity.isFinite && quantity > 0 && quantity <= product.stock;
 
   void _persist() =>
       _store.write(StoreKeys.cart, _items.map((e) => e.toJson()).toList());

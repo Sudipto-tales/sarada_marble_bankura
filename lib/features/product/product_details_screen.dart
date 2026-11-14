@@ -58,6 +58,10 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 
   Future<void> _addToCart(Product product, {bool buyNow = false}) async {
     final deps = AppScope.read(context);
+    if (!_validPurchaseQuantity(product, _sqFt)) {
+      Toast.error(context, 'Only ${product.stock} sq.ft available');
+      return;
+    }
     if (buyNow) {
       Navigator.pushNamed(
         context,
@@ -69,8 +73,12 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         ),
       );
     } else {
-      await deps.cart.add(product, sqFt: _sqFt);
+      final added = await deps.cart.add(product, sqFt: _sqFt);
       if (!mounted) return;
+      if (!added) {
+        Toast.error(context, 'Cart quantity would exceed available stock');
+        return;
+      }
       Toast.success(
         context,
         '${Fmt.sqft(_sqFt)} of ${product.name} added',
@@ -79,6 +87,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       );
     }
   }
+
+  bool _validPurchaseQuantity(Product product, double quantity) =>
+      quantity.isFinite && quantity > 0 && quantity <= product.stock;
 
   /// Calculator hand-off: the module returns a plain result object and this
   /// screen decides what it means (prefill the quantity).
