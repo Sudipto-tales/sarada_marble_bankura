@@ -32,7 +32,7 @@ final class DefaultAccountsSeeder
             if (str_contains($e->getMessage(), 'already exists')) {
                 $result['skipped'][] = ['type' => 'developer', 'email' => $devEmail, 'reason' => 'already exists'];
             } else {
-                throw;
+                throw $e;
             }
         }
 
@@ -53,7 +53,7 @@ final class DefaultAccountsSeeder
             if (str_contains($e->getMessage(), 'already exists')) {
                 $result['skipped'][] = ['type' => 'admin', 'email' => $adminEmail, 'reason' => 'already exists'];
             } else {
-                throw;
+                throw $e;
             }
         }
 
