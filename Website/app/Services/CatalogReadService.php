@@ -8,7 +8,7 @@ final class CatalogReadService
     {
         $filters=['page'=>CommerceValues::integer($input['page']??1,1,1000,'page'),'per_page'=>CommerceValues::integer($input['per_page']??12,1,50,'per_page'),'sort'=>$input['sort']??'featured'];
         if(!is_string($filters['sort'])||!in_array($filters['sort'],['featured','newest','price_low','price_high','rating_high'],true))CommerceValues::invalid('sort');
-        foreach(['category','brand'] as $field)if(isset($input[$field])&&$input[$field]!=='')$filters[$field]=CommerceValues::slug($input[$field]);
+        foreach(['category','brand','type'] as $field)if(isset($input[$field])&&$input[$field]!=='')$filters[$field]=CommerceValues::slug($input[$field]);
         if(isset($input['q'])&&$input['q']!=='')$filters['q']=CommerceValues::text($input['q'],80,'q');
         foreach(['min_price_minor','max_price_minor'] as $field)if(isset($input[$field])&&$input[$field]!=='')$filters[$field]=CommerceValues::integer($input[$field],0,CommerceValues::MAX_MONEY,$field);
         foreach (['min_price'=>'min_price_minor','max_price'=>'max_price_minor'] as $human=>$minor) {

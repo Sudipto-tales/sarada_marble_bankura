@@ -16,6 +16,7 @@
   const estimate = form => {
     const input = form.querySelector('[name=quantity]');
     const output = form.querySelector('output');
+    if (BigInt(form.dataset.priceMinor) <= 0n) { output.textContent = ''; form.querySelector('.pdp-estimate').hidden = true; return; }
     const quantity = milli(input.value);
     if (quantity === null || !input.validity.valid) { output.textContent = 'Enter a valid quantity'; return; }
     const numerator = BigInt(form.dataset.priceMinor) * quantity;
@@ -45,13 +46,18 @@
     document.querySelectorAll('[data-variant-content]').forEach(panel => {
       panel.hidden = panel.dataset.variantContent !== picker.value;
     });
-    document.querySelectorAll('[data-selected-price]').forEach(node => { node.textContent = money(BigInt(selected.dataset.priceMinor)); });
+    const selectedMinor = BigInt(selected.dataset.priceMinor);
+    const selectedPriced = selectedMinor > 0n;
+    document.querySelectorAll('[data-selected-price]').forEach(node => {
+      node.textContent = selectedPriced ? money(selectedMinor) : '';
+      node.hidden = !selectedPriced;
+    });
     document.querySelectorAll('[data-selected-original]').forEach(node => {
       const original = selected.dataset.originalMinor;
       node.hidden = !original;
       node.textContent = original ? money(BigInt(original)) : '';
     });
-    document.querySelectorAll('[data-selected-unit]').forEach(node => { node.textContent = `per ${selected.dataset.unit}`; });
+    document.querySelectorAll('[data-selected-unit]').forEach(node => { node.hidden = !selectedPriced; node.textContent = `per ${selected.dataset.unit}`; });
     const mobile = document.querySelector('[data-mobile-purchase]');
     mobile.setAttribute('form', selected.id);
     mobile.disabled = selected.dataset.stock !== 'true';

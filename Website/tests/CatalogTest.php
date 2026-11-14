@@ -50,8 +50,13 @@ $check($page['total']===2 && count($page['items'])===1 && $page['pages']===2,'Pa
 $check($service->listing(['q'=>'White'])['total']===1,'Bounded literal query finds matching catalog.');
 $check($service->listing(['min_price_minor'=>20000,'max_price_minor'=>100000])['total']===0,'Price range uses one coherent lowest enabled price.');
 CommerceTest::rejects(fn()=>$service->listing(['sort'=>'id; DROP TABLE products']),422,'Sort injection rejected.');
-$child=$service->saveCategory($admin,['slug'=>'child','name'=>'Child','parent_id'=>$category],'category:create:child');
-CommerceTest::rejects(fn()=>$service->saveCategory($admin,['id'=>$category,'slug'=>'marble','name'=>'Marble','parent_id'=>$child],'category:cycle:marble'),422,'Category cycles rejected.');
+// CAT-TYPE-01: categories are classified by an explicit category type (the former parent tree is retired).
+$type=$service->saveCategoryType($admin,['slug'=>'natural-stone','name'=>'Natural Stone'],'category_type:create:natural-stone');
+$service->saveCategory($admin,['id'=>$category,'slug'=>'marble','name'=>'Marble','type_id'=>$type],'category:type:marble');
+$check($service->listing(['type'=>'natural-stone'])['total']===2,'Category type filter returns the typed products.');
+$check($service->listing(['type'=>'missing-type'])['total']===0,'Unknown type slug matches nothing.');
+CommerceTest::rejects(fn()=>$service->saveCategory($admin,['id'=>$category,'slug'=>'marble','name'=>'Marble','type_id'=>999999],'category:type:bad'),422,'Unknown category type rejected.');
+CommerceTest::rejects(fn()=>$service->saveCategoryType($admin,['slug'=>'natural-stone','name'=>'Dup'],'category_type:dup'),409,'Duplicate category type slug rejected.');
 $service->saveCategory($admin,['id'=>$category,'slug'=>'marble','name'=>'Marble','enabled'=>0],'category:disable:marble');
 $check($service->listing()['total']===0,'Disabled category removes public catalog.');
 $service->saveCategory($admin,['id'=>$category,'slug'=>'marble','name'=>'Marble','enabled'=>1],'category:enable:marble');

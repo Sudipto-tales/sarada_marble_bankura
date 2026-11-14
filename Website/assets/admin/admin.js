@@ -222,6 +222,15 @@
     window.setInterval(refresh,20000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
   }
   const productForm=document.querySelector('#product-form'),rows=document.querySelector('#variant-rows');
+  document.querySelectorAll('[data-product-image-inputs]').forEach(group=>{
+    const add=group.querySelector('[data-add-product-image]');
+    add?.addEventListener('click',()=>{
+      const inputs=group.querySelectorAll('input[type=file]');if(inputs.length>=12)return;
+      const input=document.createElement('input');input.type='file';input.name='image[]';input.accept='image/jpeg,image/png,image/webp';input.multiple=true;input.setAttribute('aria-label',`Choose additional product image files ${inputs.length+1}`);
+      group.insertBefore(input,add);input.focus();
+      if(inputs.length+1>=12)add.disabled=true;
+    });
+  });
   if(productForm){
     function normalizeRows(){
       [...rows.children].forEach((row,index)=>{
@@ -247,6 +256,22 @@
     };
     rows.addEventListener('click',event=>{if(event.target.closest('.remove-variant')&&rows.children.length>1){event.target.closest('.variant-row').remove();normalizeRows();}});
     rows.addEventListener('change',normalizeRows);normalizeRows();
+    const readiness=document.querySelector('#readiness');
+    if(readiness){
+      const scoreLabel=readiness.querySelector('.readiness-score'),items=[...readiness.querySelectorAll('li')];
+      function evaluateReadiness(){
+        const states={
+          category:productForm.querySelector('[name=category_id]')?.value!=='',
+          variant:[...rows.children].some(row=>row.querySelector('[name$="[enabled]"]')?.value==='1'&&Number(row.querySelector('[name$="[price]"]')?.value)>0&&(row.querySelector('[name$="[sku]"]')?.value||'').trim()!==''),
+          status:productForm.querySelector('[name=status]')?.value==='active'
+        };
+        items.forEach(item=>{const key=item.dataset.check;if(key in states)item.classList.toggle('done',states[key]);});
+        if(scoreLabel)scoreLabel.textContent=`${items.filter(item=>item.classList.contains('done')).length} / ${items.length} ready`;
+      }
+      productForm.addEventListener('input',evaluateReadiness);
+      productForm.addEventListener('change',evaluateReadiness);
+      evaluateReadiness();
+    }
   }
   document.querySelectorAll('form[data-validate]').forEach(form=>{
     form.addEventListener('input',event=>{if(event.target.setCustomValidity)event.target.setCustomValidity('');});
@@ -255,11 +280,32 @@
         if(input.value&&/[eE+]/.test(input.value))input.setCustomValidity('Use a regular decimal number.');
         if(input.name==='quantity'&&Number(input.value)===0)input.setCustomValidity('Enter a non-zero stock change.');
       });
-      form.querySelectorAll('input[type=file]').forEach(input=>{if(input.files[0]?.size>4*1024*1024)input.setCustomValidity('Choose an image under 4 MB.');});
+      form.querySelectorAll('input[type=file]').forEach(input=>{if([...input.files].some(file=>file.size>4*1024*1024))input.setCustomValidity('Each image must be under 4 MB.');});
       if(!form.reportValidity()){event.preventDefault();return;}
       form.querySelectorAll('button[type=submit],button:not([type])').forEach(button=>{button.disabled=true;button.dataset.label=button.textContent;button.textContent='Saving…';});
     });
   });
+  const lowStockPanel=document.querySelector('#low-stock-panel'),lowStockMore=document.querySelector('#low-stock-more');
+  if(lowStockPanel&&lowStockMore){
+    const body=document.querySelector('#low-stock-rows'),base=lowStockPanel.dataset.lowstockUrl,stockBase=lowStockPanel.dataset.stockUrl,canInventory=lowStockPanel.dataset.canInventory==='1';
+    const escapeCell=value=>{const node=document.createElement('span');node.textContent=value??'';return node.innerHTML;};
+    lowStockMore.addEventListener('click',async()=>{
+      const offset=Number(lowStockMore.dataset.offset)||0;
+      lowStockMore.disabled=true;lowStockMore.dataset.label=lowStockMore.dataset.label||lowStockMore.textContent;lowStockMore.textContent='Loading…';
+      try{
+        const url=new URL(base,location.href);url.searchParams.set('offset',String(offset));
+        const response=await fetch(url,{credentials:'same-origin',headers:{Accept:'application/json'}}),result=await response.json();
+        if(!response.ok)throw Error(result.error?.message||'Could not load more low-stock alerts.');
+        body.insertAdjacentHTML('beforeend',(result.rows||[]).map(row=>{
+          const action=canInventory?`<td><a class="table-icon-action" href="${escapeCell(stockBase)}?id=${encodeURIComponent(row.variant_id)}" aria-label="Review stock" title="Review stock"><i class="mdi mdi-eye-outline" aria-hidden="true"></i></a></td>`:'';
+          return `<tr><td>${escapeCell(row.name)}</td><td>${escapeCell(row.sku)}</td><td>${escapeCell(row.available)} ${escapeCell(row.sell_unit)}</td>${action}</tr>`;
+        }).join(''));
+        lowStockMore.dataset.offset=String(result.nextOffset);
+        if(result.hasMore){lowStockMore.disabled=false;lowStockMore.textContent=lowStockMore.dataset.label;}
+        else lowStockMore.closest('.form-actions').remove();
+      }catch(error){lowStockMore.disabled=false;lowStockMore.textContent=lowStockMore.dataset.label||'Load more';const note=document.createElement('p');note.className='analytics-empty';note.textContent=`${error.message} Reload the page or sign in again.`;lowStockMore.closest('.form-actions').after(note);}
+    });
+  }
   document.querySelectorAll('form[data-confirm]').forEach(form=>form.addEventListener('submit',event=>{if(!confirm(form.dataset.confirm))event.preventDefault();}));
   const summary=document.querySelector('.error-summary');if(summary)summary.focus();
   addEventListener('pageshow',()=>document.querySelectorAll('button[data-label]').forEach(button=>{button.disabled=false;button.textContent=button.dataset.label;delete button.dataset.label;}));

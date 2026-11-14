@@ -28,7 +28,7 @@ $trackEvent = static fn($s) => $trackHist[$s] ?? null;
   <div class="order-success-actions">
     <?php if ($awaiting): ?><a class="button button-wide" href="<?= $u('checkout?order=' . $order['id']) ?>">Complete payment →</a><?php endif; ?>
     <a class="button<?= $awaiting ? ' secondary' : '' ?>" href="<?= $u('orders') ?>">View all orders</a>
-    <a class="text-button" href="<?= $u('order/' . $order['id'] . '/invoice') ?>">Print order summary ↗</a>
+    <a class="text-button" href="<?= $u('order/' . $order['id'] . '/invoice') ?>">View invoice ↗</a>
   </div>
 </section>
 <?php endif; ?>
@@ -78,7 +78,7 @@ $trackEvent = static fn($s) => $trackHist[$s] ?? null;
         <?php if ($balance > 0): ?><div><dt>Paid in advance</dt><dd><?= $m($due) ?></dd></div><div class="order-total"><dt>Balance on delivery</dt><dd><?= $m($balance) ?></dd></div><?php endif; ?>
       </dl>
       <?php if ($awaiting): ?><a class="button button-wide" href="<?= $u('checkout?order=' . $order['id']) ?>">Complete payment</a><?php endif; ?>
-      <a class="button secondary button-wide" href="<?= $u('order/' . $order['id'] . '/invoice') ?>">Print order summary</a>
+      <a class="button secondary button-wide" href="<?= $u('order/' . $order['id'] . '/invoice') ?>" target="_blank" rel="noopener">View invoice</a>
     </div>
     <div class="panel"><h2>Delivery address</h2>
       <p class="order-address"><strong><?= $e($order['address']['recipient']) ?></strong><br><?= $e($order['address']['line1']) ?><?php if (!empty($order['address']['line2'])): ?><br><?= $e($order['address']['line2']) ?><?php endif; ?><br><?= $e($order['address']['city'] . ', ' . $order['address']['state'] . ' ' . $order['address']['postal_code']) ?></p>

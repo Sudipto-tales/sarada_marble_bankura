@@ -39,7 +39,7 @@
   <p>We may update this policy from time to time. The latest version will always be available on this page with its revision date.</p>
 
   <h2>9. Contact</h2>
-  <p>For any privacy question or request, reach us through our <a href="https://maasaradamarble.com/contact">contact page</a>.</p>
+  <p>For any privacy question or request, email us at <a href="mailto:no-reply@maasaradamarbleandsanitation.com">no-reply@maasaradamarbleandsanitation.com</a> or reach us through our <a href="https://maasaradamarble.com/contact">contact page</a>.</p>
 
   <p class="note">This page is a general template and not legal advice. Please have it reviewed by a qualified professional before relying on it.</p>
 </article>
