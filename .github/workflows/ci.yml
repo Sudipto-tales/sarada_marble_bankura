@@ -7,15 +7,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     services:
       mariadb:
         image: mariadb:10.11
         env:
           MARIADB_ROOT_PASSWORD: disposable-ci-only
-        ports: ['3306:3306']
+          MARIADB_DATABASE: test
+        ports:
+          - 3306:3306
         options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
-          --health-interval=10s --health-timeout=5s --health-retries=10
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pdisposable-ci-only --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
     steps:
       - uses: actions/checkout@v4
       - name: Setup PHP + Composer
@@ -27,6 +32,19 @@ jobs:
         with:
           path: Website/vendor
           key: composer-${{ hashFiles('Website/composer.lock') }}
+          restore-keys: composer-
+      - name: Wait for MariaDB
+        run: |
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -uroot -pdisposable-ci-only --silent; then
+              echo "MariaDB is ready"
+              exit 0
+            fi
+            echo "Waiting for MariaDB... ($i/30)"
+            sleep 2
+          done
+          echo "MariaDB did not become ready"
+          exit 1
       - name: Install & Test
         working-directory: Website
         env:
