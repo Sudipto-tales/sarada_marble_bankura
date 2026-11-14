@@ -175,7 +175,9 @@ $docTitle = ($isTaxInvoice ? 'Tax Invoice ' : 'Invoice ') . $order['order_number
       </thead>
       <tbody>
         <?php foreach ($order['items'] as $i => $item):
-          $rate = rtrim(rtrim(number_format(((int)($item['tax_bps'] ?? $order['tax_bps'])) / 100, 2, '.', ''), '0'), '.'); ?>
+          $rateBps = (int)($item['tax_bps'] ?? $order['tax_bps'] ?? 0);
+          $rate = number_format($rateBps / 100, 2, '.', '');
+        ?>
         <tr>
           <td><?= $i + 1 ?></td>
           <td class="item">
@@ -185,7 +187,7 @@ $docTitle = ($isTaxInvoice ? 'Tax Invoice ' : 'Invoice ') . $order['order_number
           </td>
           <td class="num"><?= $q($item['qty_milli']) ?> <?= $e($item['sell_unit']) ?></td>
           <td class="num"><?= $m($item['unit_price_minor']) ?></td>
-          <td class="num hide-sm"><?= $e($rate) ?>%</td>
+          <td><?= $e($rate) ?>%</td>
           <td class="num"><?= $m($item['line_total_minor']) ?></td>
         </tr>
         <?php endforeach; ?>
