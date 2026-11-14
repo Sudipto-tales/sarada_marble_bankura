@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/config/app_config.dart';
 import '../../core/routing/routes.dart';
 import '../../core/state/app_scope.dart';
 import '../../core/theme/app_colors.dart';
@@ -46,16 +45,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
     setState(() => _placing = true);
     final deps = AppScope.read(context);
     final cart = deps.cart;
-    final items = widget.args.items;
+    final snapshot = widget.args.snapshot;
+    final items = snapshot.items;
 
-    final subtotal = items.fold(0.0, (s, i) => s + cart.lineTotal(i));
-    final discount = cart.couponDiscount;
-    final delivery =
-        (subtotal >= AppConfig.freeDeliveryAbove
-            ? 0.0
-            : AppConfig.deliveryCharge) +
-        widget.args.deliveryExtra;
-    final tax = (subtotal - discount) * AppConfig.gstPercent / 100;
+    final subtotal = snapshot.subtotal;
+    final discount = snapshot.discount;
+    final delivery = snapshot.delivery(widget.args.deliveryExtra);
+    final tax = snapshot.tax;
     final now = DateTime.now();
     final id = 'MS${now.millisecondsSinceEpoch.toString().substring(6)}';
 
@@ -81,15 +77,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
       expectedDelivery: now.add(
         Duration(days: widget.args.slotLabel == 'Express' ? 4 : 8),
       ),
-      couponCode: cart.coupon?.code,
+      couponCode: snapshot.couponCode,
       invoiceNo: 'INV-$id',
     );
 
     await deps.orders.place(order);
-    for (final item in items) {
-      cart.remove(item.productId);
+    if (snapshot.clearPurchasedCartLines) {
+      cart.consume(items);
+      cart.applyCoupon(null);
     }
-    cart.applyCoupon(null);
 
     if (!mounted) return;
     setState(() => _placing = false);
@@ -103,19 +99,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final deps = AppScope.of(context);
-    final cart = deps.cart;
-    final subtotal = widget.args.items.fold(
-      0.0,
-      (s, i) => s + cart.lineTotal(i),
-    );
-    final delivery =
-        (subtotal >= AppConfig.freeDeliveryAbove
-            ? 0.0
-            : AppConfig.deliveryCharge) +
-        widget.args.deliveryExtra;
-    final tax = (subtotal - cart.couponDiscount) * AppConfig.gstPercent / 100;
-    final total = subtotal - cart.couponDiscount + delivery + tax;
+    final snapshot = widget.args.snapshot;
+    final total = snapshot.total(widget.args.deliveryExtra);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Payment')),

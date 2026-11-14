@@ -248,7 +248,11 @@ class _CartLine extends StatelessWidget {
                   value: item.sqFt,
                   step: 10,
                   dense: true,
-                  onChanged: (v) => cart.updateSqFt(item.productId, v),
+                  onChanged: (v) {
+                    if (!cart.updateSqFt(item.productId, v)) {
+                      Toast.error(context, 'Quantity exceeds available stock');
+                    }
+                  },
                 ),
                 const Spacer(),
                 // Icon-only actions: the row has to survive long product names,

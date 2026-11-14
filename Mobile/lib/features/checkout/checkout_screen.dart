@@ -241,6 +241,7 @@ class CheckoutSnapshot {
     required this.items,
     required this.products,
     required this.coupon,
+    required this.discount,
     required this.clearPurchasedCartLines,
   });
 
@@ -249,6 +250,7 @@ class CheckoutSnapshot {
         items: [CartItem(productId: product.id, sqFt: sqFt)],
         products: {product.id: product},
         coupon: null,
+        discount: 0,
         clearPurchasedCartLines: false,
       );
 
@@ -258,10 +260,18 @@ class CheckoutSnapshot {
       final product = cart.product(item.productId);
       if (product != null) products[item.productId] = product;
     }
+    final items = List<CartItem>.unmodifiable(cart.items);
+    final subtotal = items.fold<double>(
+      0,
+      (sum, item) =>
+          sum + (products[item.productId]?.pricePerSqFt ?? 0) * item.sqFt,
+    );
+    final coupon = cart.coupon;
     return CheckoutSnapshot._(
-      items: List.unmodifiable(cart.items),
+      items: items,
       products: Map.unmodifiable(products),
-      coupon: cart.coupon,
+      coupon: coupon,
+      discount: coupon?.discountFor(subtotal) ?? 0,
       clearPurchasedCartLines: true,
     );
   }
@@ -269,6 +279,7 @@ class CheckoutSnapshot {
   final List<CartItem> items;
   final Map<String, Product> products;
   final Coupon? coupon;
+  final double discount;
   final bool clearPurchasedCartLines;
 
   double lineTotal(CartItem item) =>
@@ -279,7 +290,6 @@ class CheckoutSnapshot {
 
   double get subtotal => items.fold(0.0, (sum, item) => sum + lineTotal(item));
   double get savings => items.fold(0.0, (sum, item) => sum + lineSavings(item));
-  double get discount => coupon?.discountFor(subtotal) ?? 0;
   String? get couponCode => discount > 0 ? coupon?.code : null;
 
   double delivery(double extra) =>

@@ -94,13 +94,17 @@ class ProductDiscovery extends StatelessWidget {
                     onPressed: product.inStock
                         ? () async {
                             final cart = AppScope.read(context).cart;
-                            await cart.add(product, sqFt: sqFt);
-                            await cart.add(companion, sqFt: sqFt);
+                            final canAddBoth = cart.canAdd(product, sqFt) &&
+                                cart.canAdd(companion, sqFt);
+                            final added = canAddBoth &&
+                                await cart.add(product, sqFt: sqFt) &&
+                                await cart.add(companion, sqFt: sqFt);
                             if (context.mounted) {
-                              Toast.success(
-                                context,
-                                'Both stones added to your cart',
-                              );
+                              if (added) {
+                                Toast.success(context, 'Both stones added to your cart');
+                              } else {
+                                Toast.error(context, 'One or both stones exceed available stock');
+                              }
                             }
                           }
                         : null,
