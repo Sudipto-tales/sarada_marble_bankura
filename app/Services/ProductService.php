@@ -234,12 +234,29 @@ final class ProductService
         } catch (Throwable $e) { if (CommerceDatabase::uniqueConflict($e)) throw new RequestRejected(409,'catalog_conflict','Brand slug already exists.'); throw $e; }
     }
 
+    /** The only remote product-image form: a Google Drive file served by Google's image host at a fixed width. */
+    public static function remoteImage($path): bool
+    {
+        return is_string($path) && preg_match('~\Ahttps://lh3\.googleusercontent\.com/d/[A-Za-z0-9_-]{20,80}=w[0-9]{2,4}\z~', $path) === 1;
+    }
+    /** Normalise a Google Drive share link (or bare file ID) to the canonical remote image URL; rejects anything else. */
+    public static function driveImage($link, int $width = 1200): string
+    {
+        $link = is_string($link) ? trim($link) : '';
+        $id = null;
+        if (preg_match('~\A[A-Za-z0-9_-]{20,80}\z~', $link)) $id = $link;
+        elseif (preg_match('~\Ahttps://(?:drive\.google\.com/file/d/|lh3\.googleusercontent\.com/d/)([A-Za-z0-9_-]{20,80})(?:[/=?#].*)?\z~', $link, $m)) $id = $m[1];
+        elseif (preg_match('~\Ahttps://(?:drive\.google\.com/(?:open|uc|thumbnail)|drive\.usercontent\.google\.com/download)\?(?:[^#]*&)?id=([A-Za-z0-9_-]{20,80})(?:[&#].*)?\z~', $link, $m)) $id = $m[1];
+        if ($id === null || $width < 16 || $width > 4000) CommerceValues::invalid('image_url');
+        return 'https://lh3.googleusercontent.com/d/' . $id . '=w' . $width;
+    }
     public function addImage(int $actorId, int $productId, array $image, string $key): int
     {
         CommerceAccess::requirePermission('admin.products.edit',$actorId); $key=CommerceValues::key($key);
         $path=$image['path']??null; $mime=$image['mime']??null;
         $formats=['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
-        if (!is_string($path)||!isset($formats[$mime])||!preg_match('~\Aassets/products/[a-f0-9]{32}\.' . $formats[$mime] . '\z~',$path)) CommerceValues::invalid('image');
+        // Local generated files, or a Google Drive image shown directly from Google's image host.
+        if (!is_string($path)||!isset($formats[$mime])||(!self::remoteImage($path)&&!preg_match('~\Aassets/products/[a-f0-9]{32}\.' . $formats[$mime] . '\z~',$path))) CommerceValues::invalid('image');
         $width=CommerceValues::integer($image['width']??null,1,6000,'width'); $height=CommerceValues::integer($image['height']??null,1,6000,'height');
         $alt=CommerceValues::text($image['alt_text']??'',190,'alt_text',true); $position=CommerceValues::integer($image['position']??0,0,1000,'position');
         $variant=isset($image['variant_id'])?CommerceValues::id($image['variant_id']):null;

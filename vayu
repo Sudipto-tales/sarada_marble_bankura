@@ -35,7 +35,7 @@ if (in_array($command, ['help', '--help', '-h'], true)) {
     echo "Create commerce staff: php vayu commerce:create you@example.com [admin|catalog_manager|operations|viewer]\n";
     echo "Inspect old orphan images: php vayu catalog:images:clean [--delete]\n";
     echo "Seed development demo catalog: php vayu demo:seed --actor-id=ID\n";
-    echo "Import bundled Kajaria catalog (draft, hidden): php vayu catalog:import --actor-id=ID\n";
+    echo "Import bundled Kajaria catalog (draft, hidden): php vayu catalog:import --actor-id=ID|auto\n";
     echo "Bounded worker: php vayu queue:work --queues=emails,maintenance --max=20 --max-seconds=30\nRetry one failed job: php vayu queue:retry --failed-id=123\n";
     echo "Aggregate analytics: php vayu analytics:aggregate [--batch=200] [--max-seconds=20]\nPrune old processed events: php vayu analytics:purge --retention-days=90 [--batch=500]\n";
     echo "Rebuild recommendations: php vayu recommend:rebuild\n";
@@ -58,16 +58,27 @@ if ($command === 'demo:seed') {
 }
 if ($command === 'catalog:import') {
     try {
-        if (count($argv) !== 3 || !preg_match('/\A--actor-id=([1-9][0-9]*)\z/', $argv[2], $match)) {
-            throw new RuntimeException('Usage: php vayu catalog:import --actor-id=ID');
+        if (count($argv) !== 3 || !preg_match('/\A--actor-id=([1-9][0-9]*|auto)\z/', $argv[2], $match)) {
+            throw new RuntimeException('Usage: php vayu catalog:import --actor-id=ID|auto');
         }
         require __DIR__ . '/config/bootstarp.php';
         require __DIR__ . '/database/seeders/KajariaCatalogSeeder.php';
-        $result = (new KajariaCatalogSeeder($pdo))->run(CommerceValues::id($match[1]));
+        if ($match[1] === 'auto') {
+            // Deployment path: act as the first eligible staff account; before /setup has run there is none.
+            $actorId = KajariaCatalogSeeder::autoActor($pdo);
+            if ($actorId === null) {
+                echo "Kajaria import skipped: no staff yet (the /setup installer will import).\n";
+                exit(0);
+            }
+        } else {
+            $actorId = CommerceValues::id($match[1]);
+        }
+        $result = (new KajariaCatalogSeeder($pdo))->run($actorId);
+        if ($match[1] === 'auto') unset($result['products']); // Keep deployment logs to the counts.
         echo json_encode($result, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n";
         exit(0);
     } catch (Throwable $error) {
-        fwrite(STDERR, "Kajaria import failed. Use: php vayu catalog:import --actor-id=ID. Requires applied migrations, the bundled Website/database/seeders/kajaria dataset and an active staff account with the catalog-edit grant. Products are created hidden (draft, no price); existing records are preserved, so rerun after correcting the prerequisite.\n");
+        fwrite(STDERR, "Kajaria import failed. Use: php vayu catalog:import --actor-id=ID|auto. Requires applied migrations, the bundled Website/database/seeders/kajaria dataset and an active staff account with the catalog-edit grant. Products are created hidden (draft, no price); existing records are preserved, so rerun after correcting the prerequisite.\n");
         exit(1);
     }
 }
@@ -91,6 +102,19 @@ if ($command === 'migrate') {
         require __DIR__ . '/config/cli.php';
         require __DIR__ . '/config/migrate.php';
         (new MigrationRunner($pdo, __DIR__ . '/database/migrations'))->run();
+        // Migrations use the lightweight CLI bootstrap; load commerce services only after schema is ready.
+        require __DIR__ . '/config/bootstarp.php';
+        // Catalog fixtures are a post-schema seed. Use an already-provisioned catalog editor;
+        // a fresh install without staff stays clean until the protected /setup flow imports it.
+        require_once __DIR__ . '/database/seeders/KajariaCatalogSeeder.php';
+        $actorId = KajariaCatalogSeeder::autoActor($pdo);
+        if ($actorId === null) {
+            echo "Catalog seed skipped: no staff account has catalog-edit permission yet. Run /setup or php vayu catalog:import after provisioning staff.\n";
+        } else {
+            $seed = (new KajariaCatalogSeeder($pdo))->run($actorId);
+            unset($seed['products']);
+            echo 'Catalog seed: ' . json_encode($seed, JSON_THROW_ON_ERROR) . "\n";
+        }
         exit(0);
     } catch (Throwable $e) {
         $message = $e instanceof MigrationRunException ? $e->getMessage()
