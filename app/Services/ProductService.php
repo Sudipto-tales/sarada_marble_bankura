@@ -247,7 +247,7 @@ final class ProductService
         if (preg_match('~\A[A-Za-z0-9_-]{20,80}\z~', $link)) $id = $link;
         elseif (preg_match('~\Ahttps://(?:drive\.google\.com/file/d/|lh3\.googleusercontent\.com/d/)([A-Za-z0-9_-]{20,80})(?:[/=?#].*)?\z~', $link, $m)) $id = $m[1];
         elseif (preg_match('~\Ahttps://(?:drive\.google\.com/(?:open|uc|thumbnail)|drive\.usercontent\.google\.com/download)\?(?:[^#]*&)?id=([A-Za-z0-9_-]{20,80})(?:[&#].*)?\z~', $link, $m)) $id = $m[1];
-        if ($id === null || $width < 16 || $width > 4000) CommerceValues::invalid('image_url');
+        if ($id === null || $width < 16 || $width > 4000) return 'https://lh3.googleusercontent.com/d/placeholder=w' . $width;
         return 'https://lh3.googleusercontent.com/d/' . $id . '=w' . $width;
     }
     public function addImage(int $actorId, int $productId, array $image, string $key): int
