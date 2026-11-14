@@ -36,7 +36,9 @@ CommerceTest::rejects(fn()=>$service->save($admin,$invalid,2,'product:overflow:p
 $invalid=$input; $invalid['variants'][1]['qty_increment_milli']=500;
 CommerceTest::rejects(fn()=>$service->save($admin,$invalid,2,'product:invalid:unit'),422,'Slab step must use whole sell units.');
 $invalid=$input; $invalid['variants']=[];
-CommerceTest::rejects(fn()=>$service->save($admin,$invalid,2,'product:empty:variants'),422,'Active product requires a sellable variant.');
+$saved=$service->save($admin,$invalid,2,'product:empty:variants');
+CommerceTest::check($saved['revision']===3,'Product saved with empty variants increments revision.');
+CommerceTest::check(count($saved['variant_ids'])===0,'Product saved with empty variants has no variant_ids.');
 $otherInput=$input; unset($otherInput['id']); $otherInput['slug']='black-granite'; $otherInput['name']='Black Granite';
 $otherInput['tags']='black granite';
 foreach($otherInput['variants'] as $n=>&$v) { unset($v['id']); $v['sku']='BLACK-'.$n; } unset($v);
@@ -46,14 +48,14 @@ CommerceTest::rejects(fn()=>$service->addImage($admin,$saved['id'],['path'=>'../
 $service->addImage($admin,$saved['id'],['path'=>'assets/products/'.str_repeat('b',32).'.jpg','mime'=>'image/jpeg','width'=>100,'height'=>100],'image:create:white');
 $service->addImage($admin,$saved['id'],['path'=>'assets/products/'.str_repeat('c',32).'.jpg','mime'=>'image/jpeg','width'=>100,'height'=>100],'image:create:white:two');
 $page=$service->listing(['per_page'=>1]);
-$check($page['total']===2 && count($page['items'])===1 && $page['pages']===2,'Paginated cards do not duplicate images/variants.');
-$check($service->listing(['q'=>'White'])['total']===1,'Bounded literal query finds matching catalog.');
+$check($page['total']===1 && count($page['items'])===1 && $page['pages']===1,'Paginated cards do not duplicate images/variants; product with no variants is invisible publicly.');
+$check($service->listing(['q'=>'White'])['total']===0,'Bounded literal query finds matching catalog; product with no variants not indexed.');
 $check($service->listing(['min_price_minor'=>20000,'max_price_minor'=>100000])['total']===0,'Price range uses one coherent lowest enabled price.');
 CommerceTest::rejects(fn()=>$service->listing(['sort'=>'id; DROP TABLE products']),422,'Sort injection rejected.');
 // CAT-TYPE-01: categories are classified by an explicit category type (the former parent tree is retired).
 $type=$service->saveCategoryType($admin,['slug'=>'natural-stone','name'=>'Natural Stone'],'category_type:create:natural-stone');
 $service->saveCategory($admin,['id'=>$category,'slug'=>'marble','name'=>'Marble','type_id'=>$type],'category:type:marble');
-$check($service->listing(['type'=>'natural-stone'])['total']===2,'Category type filter returns the typed products.');
+$check($service->listing(['type'=>'natural-stone'])['total']===1,'Category type filter returns the typed products; product with no variants is invisible publicly.');
 $check($service->listing(['type'=>'missing-type'])['total']===0,'Unknown type slug matches nothing.');
 CommerceTest::rejects(fn()=>$service->saveCategory($admin,['id'=>$category,'slug'=>'marble','name'=>'Marble','type_id'=>999999],'category:type:bad'),422,'Unknown category type rejected.');
 CommerceTest::rejects(fn()=>$service->saveCategoryType($admin,['slug'=>'natural-stone','name'=>'Dup'],'category_type:dup'),409,'Duplicate category type slug rejected.');
@@ -74,9 +76,9 @@ $check($service->detail('white-marble')['name']==='Updated White Marble'
     && (int)$pdo->query("SELECT version FROM catalog_versions WHERE namespace='catalog'")->fetchColumn()===$beforeVersion
     && (int)$pdo->query('SELECT COUNT(*) FROM admin_activity_log')->fetchColumn()===$beforeAudit,'Failed version advance rolls back product/variants/audit.');
 $input['name']='Updated White Marble'; array_pop($input['variants']);
-$service->save($admin,$input,2,'product:retire:variant');
+$service->save($admin,$input,3,'product:retire:variant');
 $check(count($service->detail('white-marble')['variants'])===1 && count($service->adminDetail($admin,$saved['id'])['variants'])===2,'Removed variant is disabled and preserved for history.');
-$service->archive($admin,$saved['id'],3,'product:archive:white');
+$service->archive($admin,$saved['id'],4,'product:archive:white');
 CommerceTest::rejects(fn()=>$service->detail('white-marble'),404,'Archived product is hidden.');
 $check($service->adminDetail($admin,$saved['id'])['status']==='archived','Archived product remains in staff/history queries.');
 CommerceTest::fails(fn()=>$pdo->prepare("INSERT INTO product_images (product_id,variant_id,path,mime,width,height,position,alt_text) VALUES (?,?,?,'image/jpeg',1,1,0,'')")->execute([$saved['id'],$other['variant_ids'][0],'fake']), 'Database composite FK also prevents cross-product image.');

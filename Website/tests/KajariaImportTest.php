@@ -37,7 +37,7 @@ $check((int)$pdo->query('SELECT COUNT(*) FROM brands')->fetchColumn() === 1, 'A 
 $check((int)$pdo->query("SELECT COUNT(*) FROM products WHERE status='draft'")->fetchColumn() === $expectedProducts, 'Every product is hidden (draft).');
 $check((int)$pdo->query('SELECT COUNT(*) FROM product_variants')->fetchColumn() === 0, 'No variants, so no price is published.');
 $check((int)$pdo->query('SELECT COUNT(*) FROM product_images')->fetchColumn() === $expectedImages, 'Each manifest image is recorded.');
-$check((int)$pdo->query("SELECT COUNT(*) FROM product_images WHERE mime='image/webp'")->fetchColumn() === $expectedImages, 'All imported images are webp.');
+$check((int)$pdo->query("SELECT COUNT(*) FROM product_images WHERE mime='image/jpeg'")->fetchColumn() === $expectedImages, 'All imported images are jpeg.');
 $check((int)$pdo->query('SELECT COUNT(*) FROM users_tbl')->fetchColumn() === 2, 'Import creates no extra identities (only the test admin and customer).');
 
 // Draft products are invisible to the public storefront and not purchasable.
