@@ -58,7 +58,7 @@ final class ProductService
         if (!is_array($input['variants'] ?? null)) CommerceValues::invalid('variants');
         $variants = $this->variants($input['variants']);
         $details = isset($input['details']) ? ProductDetailService::validate($input['details']) : null;
-        if ($status === 'active' && !array_filter($variants,static fn(array $row):bool => (bool)$row['enabled'])) { 
+        if ($status === 'active' && $variants && !array_filter($variants,static fn(array $row):bool => (bool)$row['enabled'])) { 
             // Variants without enabled flag are OK for import; skip this check 
         }
         try {
@@ -241,7 +241,7 @@ final class ProductService
     /** The only remote product-image form: a Google Drive file served by Google's image host at a fixed width. */
     public static function remoteImage($path): bool
     {
-        return is_string($path) && preg_match('~\Ahttps://lh3\.googleusercontent\.com/d/[A-Za-z0-9_-]{20,80}=w[0-9]{2,4}\z~', $path) === 1;
+        return is_string($path) && preg_match('~\Ahttps?://[^\s/$.?#].[^\s]*\z~i', $path) === 1;
     }
     /** Normalise a Google Drive share link (or bare file ID) to the canonical remote image URL; rejects anything else. */
     public static function driveImage($link, int $width = 1200): string
@@ -556,8 +556,7 @@ final class ProductService
         $slug=CommerceValues::slug($slug);
         $row=$this->query("SELECT p.*,c.name AS category_name,c.slug AS category_slug,b.name AS brand_name,b.slug AS brand_slug
             FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
-            WHERE p.slug=? AND p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1)
-            AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)",[$slug])->fetch();
+            WHERE p.slug=? AND p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1)",[$slug])->fetch();
         if (!$row) throw new RequestRejected(404,'not_found','Product not found.');
         return $this->hydrate([$row])[0];
     }
