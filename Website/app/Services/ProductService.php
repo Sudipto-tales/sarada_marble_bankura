@@ -58,8 +58,8 @@ final class ProductService
         if (!is_array($input['variants'] ?? null)) CommerceValues::invalid('variants');
         $variants = $this->variants($input['variants']);
         $details = isset($input['details']) ? ProductDetailService::validate($input['details']) : null;
-        if ($status === 'active' && $variants && !array_filter($variants,static fn(array $row):bool => (bool)$row['enabled'])) { 
-            // Variants without enabled flag are OK for import; skip this check 
+        if ($status === 'active' && $variants && !array_filter($variants,static fn(array $row):bool => (bool)$row['enabled'])) {
+            throw new RequestRejected(422,'item_unavailable','Publishing requires an enabled variant');
         }
         try {
             return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$data,$variants,$details,$expectedRevision,$operationKey):array {
