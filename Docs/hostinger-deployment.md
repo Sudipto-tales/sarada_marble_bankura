@@ -47,6 +47,7 @@ Server commands include:
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 composer check-platform-reqs --no-dev
 php vayu migrate
+php vayu catalog:import --actor-id=auto
 ```
 
 A migration failure stops publication and leaves maintenance enabled. MySQL DDL may already have partially committed: inspect the failing migration before repairing/rerunning. Do not reset/drop/import the live schema as an automatic retry. A post-publication HTTP failure marks the Actions run failed; it does not automatically roll back code or database. Inspect private backups and the actual site before recovery.
@@ -56,6 +57,8 @@ Backups contain sensitive configuration and database records, remain outside pub
 ## Seeders and first-time accounts
 
 `php vayu migrate` initializes required commerce roles/permissions and applies only pending schema changes, then verifies schemas. The existing demo seeder refuses production and is never invoked during deployment. Real products/prices/stock need approved admin entry/import; a database schema update does not import the local development catalog.
+
+After migrations, each deployment runs `php vayu catalog:import --actor-id=auto`, which imports the bundled Kajaria dataset (`database/seeders/kajaria`) as hidden draft products with no price or stock. It acts as the lowest-id active staff account holding `admin.products.edit`; if none exists yet it prints a skip message and succeeds, and the `/setup` installer performs the first import instead. The import is repeatable: products already present and operator edits are kept, and only newly bundled products and images are added. An import failure stops publication with maintenance enabled, like a migration failure; products created before the failure remain and the next run resumes. To change the dataset, rebuild it with `Tools/catalog_scraper/build_seed.py` (see the [scraper README](../Tools/catalog_scraper/README.md)).
 
 Create your admin once through a private interactive SSH terminal in public_html:
 

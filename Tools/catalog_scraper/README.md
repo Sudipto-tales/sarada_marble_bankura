@@ -107,6 +107,29 @@ source strings. Price and stock stay null; SKUs and sellable variants need your
 own validated mapping. Site changes or JavaScript-only fields may require a
 parser update. This output is staging data, **not an OPT-02 import format**.
 
+## Build the bundled website seed
+
+`build_seed.py` turns the private scraper output into the dataset that
+`Website/database/seeders/KajariaCatalogSeeder.php` imports
+(`Website/database/seeders/kajaria/catalog.json` plus `images/*.webp`). It makes no
+network requests and needs Pillow with WebP support.
+
+```bash
+python3 Tools/catalog_scraper/kajaria.py --download-images --limit 300   # repeat to resume
+python3 Tools/catalog_scraper/build_seed.py --limit 300 --max-images 2
+cd Website && php tests/KajariaImportTest.php
+```
+
+Only products whose selected images are all on disk are bundled, sorted by slug and
+capped by `--limit` (default 300); `--max-images` (default 2) caps images per product.
+Images are converted to WebP with the longest edge at most 800 px. WebP files already
+in the bundle are kept as they are unless `--force` is given, and bundle images the new
+manifest no longer references are deleted. The summary lists skipped records by
+reason. The bundle is committed and deployed, so keep it small. Price and stock are
+never generated: the seeder creates hidden draft products for an operator to price.
+The bundle committed on 2026-11-14 holds 25 products with up to six images each;
+rebuilding it with `--max-images 6` reproduces it unchanged.
+
 Initial live verification on 2026-10-15 found 832 unique product URLs in the public sitemap.
 This is the discovered subset, not proof of coverage of the site's advertised
 tile count. One explicit product parsed successfully with five gallery URLs;

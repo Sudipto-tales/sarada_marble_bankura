@@ -136,7 +136,7 @@ class DeploymentConfigurationTest(unittest.TestCase):
             self.assertFalse((site / '.env').exists())
 
     def test_server_failures_keep_maintenance_and_do_not_publish(self):
-        for failure in ('migration', 'backup', 'maintenance'):
+        for failure in ('migration', 'import', 'backup', 'maintenance'):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temp:
                 home = Path(temp)
                 web = home / 'domains/example.com/public_html'
@@ -156,6 +156,10 @@ if [[ "$1" == *database-backup.php ]]; then echo disposable_db; exit 0; fi
 if [[ "$1" == vayu ]]; then
   touch "$HOME/migration-attempted"
   [[ "$FAILURE" != migration ]] || exit 1
+  if [[ "$2" == catalog:import ]]; then
+    [[ "$3" == --actor-id=auto ]] && touch "$HOME/import-attempted"
+    [[ "$FAILURE" != import ]] || exit 1
+  fi
 fi
 exit 0
 ''',
@@ -175,7 +179,8 @@ exit 0
                 self.assertEqual((web / 'index.php').read_text(), 'existing-site')
                 self.assertIn('R=503', (web / '.htaccess').read_text())
                 self.assertFalse((home / 'publish-attempted').exists())
-                self.assertEqual((home / 'migration-attempted').exists(), failure == 'migration')
+                self.assertEqual((home / 'migration-attempted').exists(), failure in ('migration', 'import'))
+                self.assertEqual((home / 'import-attempted').exists(), failure == 'import')
                 self.assertTrue(list((home / '.sarada-deploy/example.com/backups').glob('*/website.tar.gz')))
                 self.assertFalse((site / '.env').exists())
 

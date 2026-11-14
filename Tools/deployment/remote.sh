@@ -75,6 +75,10 @@ mysqldump --defaults-extra-file="$work/database.cnf" --single-transaction --quic
 test -s "$backup/database.sql"
 chmod 600 "$backup/database.sql" "$backup/website.tar.gz"
 php vayu migrate
+# Import the bundled Kajaria catalog as hidden drafts. Idempotent: existing products and operator
+# edits are kept; only new bundled products/images are added. Skips until the first staff exists.
+# A failure stops publication (maintenance stays on) like a failed migration.
+php vayu catalog:import --actor-id=auto
 # Preserve runtime product images, then copy only new bundled images without replacing uploads.
 mkdir -p "$web/assets/products"
 if [[ -d assets/products ]]; then
