@@ -118,7 +118,7 @@ final class KajariaCatalogSeeder
                     'tags' => $product['tags'] ?? '',
                     'category_id' => $categories[$product['category_slug']],
                     'brand_id' => $brand,
-                    'status' => 'active',
+                    'status' => 'draft',
                     'variants' => [],
                 ], 0, 'kajaria:v1:product:' . $slug);
                 $productId = $saved['id'];
