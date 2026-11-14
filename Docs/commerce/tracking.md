@@ -739,3 +739,12 @@ Runtime PHP 8.3.6, SQLite 3.45.1, MariaDB 10.11.14, Python 3.12.3, Chrome 154.0.
 
 - Added a self-disabling bootstrap route (`Setup` controller, `app/page/setup.php`, routes `GET/POST setup`) so a production store with no shell access and no existing admin can create the first admin and import the Kajaria catalog. **Dead by default:** returns 404 unless `COMMERCE_SETUP_TOKEN` is set in the server environment. **Self-closing:** returns 410 permanently once any `user_roles` grant exists, so it cannot be replayed to add/hijack an admin. The admin password is operator-supplied in the form (12–72 chars, `password_hash`), never seeded. Token compared with `hash_equals`; POST requires CSRF. Independent of Admin/Auth; grants nothing on its own. `.env.example` documents the token with remove-after-use guidance. This is a deliberate, reviewed exception to "CLI-only provisioning" for first-run bootstrap, not a general web-provisioning path.
 - Actual end-to-end check on PHP 8.3.6 / SQLite 3.45.1 (disposable DB, `php vayu run`): wrong/absent token → **404**; correct token → **200** form; POST → admin created + **25 draft products** imported ("Setup complete"); re-run with valid token after admin exists → **410**; DB confirmed 1 `user_roles` row and 25 draft products. `php -l` clean on `Setup.php`, `setup.php`, `classes.php`, `view.php`; `php tests/RoutingTest.php` **50 passed**. Not exercised against MySQL or over real HTTPS. The route ships inert; it activates only when the operator sets the token on the server and must be disabled again afterward.
+
+
+## ADM-02-IMG-01 claim (2026-11-14)
+
+Status: in_progress — user-authorized follow-up to ADM-02. Keep source image bytes without raster re-encoding, support safe image uploads and URL imports during product creation, and allow multiple images in one submission or through additional file/URL inputs. Coordinator claim; implementation limited to Website product/admin image flow.
+
+## ADM-02-IMG-01 completion (2026-11-14)
+
+Status: done — original JPEG/PNG/WebP bytes are validated and stored unchanged; GD is optional when Imagick is available. Product creation now accepts multiple selected files and URL imports, adds file-picker controls, enforces the 12-image limit, and leaves the edit gallery ready for additional photos. Brand image paths accept the original detected format. Evidence: `php -l` passed for ProductImageService.php, ProductService.php, Admin.php and product.php; `git diff --check` passed. Test suite and live-host upload were not run.
