@@ -81,8 +81,8 @@ final class CommerceAccess
             throw new CommerceProvisioningRejected('Password must contain 12 to 72 bytes and no null bytes. Retry and enter a longer password if needed; input is hidden.');
         if ($name === '' || strlen($name) > 190 || !preg_match('//u', $name) || preg_match('/[\x00-\x1f\x7f]/', $name))
             throw new CommerceProvisioningRejected('Supply a valid staff name of at most 190 bytes.');
-        if (!in_array($role, ['superadmin', 'admin', 'catalog_manager', 'operations', 'viewer'], true))
-            throw new CommerceProvisioningRejected('Role must be superadmin, admin, catalog_manager, operations or viewer.');
+        if (!in_array($role, ['superadmin', 'admin', 'catalog_manager', 'operations', 'viewer', 'customer'], true))
+            throw new CommerceProvisioningRejected('Role must be superadmin, admin, catalog_manager, operations, viewer or customer.');
         if ($pdo->inTransaction()) throw new RuntimeException('Provisioning requires its own transaction.');
         $hash = password_hash($password, PASSWORD_DEFAULT);
         try {
