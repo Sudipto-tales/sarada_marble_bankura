@@ -306,7 +306,7 @@ final class ProductService
             $product['rating_tenths']=$rating&&(int)$rating['review_count']>0?CommerceValues::round((int)$rating['sum_tenths'],(int)$rating['review_count']):null;
             $prices=array_column(array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled']),'unit_price_minor');
             $product['min_price_minor']=$prices?min($prices):null;
-            $product['in_stock']=(bool)array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled']);
+            $product['availability_status']=$product['availability_status']??'in_stock';
         }
         unset($product); return $products;
     }
@@ -439,7 +439,7 @@ final class ProductService
         . "JOIN users_tbl pu ON pu.id=pr.user_id WHERE pr.product_id=p.id AND pr.status='approved' AND pu.status=1 AND pu.email_verify=1";
     private const CANDIDATE_CAP = 1000;
     // Weights (per-million) for the ranked score: relevance .40, net sales_30d .20, rating .15, stock .10, featured .10, freshness .05.
-    private const WEIGHTS = ['relevance'=>400000,'sales'=>200000,'rating'=>150000,'stock'=>100000,'featured'=>100000,'freshness'=>50000];
+    private const WEIGHTS = ['relevance'=>400000,'sales'=>200000,'rating'=>150000,'featured'=>100000,'freshness'=>50000];
 
     /** Visibility + bounded filter clauses shared by the ranked search (keyword/sort handled separately). */
     private function searchClauses(array $filters): array
@@ -520,7 +520,7 @@ final class ProductService
                 'relevance' => $maxLex > 0 ? ($lex[$id] ?? 0) / $maxLex : 0.0,
                 'sales' => $maxSales > 0 ? ($sales[$id] ?? 0) / $maxSales : 0.0,
                 'rating' => $product['rating_tenths'] !== null ? $product['rating_tenths'] / 50 : 0.0,
-                'stock' => $product['in_stock'] ? 1.0 : 0.0,
+                'stock' => $product['availability_status'] === 'in_stock' ? 1.0 : 0.0,
                 'featured' => (int) $product['featured'] ? 1.0 : 0.0,
                 'freshness' => max(0.0, 1 - $age / 90),
             ];

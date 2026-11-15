@@ -18,7 +18,7 @@ $hasPreview = (bool)array_filter($product['images'], static fn(array $image): bo
     <p class="note php-stone-note">Every slab has its own character. Inspect the actual stone for colour and veining before selection.</p>
   </div>
   <div class="detail-copy">
-    <div class="pdp-badges"><span class="pdp-chip"><?= $e($product['category_name']) ?></span><?php if ($product['featured']): ?><span class="pdp-chip">Featured selection</span><?php endif; ?><span class="pdp-chip <?= $product['in_stock'] ? 'pdp-stock' : '' ?>"><?= $product['in_stock'] ? 'In stock' : 'Out of stock' ?></span></div>
+    <div class="pdp-badges"><span class="pdp-chip"><?= $e($product['category_name']) ?></span><?php if ($product['featured']): ?><span class="pdp-chip">Featured selection</span><?php endif; ?><span class="pdp-chip <?= $product['availability_status'] === 'in_stock' ? 'pdp-stock' : '' ?>"><?= $product['availability_status'] === 'in_stock' ? 'In stock' : 'Out of stock' ?></span></div>
     <?php if ($product['brand_name']): ?><a class="pdp-brand" href="<?= $u('shop') ?>?brand=<?= $e($product['brand_slug']) ?>"><?= $e($product['brand_name']) ?> ↗</a><?php endif; ?>
     <h1><?= $e($product['name']) ?></h1>
     <p class="pdp-subtitle"><?= $e(implode(' · ', array_unique(array_filter(array_column($product['variants'], 'finish'))))) ?></p>
