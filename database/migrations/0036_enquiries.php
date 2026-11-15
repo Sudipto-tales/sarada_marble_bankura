@@ -9,10 +9,7 @@ class Enquiries extends Migration
         $this->pdo->exec("CREATE INDEX idx_enquiries_product ON enquiries(product_id)");
 
         $this->pdo->exec("CREATE INDEX idx_enquiries_status ON enquiries(status)");
-
-        $this->pdo->exec("INSERT INTO enquiries (product_id, customer_name, phone, email, quantity, message, status, created_at, updated_at) VALUES (0, '', '', NULL, NULL, '', 'new', datetime('now'), datetime('now'))");
     }
-
     public function verify(): void
     {
 MigrationSchema::verifyDefinition($this->pdo,'enquiries',['id'=>'int','product_id'=>'int','customer_name'=>'varchar(190)','phone'=>'varchar(40)','email'=>'?varchar(190)','quantity'=>'integer','message'=>'text','status'=>'varchar(20)','created_at'=>'varchar(20)','updated_at'=>'varchar(20)'],
