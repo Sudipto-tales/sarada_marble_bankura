@@ -15,8 +15,8 @@ class Enquiries extends Migration
 
     public function verify(): void
     {
-        MigrationSchema::verifyDefinition($this->pdo,'enquiries',['id'=>'int','product_id'=>'?int','customer_name'=>'varchar(190)','phone'=>'varchar(40)','email'=>'?varchar(190)','quantity'=>'?int','message'=>'text','status'=>'varchar(20)','created_at'=>'varchar(20)','updated_at'=>'varchar(20)'],
-            [[['product_id'],false],[['status'],true]],[['product_id','products','id','RESTRICT']]);
+MigrationSchema::verifyDefinition($this->pdo,'enquiries',['id'=>'int','product_id'=>'int','customer_name'=>'varchar(190)','phone'=>'varchar(40)','email'=>'?varchar(190)','quantity'=>'integer','message'=>'text','status'=>'varchar(20)','created_at'=>'varchar(20)','updated_at'=>'varchar(20)'],
+    [[['product_id'],false],[['status'],false]],[['product_id','products','id','RESTRICT']]);
 
         MigrationSchema::verifyDefinition($this->pdo,'catalog_versions',['id'=>'id','namespace'=>'varchar(40)','version'=>'bigint'],[[['namespace'],true]]);
         foreach (['commerce_write_lock','catalog_hierarchy_lock'] as $table) MigrationSchema::verifyDefinition($this->pdo,$table,['id'=>'id','revision'=>'bigint']);

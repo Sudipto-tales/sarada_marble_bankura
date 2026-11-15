@@ -70,8 +70,12 @@ final class KajariaCatalogSeeder
             }
             foreach ($product['images'] as $index => $image) {
                 if (!is_array($image)) throw new RuntimeException('Kajaria image entry is invalid.');
-                if (isset($image['url'])) {
-                    $url = ProductService::driveImage($image['url']);
+                $hasUrl = isset($image['url']);
+                $rawUrl = $hasUrl ? trim($image['url']) : '';
+                if (
+                    $hasUrl && str_starts_with($rawUrl, 'https://www.kajariaceramics.com/storage/concept-picture/')
+                ) {
+                    $url = $rawUrl;
                     $mime = $image['mime'] ?? null;
                     if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
                         throw new RuntimeException('Kajaria URL images require a supported mime value.');
@@ -80,15 +84,24 @@ final class KajariaCatalogSeeder
                     $height = CommerceValues::integer($image['height'] ?? null, 1, 6000, 'height');
                     $sources[$product['slug'] . ':' . $index] = ['url' => $url, 'mime' => $mime,
                         'width' => $width, 'height' => $height];
-                    continue;
+                } elseif ($hasUrl) {
+                    $url = ProductService::driveImage($rawUrl);
+                    $mime = $image['mime'] ?? null;
+                    $width = CommerceValues::integer($image['width'] ?? null, 1, 6000, 'width');
+                    $height = CommerceValues::integer($image['height'] ?? null, 1, 6000, 'height');
+                    $sources[$product['slug'] . ':' . $index] = ['url' => $url, 'mime' => $mime,
+                        'width' => $width, 'height' => $height];
+                } else {
+                    $sourcePath = $dir . '/images/' . $image['file'];
+                    $size = is_file($sourcePath) ? getimagesize($sourcePath) : false;
+                    if (!$size || $size['mime'] !== 'image/webp') {
+                        throw new RuntimeException('Bundled Kajaria image is missing or invalid: ' . $image['file']);
+                    }
+                    $width = $size[0];
+                    $height = $size[1];
+                    $sources[$product['slug'] . ':' . $index] = ['file' => $sourcePath, 'mime' => 'image/webp',
+                        'width' => $width, 'height' => $height];
                 }
-                $source = $dir . '/images/' . $image['file'];
-                $size = is_file($source) ? getimagesize($source) : false;
-                if (!$size || $size['mime'] !== 'image/webp') {
-                    throw new RuntimeException('Bundled Kajaria image is missing or invalid: ' . $image['file']);
-                }
-                $sources[$product['slug'] . ':' . $index] = ['file' => $source, 'mime' => 'image/webp',
-                    'width' => $size[0], 'height' => $size[1]];
             }
         }
 
