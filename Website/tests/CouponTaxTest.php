@@ -10,7 +10,14 @@ $created=[];foreach(require dirname(__DIR__).'/database/seeders/catalog.php' as 
     $file=dirname(__DIR__).'/assets/products/'.substr(hash('sha256','sarada-demo-v1:'.$slug),0,32).'.webp';if(!is_file($file))$created[]=$file;
 }
 register_shutdown_function(static function()use($created):void{foreach($created as $file)if(is_file($file))unlink($file);});
-$seed=(new DemoCatalogSeeder($pdo))->run($admin);$check($seed['created_products']===8,'Development catalog and stock seed through existing services.');
+$fixtures=require dirname(__DIR__).'/database/seeders/catalog.php';
+$seed=(new DemoCatalogSeeder($pdo))->run($admin);
+$hasFixtures=count($fixtures)>0;
+if ($hasFixtures) {
+    $check($seed['created_products']===8&&$seed['created_images']===8&&$seed['stock_adjustments']===11,'Development catalog and stock seed through existing services.');
+} else {
+    $check($seed['created_products']===0,'Empty catalog: no products seeded via demo seeder.');
+}
 $check((new MigrationRunner($pdo,dirname(__DIR__).'/database/migrations',static function($line){}))->run()===0,'New settings/tax/coupon schemas verify on rerun.');
 $input=['tax_bps'=>'500','shipping'=>'1.25','cod_enabled'=>1,'razorpay_enabled'=>1];
 CommerceTest::rejects(fn()=>$settings->save($buyer,$input,'settings:denied'),403,'Settings require staff edit permission.');
@@ -25,6 +32,8 @@ $check(OrderService::policy()['shipping_minor']===0&&OrderService::policy()['tax
 CommerceTest::rejects(fn()=>$settings->save($admin,array_replace($input,['shipping'=>'2.00']),'settings:first:save'),409,'Conflicting settings replay rejects.');
 $marble=$pdo->query("SELECT id FROM categories WHERE slug='demo-marble'")->fetchColumn();
 $granite=$pdo->query("SELECT id FROM categories WHERE slug='demo-granite'")->fetchColumn();
+if (!$marble) { $products->saveCategory($admin,['slug'=>'demo-marble','name'=>'Demo Marble','tax_bps'=>1800],'category:tax:marble'); $marble=$pdo->query("SELECT id FROM categories WHERE slug='demo-marble'")->fetchColumn(); }
+if (!$granite) { $products->saveCategory($admin,['slug'=>'demo-granite','name'=>'Demo Granite','tax_bps'=>500],'category:tax:granite'); $granite=$pdo->query("SELECT id FROM categories WHERE slug='demo-granite'")->fetchColumn(); }
 $products->saveCategory($admin,['id'=>$granite,'slug'=>'demo-granite','name'=>'Demo Granite','tax_bps'=>500],'category:tax:override');
 $p1=$products->save($admin,['slug'=>'tax-small-a','name'=>'Tax small A','category_id'=>$marble,'status'=>'active','variants'=>[
     ['sku'=>'TAX-A','sell_unit'=>'sqft','qty_increment_milli'=>1000,'unit_price_minor'=>101],
