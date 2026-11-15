@@ -244,11 +244,38 @@
         const whole=row.querySelector('.variant-unit').value!=='sqft',increment=row.querySelector('[name$="[increment]"]'),coverage=row.querySelector('[name$="[coverage]"]');
         increment.step=whole?'1':'.001';increment.min=whole?'1':'.001';coverage.required=whole;
       });
-      document.querySelector('#variant-count').value=rows.children.length;document.querySelector('#add-variant').disabled=rows.children.length>=20;
+      document.querySelector('#variant-count').value=rows.children.length;
+      const addBtn=document.querySelector('#add-variant');
+      if(addBtn)addBtn.disabled=rows.children.length>=20;
     }
     document.querySelector('#add-variant').onclick=()=>{
       if(rows.children.length>=20)return;
-      const row=rows.firstElementChild.cloneNode(true);
+      let row=rows.firstElementChild;
+      if(!row){
+        const template=document.createElement('article');
+        template.className='variant-row';
+        template.innerHTML=`
+          <div class="variant-heading"><h3>Variant <span class="variant-number">1</span></h3><button type="button" class="text-button remove-variant">Remove variant</button></div>
+          <div class="form-grid three">
+            <label class="field"><span>SKU</span><input type="text" name="variants[0][sku]" class="skus" required maxlength="80" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*"></label>
+            <label class="field"><span>Finish</span><input type="text" name="variants[0][finish]" maxlength="80"></label>
+            <label class="field"><span>Selling unit</span><select name="variants[0][sell_unit]" class="variant-unit">
+              <option value="sqft" selected>Square feet</option>
+              <option value="slab">Slab</option>
+              <option value="box">Box</option>
+            </select></label>
+            <label class="field"><span>Price per unit (INR)</span><input type="number" name="variants[0][price]" required min="0" step="0.01" max="10000000000"></label>
+            <label class="field"><span>Minimum quantity increment</span><input type="number" name="variants[0][increment]" required min="0.001" step="0.001" max="1000"></label>
+            <label class="field"><span>Coverage per unit (sq ft)</span><input type="number" name="variants[0][coverage]" required min="0.001" step="0.001" max="1000000"></label>
+            <label class="field"><span>Thickness (mm)</span><input type="number" name="variants[0][thickness]" required min="0.001" step="0.001" max="1000000"></label>
+            <label class="field"><span>Length (mm)</span><input type="number" name="variants[0][length]" required min="0.001" step="0.001" max="1000000"></label>
+            <label class="field"><span>Enabled</span><select name="variants[0][enabled]"><option value="1" selected>Enabled</option><option value="0">Disabled</option></select></label>
+          </div>
+        `;
+        row=template;
+      } else {
+        row=row.cloneNode(true);
+      }
       row.querySelectorAll('[type=hidden],.field-error').forEach(el=>el.remove());
       row.querySelectorAll('input').forEach(input=>{input.value=input.name.endsWith('[increment]')?'1':'';input.removeAttribute('aria-invalid');input.removeAttribute('aria-describedby');input.setCustomValidity('');});
       row.querySelectorAll('select').forEach(select=>{select.selectedIndex=0;});

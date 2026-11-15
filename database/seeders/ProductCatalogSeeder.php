@@ -1,214 +1,98 @@
-<?php
+                        'category_id' => $categories[$definition['category']],
+                        'brand_id' => $brandId,
+                        'status' => 'active',
+                        'featured' => $definition['featured'],
+                        'variants' => $definition['variants'],
+                    ],
+                    0,
+                    'product-seed:v1:product:' . $slug
+                );
 
-/**
- * Standalone product catalog seeder.
- * Creates 20 published products with enabled variants and pricing.
- * Can be run independently or after migration.
- * Idempotent: rerunning skips products already imported.
- *
- * Usage: php vayu seeder:product-catalog --actor-id=<admin-id>
- * Or integrate into your CLI command structure.
- */
-final class ProductCatalogSeeder
-{
-    public function __construct(private PDO $pdo) {}
-
-    public function run(int $actorId): array
-    {
-        if (PHP_SAPI !== 'cli') {
-            throw new RuntimeException('Product catalog seeder requires CLI invocation.');
-        }
-
-        CommerceAccess::requirePermission('admin.products.edit', $actorId);
-
-        $catalog = new ProductService($this->pdo);
-        $result = ['created_products' => 0, 'skipped_products' => 0, 'products' => []];
-
-        // Ensure brand and categories exist
-        $brand = $this->ensureBrand($catalog, 'sarada', 'Sarada Collection');
-        $categories = $this->ensureCategories($catalog);
-
-        $env = getenv();
-        $adminEmail = $env['SEED_ADMIN_EMAIL'] ?? 'admin@sarada-marble.test';
-        $adminPassword = $env['SEED_ADMIN_PASSWORD'] ?? 'AdminPass123';
-
-        // Check if brand already exists
-        $brandId = (int)$this->pdo->query("SELECT id FROM brands WHERE slug='sarada'")->fetchColumn();
-
-        $productData = [
-            [
-                'slug' => 'breccia-azure',
-                'name' => 'Breccia Azure Tile',
-                'description' => 'Breccia Azure glazed vitrified tile, 120x240cm, polished finish',
-                'tags' => 'gvt polished large-format tile',
-                'category' => 'glazed-vitrified-tiles',
-                'unit_price_minor' => 12500,
-                'sell_unit' => 'sqft',
-                'finish' => 'Polished',
-            ],
-            [
-                'slug' => 'statuario-extra',
-                'name' => 'Statuario Extra Tile',
-                'description' => 'Statuario Extra polished marble GVT, 80x160cm',
-                'tags' => 'gvt polished marble',
-                'category' => 'glazed-vitrified-tiles',
-                'unit_price_minor' => 14500,
-                'sell_unit' => 'sqft',
-                'finish' => 'Polished',
-            ],
-            [
-                'slug' => 'calacatta-gold',
-                'name' => 'Calacatta Gold Tile',
-                'description' => 'Calacatta Gold polished marble, 120x278cm',
-                'tags' => 'gvt polished calacatta',
-                'category' => 'glazed-vitrified-tiles',
-                'unit_price_minor' => 145000,
-                'sell_unit' => 'slab',
-                'finish' => 'Polished',
-            ],
-            [
-                'slug' => 'nero-marquina',
-                'name' => 'Nero Marquina Tile',
-                'description' => 'Nero Marquina polished black tile, 80x80cm',
-                'tags' => 'gvt polished black',
-                'category' => 'glazed-vitrified-tiles',
-                'unit_price_minor' => 8500,
-                'sell_unit' => 'sqft',
-                'finish' => 'Polished',
-            ],
-            [
-                'slug' => 'polar-white',
-                'name' => 'Polar White Tile',
-                'description' => 'Polar White satin finish GVT, 120x240cm',
-                'tags' => 'gvt satin white',
-                'category' => 'glazed-vitrified-tiles',
-                'unit_price_minor' => 11000,
-                'sell_unit' => 'sqft',
-                'finish' => 'Satin',
-            ],
-        ];
-
-        foreach ($productData as $pd) {
-            // Find or create category
-            $catSlug = $pd['category'];
-            $catId = $this->ensureCategory($catalog, $categories, $catSlug, ucfirst($catSlug));
-
-            // Find or create brand
-            if ($brandId === null) {
-                $brandId = $this->ensureBrand($catalog, 'sarada', 'Sarada Collection');
+                $productId = (int)$saved['id'];
+                $result['created_products']++;
+                $result['created_variants'] += count($definition['variants']);
+            } else {
+                // Never overwrite a product that may have been edited by an administrator.
+                $result['skipped_products']++;
+                $this->assertOwnedDemoProduct($productId, $slug);
             }
 
-            // Create variant for this product
-            $variant = [
-                'sku' => strtoupper('SA-' . $pd['slug'] . '-' . $pd['sell_unit']),
-                'finish' => $pd['finish'],
-                'sell_unit' => $pd['sell_unit'],
-                'qty_increment_milli' => $pd['sell_unit'] === 'sqft' ? 500 : 1000,
-                'unit_price_minor' => $pd['unit_price_minor'],
-                'enabled' => 1,
-                'coverage_sqft_milli' => $pd['sell_unit'] === 'sqft' ? 40000 : null,
-                'thickness_mm_milli' => 18000,
-                'length_mm_milli' => null,
-                'width_mm_milli' => null,
-            ];
+            // Resume safely: positions already occupied are left untouched.
+            $existingPositions = CommerceDatabase::query(
+                $this->pdo,
+                'SELECT position FROM product_images WHERE product_id = ? ORDER BY position',
+                [$productId]
+            )->fetchAll(PDO::FETCH_COLUMN);
+            $existingPositions = array_map('intval', $existingPositions);
 
-            // Build input for ProductService::save()
-            $variantRows = [$variant];
-            $input = [
-                'slug' => $pd['slug'],
-                'name' => $pd['name'],
-                'description' => $pd['description'],
-                'tags' => $pd['tags'],
-                'category_id' => $catId,
-                'brand_id' => $brandId,
-                'status' => 'active',
-                'featured' => 0,
-                'variants' => $variantRows,
-            ];
+            foreach ($definition['images'] as $position => $url) {
+                if (in_array($position, $existingPositions, true)) {
+                    $result['skipped_images']++;
+                    continue;
+                }
 
-            // Try to save; skip if already exists
-            try {
-                $saved = $catalog->save($actorId, $input, 0, 'product-catalog:v1:' . $pd['slug']);
-                $result['created_products']++;
-                $result['products'][] = [
-                    'id' => $saved['id'],
-                    'slug' => $pd['slug'],
-                    'name' => $pd['name'],
-                    'status' => 'active',
-                    'min_price_minor' => $pd['unit_price_minor'],
-                ];
-            } catch (RequestRejected $e) {
-                if ($e->getCode() === 409) {
-                    $result['skipped_products']++;
-                    // Product exists, still hydrate info
-                    $existing = $catalog->adminDetail($actorId, $saved['id'] ?? 0);
-                    $result['products'][] = [
-                        'id' => $existing['id'] ?? 0,
-                        'slug' => $pd['slug'],
-                        'name' => $pd['name'],
-                        'status' => 'active',
-                        'min_price_minor' => null,
+                try {
+                    $this->images->uploadFromUrl(
+                        $actorId,
+                        $productId,
+                        $url,
+                        [
+                            'alt_text' => $definition['name'] . ' - sample image ' . ($position + 1),
+                            'position' => $position,
+                        ],
+                        'product-seed:v1:image:' . $slug . ':' . $position
+                    );
+                    $result['created_images']++;
+                } catch (Throwable $error) {
+                    $result['failed_images'][] = [
+                        'product' => $slug,
+                        'position' => $position,
+                        'message' => $error->getMessage(),
                     ];
-                } else {
-                    throw $e;
                 }
             }
+
+            $result['products'][] = [
+                'id' => $productId,
+                'slug' => $slug,
+                'name' => $definition['name'],
+                'variants' => count($definition['variants']),
+            ];
+        }
+
+        if ($result['failed_images'] !== []) {
+            throw new RuntimeException(
+                'Catalogue records were seeded, but one or more images failed. Review failed_images in the seeder output and rerun to retry missing image positions.'
+            );
         }
 
         return $result;
     }
 
-    private function ensureBrand(ProductService $catalog, string $slug, string $name): int
+    private function findId(string $table, string $slug): int
     {
-        // Try to find existing brand
-        $brandId = (int)$this->pdo->query("SELECT id FROM brands WHERE slug=?", [$slug])->fetchColumn();
-        if ($brandId) return $brandId;
-
-        // Create brand
-        $saved = $catalog->saveBrand($actorId, ['slug' => $slug, 'name' => $name], 'product-catalog:v1:brand');
-        return (int)$saved;
-    }
-
-    private function ensureCategories(ProductService $catalog): array
-    {
-        $categories = ['glazed-vitrified-tiles', 'marble', 'granite'];
-        $result = [];
-
-        foreach ($categories as $catSlug) {
-            $catId = (int)$this->pdo->query("SELECT id FROM categories WHERE slug=?", [$catSlug])->fetchColumn();
-            if ($catId) {
-                $result[$catSlug] = $catId;
-                continue;
-            }
-
-            // Create category with parent if needed
-            $parentId = null;
-            if ($catSlug === 'glazed-vitrified-tiles') {
-                // Check if parent exists
-                $parentId = (int)$this->pdo->query("SELECT id FROM categories WHERE slug='tiles'")->fetchColumn();
-            }
-
-            $saved = $catalog->saveCategory($actorId, ['slug' => $catSlug, 'name' => ucfirst($catSlug)], 'product-catalog:v1:category:' . $catSlug);
-            $result[$catSlug] = (int)$saved;
+        if (!in_array($table, ['products', 'categories', 'brands'], true)) {
+            throw new LogicException('Unsupported seeder lookup table.');
         }
 
-        return $result;
+        return (int)CommerceDatabase::query(
+            $this->pdo,
+            "SELECT id FROM {$table} WHERE slug = ?",
+            [$slug]
+        )->fetchColumn();
     }
 
-    private function ensureCategory(ProductService $catalog, array $existing, string $slug, string $name): int
+    private function assertOwnedDemoProduct(int $productId, string $slug): void
     {
-        $catId = (int)$this->pdo->query("SELECT id FROM categories WHERE slug=?", [$slug])->fetchColumn();
-        if ($catId) return $catId;
+        $row = CommerceDatabase::query(
+            $this->pdo,
+            'SELECT description FROM products WHERE id = ?',
+            [$productId]
+        )->fetch(PDO::FETCH_ASSOC);
 
-        // Use first available parent or create root
-        $parentId = null;
-        foreach ($existing as $slug => $id) {
-            // Check if this could be a parent
-            $parentId = $id;
-            break;
+        if (!$row || !str_contains((string)$row['description'], 'Development sample')) {
+            throw new RuntimeException(
+                'Seeder slug conflict for "' . $slug . '". Existing product was not modified.'
+            );
         }
-
-        $saved = $catalog->saveCategory($actorId, ['slug' => $slug, 'name' => $name], 'product-catalog:v1:category:' . $slug);
-        return (int)$saved;
     }
-}
