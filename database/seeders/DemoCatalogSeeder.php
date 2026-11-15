@@ -13,6 +13,10 @@ final class DemoCatalogSeeder
         CommerceAccess::requirePermission('admin.products.edit', $actorId);
         CommerceAccess::requirePermission('admin.inventory.adjust', $actorId);
         $fixtures = require __DIR__ . '/catalog.php';
+        if (empty($fixtures)) {
+            // No demo fixtures — use Kajaria catalog import instead.
+            return ['created_products' => 0, 'skipped_products' => 0, 'created_images' => 0, 'stock_adjustments' => 0, 'products' => []];
+        }
         $root = dirname(__DIR__, 2);
         // Validate all bundled images before any catalog write; no network or GD dependency.
         $images = [];
