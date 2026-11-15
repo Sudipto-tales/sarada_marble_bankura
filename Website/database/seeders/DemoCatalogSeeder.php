@@ -12,6 +12,9 @@ final class DemoCatalogSeeder
         }
         CommerceAccess::requirePermission('admin.products.edit', $actorId);
         CommerceAccess::requirePermission('admin.inventory.adjust', $actorId);
+        if (!file_exists(__DIR__ . '/catalog.php')) {
+            return ['created_products' => 0, 'skipped_products' => 0, 'created_images' => 0, 'stock_adjustments' => 0, 'products' => []];
+        }
         $fixtures = require __DIR__ . '/catalog.php';
         if (empty($fixtures)) {
             // No demo fixtures — use Kajaria catalog import instead.
