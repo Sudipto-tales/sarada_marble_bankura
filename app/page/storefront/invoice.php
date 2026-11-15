@@ -175,7 +175,9 @@ $docTitle = ($isTaxInvoice ? 'Tax Invoice ' : 'Invoice ') . $order['order_number
       </thead>
       <tbody>
         <?php foreach ($order['items'] as $i => $item):
-          $rate = rtrim(rtrim(number_format(((int)($item['tax_bps'] ?? $order['tax_bps'])) / 100, 2, '.', ''), '0'), '.'); ?>
+          $rateBps = (int)($item['tax_bps'] ?? $order['tax_bps'] ?? 0);
+          $rate = number_format($rateBps / 100, 2, '.', '');
+        ?>
         <tr>
           <td><?= $i + 1 ?></td>
           <td class="item">
@@ -185,7 +187,7 @@ $docTitle = ($isTaxInvoice ? 'Tax Invoice ' : 'Invoice ') . $order['order_number
           </td>
           <td class="num"><?= $q($item['qty_milli']) ?> <?= $e($item['sell_unit']) ?></td>
           <td class="num"><?= $m($item['unit_price_minor']) ?></td>
-          <td class="num hide-sm"><?= $e($rate) ?>%</td>
+          <td><?= $e($rate) ?>%</td>
           <td class="num"><?= $m($item['line_total_minor']) ?></td>
         </tr>
         <?php endforeach; ?>
@@ -194,13 +196,19 @@ $docTitle = ($isTaxInvoice ? 'Tax Invoice ' : 'Invoice ') . $order['order_number
 
     <div class="foot">
       <div class="totals">
-        <div class="row"><span>Subtotal</span><span><?= $m($order['subtotal_minor']) ?></span></div>
-        <?php if ((int)$order['discount_minor'] > 0): ?><div class="row credit"><span>Discount</span><span>−<?= $m($order['discount_minor']) ?></span></div><?php endif; ?>
-        <div class="row muted"><span>CGST <?= $e($halfRate) ?>%</span><span><?= $m($cgst) ?></span></div>
-        <div class="row muted"><span>SGST <?= $e($halfRate) ?>%</span><span><?= $m($sgst) ?></span></div>
-        <div class="row"><span>Delivery</span><span><?= (int)$order['shipping_minor'] ? $m($order['shipping_minor']) : 'Free' ?></span></div>
+        <?php foreach ([
+          'subtotal_minor' => 'Subtotal',
+          'discount_minor' => 'Discount',
+          'shipping_minor' => 'Delivery',
+          'tax_minor'      => 'Tax',
+          'total_minor'    => 'Total',
+        ] as $field => $label): ?>
+          <div class="row<?= $field === 'total_minor' ? ' grand' : '' ?>">
+            <span><?= $e($label) ?></span>
+            <span data-total="<?= $e($field) ?>"><?= $m($order[$field]) ?></span>
+          </div>
+        <?php endforeach; ?>
         <hr>
-        <div class="grand"><span>Total</span><span><?= $m($order['total_minor']) ?></span></div>
         <?php if ($balance > 0): ?>
         <div class="due">
           <div class="row"><span>Paid in advance</span><span><?= $m($due) ?></span></div>

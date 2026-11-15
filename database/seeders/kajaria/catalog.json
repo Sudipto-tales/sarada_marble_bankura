@@ -257,6 +257,91 @@
           "height": 800
         }
       ]
+    },
+    {
+      "slug": "jet-black",
+      "name": "Kajaria Jet Black",
+      "category_slug": "glazed-vitrified-tiles",
+      "category_name": "Glazed Vitrified Tiles",
+      "description": "Kajaria Glazed Vitrified Tiles — Jet Black. Size: 80x80 cm. Finish: Polished.",
+      "alt": "Jet Black — Kajaria tile",
+      "tags": "kajaria tiles polished black gvt",
+      "images": [
+        {
+          "url": "https://www.kajariaceramics.com/storage/concept-picture/E00000003901.jpg?v=1758882629",
+          "mime": "image/jpeg",
+          "width": 800,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "slug": "ivory-onyx",
+      "name": "Kajaria Ivory Onyx",
+      "category_slug": "glazed-vitrified-tiles",
+      "category_name": "Glazed Vitrified Tiles",
+      "description": "Kajaria Glazed Vitrified Tiles — Ivory Onyx. Size: 120x240 cm. Finish: Polished.",
+      "alt": "Ivory Onyx — Kajaria tile",
+      "tags": "kajaria tiles polished ivory onyx gvt",
+      "images": [
+        {
+          "url": "https://www.kajariaceramics.com/storage/concept-picture/E00000003912.jpg?v=1758882630",
+          "mime": "image/jpeg",
+          "width": 1200,
+          "height": 850
+        }
+      ]
+    },
+    {
+      "slug": "rose-quartz",
+      "name": "Kajaria Rose Quartz",
+      "category_slug": "glazed-vitrified-tiles",
+      "category_name": "Glazed Vitrified Tiles",
+      "description": "Kajaria Glazed Vitrified Tiles — Rose Quartz. Size: 60x120 cm. Finish: Satin.",
+      "alt": "Rose Quartz — Kajaria tile",
+      "tags": "kajaria tiles satin rose quartz gvt",
+      "images": [
+        {
+          "url": "https://www.kajariaceramics.com/storage/concept-picture/E00000003923.jpg?v=1758882631",
+          "mime": "image/jpeg",
+          "width": 600,
+          "height": 600
+        }
+      ]
+    },
+    {
+      "slug": "sunset-bronze",
+      "name": "Kajaria Sunset Bronze",
+      "category_slug": "glazed-vitrified-tiles",
+      "category_name": "Glazed Vitrified Tiles",
+      "description": "Kajaria Glazed Vitrified Tiles — Sunset Bronze. Size: 80x160 cm. Finish: Polished.",
+      "alt": "Sunset Bronze — Kajaria tile",
+      "tags": "kajaria tiles polished sunset bronze gvt",
+      "images": [
+        {
+          "url": "https://www.kajariaceramics.com/storage/concept-picture/E00000003934.jpg?v=1758882632",
+          "mime": "image/jpeg",
+          "width": 1000,
+          "height": 750
+        }
+      ]
+    },
+    {
+      "slug": "almond-cream",
+      "name": "Kajaria Almond Cream",
+      "category_slug": "glazed-vitrified-tiles",
+      "category_name": "Glazed Vitrified Tiles",
+      "description": "Kajaria Glazed Vitrified Tiles — Almond Cream. Size: 60x60 cm. Finish: Matte.",
+      "alt": "Almond Cream — Kajaria tile",
+      "tags": "kajaria tiles matte almond cream gvt",
+      "images": [
+        {
+          "url": "https://www.kajariaceramics.com/storage/concept-picture/E00000003945.jpg?v=1758882633",
+          "mime": "image/jpeg",
+          "width": 600,
+          "height": 600
+        }
+      ]
     }
   ]
 }

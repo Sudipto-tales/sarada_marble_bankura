@@ -58,8 +58,8 @@ final class ProductService
         if (!is_array($input['variants'] ?? null)) CommerceValues::invalid('variants');
         $variants = $this->variants($input['variants']);
         $details = isset($input['details']) ? ProductDetailService::validate($input['details']) : null;
-        if ($status === 'active' && $variants && !array_filter($variants,static fn(array $row):bool => (bool)$row['enabled'])) { 
-            // Variants without enabled flag are OK for import; skip this check 
+        if ($status === 'active' && $variants && !array_filter($variants,static fn(array $row):bool => (bool)$row['enabled'])) {
+            throw new RequestRejected(422,'item_unavailable','Publishing requires an enabled variant');
         }
         try {
             return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$data,$variants,$details,$expectedRevision,$operationKey):array {
@@ -98,19 +98,15 @@ final class ProductService
                         $variant['sell_unit'],$variant['qty_increment_milli'],$variant['coverage_sqft_milli'],$variant['unit_price_minor'],$variant['enabled']];
                     if ($variantId) {
                         $old = $known[$variantId];
-                        $stock = $stockRows[$variantId] ?? null;
                         if ($old['sell_unit']!==$variant['sell_unit'] || (int)($old['coverage_sqft_milli']??0)!==(int)($variant['coverage_sqft_milli']??0)) {
-                            $history=$this->query('SELECT id FROM inventory_movements WHERE variant_id=? ORDER BY id LIMIT 1'.$lock,[$variantId])->fetchColumn();
-                            if ($history || ($stock && ((int)$stock['on_hand_milli']>0 || (int)$stock['reserved_milli']>0))) {
-                                throw new RequestRejected(409,'unit_change_conflict','A variant with stock history cannot change its sell unit or coverage.');
-                            }
+                            throw new RequestRejected(409,'unit_change_conflict','Variant sell unit or coverage cannot be changed.');
                         }
                         $this->query('UPDATE product_variants SET sku=?,finish=?,thickness_mm_milli=?,length_mm_milli=?,width_mm_milli=?,sell_unit=?,qty_increment_milli=?,coverage_sqft_milli=?,unit_price_minor=?,enabled=?,revision=revision+1 WHERE id=?',array_merge($values,[$variantId]));
                     } else {
                         if (count($known)+count(array_filter($kept,static fn(int $item):bool => !isset($known[$item]))) >=100) CommerceValues::invalid('variants');
                         $this->query('INSERT INTO product_variants (sku,finish,thickness_mm_milli,length_mm_milli,width_mm_milli,sell_unit,qty_increment_milli,coverage_sqft_milli,unit_price_minor,enabled,product_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',array_merge($values,[$id]));
                         $variantId = (int)$this->pdo->lastInsertId();
-                        InventoryService::initialize($this->pdo,$variantId);
+                        // Inventory tracking removed - use availability_status instead
                     }
                     if (array_key_exists('original_price_minor', $variant)) {
                         $this->query('DELETE FROM variant_reference_prices WHERE variant_id=?', [$variantId]);
@@ -293,8 +289,7 @@ final class ProductService
     {
         if (!$products) return [];
         $ids=array_column($products,'id'); $marks=implode(',',array_fill(0,count($ids),'?'));
-        $variants=$this->query("SELECT v.*,r.original_price_minor,i.on_hand_milli,i.reserved_milli,(i.on_hand_milli-i.reserved_milli) AS available_milli
-            FROM product_variants v LEFT JOIN variant_reference_prices r ON r.variant_id=v.id LEFT JOIN inventory i ON i.variant_id=v.id WHERE v.product_id IN ($marks)".($staff?'':' AND v.enabled=1').' ORDER BY v.product_id,v.id',$ids)->fetchAll();
+        $variants=$this->query("SELECT v.*,r.original_price_minor FROM product_variants v LEFT JOIN variant_reference_prices r ON r.variant_id=v.id WHERE v.product_id IN ($marks)".($staff?'':' AND v.enabled=1').' ORDER BY v.product_id,v.id',$ids)->fetchAll();
         $images=$this->query("SELECT * FROM product_images WHERE product_id IN ($marks) ORDER BY product_id,position,id",$ids)->fetchAll();
         // One roll-up for the whole page so cards can show a rating without a query each.
         $ratings=$this->query("SELECT r.product_id,COUNT(*) AS review_count,SUM(COALESCE(r.rating_tenths,r.rating*10)) AS sum_tenths
@@ -311,7 +306,7 @@ final class ProductService
             $product['rating_tenths']=$rating&&(int)$rating['review_count']>0?CommerceValues::round((int)$rating['sum_tenths'],(int)$rating['review_count']):null;
             $prices=array_column(array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled']),'unit_price_minor');
             $product['min_price_minor']=$prices?min($prices):null;
-            $product['in_stock']=(bool)array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled'] && $row['available_milli']!==null && (int)$row['available_milli']>=(int)$row['qty_increment_milli']);
+            $product['in_stock']=(bool)array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled']);
         }
         unset($product); return $products;
     }
@@ -418,7 +413,7 @@ final class ProductService
             $values[] = CommerceValues::text($filters['finish'], 80, 'finish');
         }
         if (isset($filters['in_stock']) && CommerceValues::flag($filters['in_stock'], 'in_stock') === 1) {
-            $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vs JOIN inventory i ON i.variant_id=vs.id WHERE vs.product_id=p.id AND vs.enabled=1 AND i.on_hand_milli-i.reserved_milli>=vs.qty_increment_milli)';
+            $clauses[] = 'p.availability_status = "in_stock"';
         }
         if (isset($filters['min_rating']) && $filters['min_rating'] !== '') {
             // Stars (1..5) → tenths; interpolate the validated integer so SQLite compares AVG (REAL/NULL)
@@ -470,7 +465,7 @@ final class ProductService
             $values[] = CommerceValues::text($filters['finish'], 80, 'finish');
         }
         if (isset($filters['in_stock']) && CommerceValues::flag($filters['in_stock'], 'in_stock') === 1) {
-            $clauses[] = 'EXISTS(SELECT 1 FROM product_variants vs JOIN inventory i ON i.variant_id=vs.id WHERE vs.product_id=p.id AND vs.enabled=1 AND i.on_hand_milli-i.reserved_milli>=vs.qty_increment_milli)';
+            $clauses[] = 'p.availability_status = "in_stock"';
         }
         return [$clauses, $values];
     }
