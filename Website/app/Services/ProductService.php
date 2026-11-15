@@ -47,7 +47,7 @@ final class ProductService
         CommerceAccess::requirePermission('admin.products.edit',$actorId);
         $operationKey = CommerceValues::key($operationKey);
         $id = isset($input['id']) ? CommerceValues::id($input['id']) : null;
-        $status = $input['status'] ?? 'draft';
+        $status = 'active';
         if (!in_array($status,['draft','active','archived'],true)) CommerceValues::invalid('status');
         $data = ['slug'=>CommerceValues::slug($input['slug'] ?? null),'name'=>CommerceValues::text($input['name'] ?? null,190,'name'),
             'description'=>CommerceValues::text($input['description'] ?? '',10000,'description',true),
@@ -58,9 +58,6 @@ final class ProductService
         if (!is_array($input['variants'] ?? null)) CommerceValues::invalid('variants');
         $variants = $this->variants($input['variants']);
         $details = isset($input['details']) ? ProductDetailService::validate($input['details']) : null;
-        if ($status === 'active' && $variants && !array_filter($variants,static fn(array $row):bool => (bool)$row['enabled'])) {
-            throw new RequestRejected(422,'item_unavailable','Publishing requires an enabled variant');
-        }
         try {
             return CommerceDatabase::transaction($this->pdo,function() use($actorId,$id,$data,$variants,$details,$expectedRevision,$operationKey):array {
                 CommerceAccess::requirePermission('admin.products.edit',$actorId);
@@ -90,37 +87,39 @@ final class ProductService
                     $id = (int)$this->pdo->lastInsertId();
                 }
                 $kept = []; $seen = [];
-                foreach ($variants as $variant) {
-                    $variantId = $variant['id'];
-                    if ($variantId && (!isset($known[$variantId]) || isset($seen[$variantId]))) CommerceValues::invalid('variant_id');
-                    if ($variantId) $seen[$variantId] = true;
-                    $values = [$variant['sku'],$variant['finish'],$variant['thickness_mm_milli'],$variant['length_mm_milli'],$variant['width_mm_milli'],
-                        $variant['sell_unit'],$variant['qty_increment_milli'],$variant['coverage_sqft_milli'],$variant['unit_price_minor'],$variant['enabled']];
-                    if ($variantId) {
-                        $old = $known[$variantId];
-                        if ($old['sell_unit']!==$variant['sell_unit'] || (int)($old['coverage_sqft_milli']??0)!==(int)($variant['coverage_sqft_milli']??0)) {
-                            throw new RequestRejected(409,'unit_change_conflict','Variant sell unit or coverage cannot be changed.');
-                        }
-                        $this->query('UPDATE product_variants SET sku=?,finish=?,thickness_mm_milli=?,length_mm_milli=?,width_mm_milli=?,sell_unit=?,qty_increment_milli=?,coverage_sqft_milli=?,unit_price_minor=?,enabled=?,revision=revision+1 WHERE id=?',array_merge($values,[$variantId]));
-                    } else {
-                        if (count($known)+count(array_filter($kept,static fn(int $item):bool => !isset($known[$item]))) >=100) CommerceValues::invalid('variants');
-                        $this->query('INSERT INTO product_variants (sku,finish,thickness_mm_milli,length_mm_milli,width_mm_milli,sell_unit,qty_increment_milli,coverage_sqft_milli,unit_price_minor,enabled,product_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',array_merge($values,[$id]));
-                        $variantId = (int)$this->pdo->lastInsertId();
-                        $pdo = $this->pdo;
+                if (count($variants) > 0) {
+                    foreach ($variants as $variant) {
+                        $variantId = $variant['id'];
+                        if ($variantId && (!isset($known[$variantId]) || isset($seen[$variantId]))) CommerceValues::invalid('variant_id');
+                        if ($variantId) $seen[$variantId] = true;
+                        $values = [$variant['sku'],$variant['finish'],$variant['thickness_mm_milli'],$variant['length_mm_milli'],$variant['width_mm_milli'],
+                            $variant['sell_unit'],$variant['qty_increment_milli'],$variant['coverage_sqft_milli'],$variant['unit_price_minor'],$variant['enabled']];
+                        if ($variantId) {
+                            $old = $known[$variantId];
+                            if ($old['sell_unit']!==$variant['sell_unit'] || (int)($old['coverage_sqft_milli']??0)!==(int)($variant['coverage_sqft_milli']??0)) {
+                                throw new RequestRejected(409,'unit_change_conflict','Variant sell unit or coverage cannot be changed.');
+                            }
+                            $this->query('UPDATE product_variants SET sku=?,finish=?,thickness_mm_milli=?,length_mm_milli=?,width_mm_milli=?,sell_unit=?,qty_increment_milli=?,coverage_sqft_milli=?,unit_price_minor=?,enabled=?,revision=revision+1 WHERE id=?',array_merge($values,[$variantId]));
+                        } else {
+                            if (count($known)+count(array_filter($kept,static fn(int $item):bool => !isset($known[$item]))) >=100) CommerceValues::invalid('variants');
+                            $this->query('INSERT INTO product_variants (sku,finish,thickness_mm_milli,length_mm_milli,width_mm_milli,sell_unit,qty_increment_milli,coverage_sqft_milli,unit_price_minor,enabled,product_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',array_merge($values,[$id]));
+                            $variantId = (int)$this->pdo->lastInsertId();
+                            $pdo = $this->pdo;
 $mysql = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql';
 $idAuto = $mysql ? 'INT NOT NULL AUTO_INCREMENT PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
 $suffix = $mysql ? ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci' : '';
 $pdo->exec("INSERT OR IGNORE INTO inventory (variant_id,on_hand_milli,reserved_milli,revision) VALUES ($variantId,0,0,1)");
-                        // Inventory tracking removed - use availability_status instead
+                            // Inventory tracking removed - use availability_status instead
+                        }
+                        if (array_key_exists('original_price_minor', $variant)) {
+                            $this->query('DELETE FROM variant_reference_prices WHERE variant_id=?', [$variantId]);
+                            if ($variant['original_price_minor'] !== null) $this->query('INSERT INTO variant_reference_prices (variant_id,original_price_minor) VALUES (?,?)', [$variantId,$variant['original_price_minor']]);
+                        }
+                        $this->query('DELETE FROM variant_reference_prices WHERE variant_id=? AND original_price_minor<?', [$variantId,$variant['unit_price_minor']]);
+                        $kept[] = $variantId;
                     }
-                    if (array_key_exists('original_price_minor', $variant)) {
-                        $this->query('DELETE FROM variant_reference_prices WHERE variant_id=?', [$variantId]);
-                        if ($variant['original_price_minor'] !== null) $this->query('INSERT INTO variant_reference_prices (variant_id,original_price_minor) VALUES (?,?)', [$variantId,$variant['original_price_minor']]);
-                    }
-                    $this->query('DELETE FROM variant_reference_prices WHERE variant_id=? AND original_price_minor<?', [$variantId,$variant['unit_price_minor']]);
-                    $kept[] = $variantId;
+                    foreach ($known as $variantId=>$old) if (!in_array((int)$variantId,$kept,true)) $this->query('UPDATE product_variants SET enabled=0, revision=revision+1 WHERE id=?',[$variantId]);
                 }
-                foreach ($known as $variantId=>$old) if (!in_array((int)$variantId,$kept,true)) $this->query('UPDATE product_variants SET enabled=0, revision=revision+1 WHERE id=?',[$variantId]);
                 if ($details !== null) (new ProductDetailService($this->pdo))->saveInside($id, $details);
                 self::advanceVersion($this->pdo);
                 $revision = ($existing ? (int)$existing['revision'] : 0)+1;
