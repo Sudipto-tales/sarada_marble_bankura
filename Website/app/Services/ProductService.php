@@ -312,6 +312,7 @@ $pdo->exec("INSERT OR IGNORE INTO inventory (variant_id,on_hand_milli,reserved_m
             $prices=array_column(array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled']),'unit_price_minor');
             $product['min_price_minor']=$prices?min($prices):null;
             $product['availability_status']=$product['availability_status']??'in_stock';
+            $product['in_stock']=(bool)$product['availability_status'];
         }
         unset($product); return $products;
     }
