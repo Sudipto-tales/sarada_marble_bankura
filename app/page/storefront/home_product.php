@@ -11,7 +11,7 @@ $discount = $reference && (int)$reference > (int)$choice['unit_price_minor'] ? i
 <h3><a href="<?= $u('product/'.$material['slug']) ?>"><?= $e($material['name']) ?></a></h3><p class="h-origin"><?= $e($choice['finish'] ?: $material['category_name']) ?></p>
 <?php if (!empty($material['review_count'])): ?><a class="stone-rating" href="<?= $u('product/'.$material['slug']) ?>#reviews"><?= $stars($material['rating_tenths'], 'sm') ?><b><?= number_format($material['rating_tenths'] / 10, 1) ?></b><small>(<?= (int)$material['review_count'] ?>)</small></a><?php endif; ?>
 <?php if ((int)$choice['unit_price_minor'] > 0): ?><div class="h-prices"><?php if ($discount): ?><del><?= $m($reference) ?></del><?php endif; ?><strong><?= $m($choice['unit_price_minor']) ?> <small>/ <?= $e($choice['sell_unit']) ?></small></strong></div><?php endif; ?>
-<div class="h-product-bottom"><span><?= $material['in_stock'] ? 'In stock' : 'Unavailable' ?></span><?php $quickProduct = $material; $quickClass = 'h-add'; $quickLabel = $icon('bag');
+<div class="h-product-bottom"><span><?= $material['availability_status'] === 'in_stock' ? 'In stock' : 'Unavailable' ?></span><?php $quickProduct = $material; $quickClass = 'h-add'; $quickLabel = $icon('bag');
 $quickUnavailable = '<a class="h-add" href="' . $u('product/'.$material['slug']) . '#purchase" aria-label="Choose options for ' . $e($material['name']) . '">' . $icon('bag') . '</a>';
 require __DIR__ . '/quick_add.php'; ?></div>
 </article>
