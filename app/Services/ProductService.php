@@ -311,8 +311,21 @@ $pdo->exec("INSERT OR IGNORE INTO inventory (variant_id,on_hand_milli,reserved_m
             $product['rating_tenths']=$rating&&(int)$rating['review_count']>0?CommerceValues::round((int)$rating['sum_tenths'],(int)$rating['review_count']):null;
             $prices=array_column(array_filter($product['variants'],static fn(array $row):bool=>(bool)$row['enabled']),'unit_price_minor');
             $product['min_price_minor']=$prices?min($prices):null;
-            $product['availability_status']=$product['availability_status']??'in_stock';
-            $product['in_stock']=(bool)$product['availability_status'];
+            // Determine availability based on inventory on-hand stock.
+            // Zero stock is never interpreted as unlimited.
+            $allVariantsZeroStock = true;
+            foreach ($product['variants'] as $variant) {
+                $vid = $variant['id'] ?? null;
+                if ($vid === null) { $allVariantsZeroStock = false; break; }
+                $onHand = $this->query('SELECT on_hand_milli FROM inventory WHERE variant_id=?', [$vid])->fetchColumn();
+                if ($onHand && $onHand > 0) { $allVariantsZeroStock = false; break; }
+            }
+            if ($allVariantsZeroStock && count($product['variants']) > 0) {
+                $product['availability_status'] = 'out_of_stock';
+            } else {
+                $product['availability_status'] = $product['availability_status'] ?? 'in_stock';
+            }
+            $product['in_stock'] = $product['availability_status'] === 'in_stock';
         }
         unset($product); return $products;
     }
