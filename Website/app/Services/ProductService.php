@@ -2,7 +2,7 @@
 
 final class ProductService
 {
-    public function __construct(private PDO $pdo) {}
+    public function __construct(private PDO $pdo, ?InventoryService $inventoryService = null) {}
     private function query(string $sql, array $values = []): PDOStatement { return DeveloperTrace::span(__METHOD__,fn()=>CommerceDatabase::query($this->pdo,$sql,$values)); }
 
     public static function advanceVersion(PDO $pdo): void
@@ -106,6 +106,11 @@ final class ProductService
                         if (count($known)+count(array_filter($kept,static fn(int $item):bool => !isset($known[$item]))) >=100) CommerceValues::invalid('variants');
                         $this->query('INSERT INTO product_variants (sku,finish,thickness_mm_milli,length_mm_milli,width_mm_milli,sell_unit,qty_increment_milli,coverage_sqft_milli,unit_price_minor,enabled,product_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',array_merge($values,[$id]));
                         $variantId = (int)$this->pdo->lastInsertId();
+                        $pdo = $this->pdo;
+$mysql = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql';
+$idAuto = $mysql ? 'INT NOT NULL AUTO_INCREMENT PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+$suffix = $mysql ? ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci' : '';
+$pdo->exec("INSERT OR IGNORE INTO inventory (variant_id,on_hand_milli,reserved_milli,revision) VALUES ($variantId,0,0,1)");
                         // Inventory tracking removed - use availability_status instead
                     }
                     if (array_key_exists('original_price_minor', $variant)) {
