@@ -5,24 +5,23 @@ require __DIR__ . '/support/CommerceTest.php';
 $pdo = CommerceTest::open(); $check = [CommerceTest::class, 'check'];
 
 $admin = CommerceAccess::provision('srch-admin@example.test', 'Disposable-Srch-Password');
-$products = new ProductService($pdo); $inventory = new InventoryService($pdo);
+$products = new ProductService($pdo);
 $category = $products->saveCategory($admin, ['slug' => 'srch-stone', 'name' => 'Srch Stone'], 'srch:category');
 $brand = $products->saveBrand($admin, ['slug' => 'srch-brand', 'name' => 'Srch Brand'], 'srch:brand');
 $n = 0;
-$make = function (string $slug, string $name, string $tags, string $desc, int $featured, int $stock, ?int $brandId = null) use (&$n, $products, $inventory, $admin, $category): int {
+$make = function (string $slug, string $name, string $tags, string $desc, int $featured, int $availability, ?int $brandId = null) use (&$n, $products, $admin, $category): int {
     $n++;
     $saved = $products->save($admin, ['slug' => $slug, 'name' => $name, 'tags' => $tags, 'description' => $desc, 'category_id' => $category,
-        'brand_id' => $brandId, 'status' => 'active', 'featured' => $featured,
+        'brand_id' => $brandId, 'status' => 'active', 'featured' => $featured, 'availability_status' => $availability === 1 ? 'in_stock' : 'out_of_stock',
         'variants' => [['sku' => 'SRCH-' . $n, 'sell_unit' => 'sqft', 'qty_increment_milli' => 1000, 'unit_price_minor' => 1000 * $n]]], 0, 'srch:p:' . $n);
-    if ($stock > 0) $inventory->adjust($admin, $saved['variant_ids'][0], $stock, 'Stock', 'srch:stock:' . $n);
     return (int) $saved['id'];
 };
 // One factor differs per pair; everything is created "now" so freshness is equal.
-$full = $make('m-full', 'Marble Full', 'marble premium', 'a marble slab', 0, 5000, $brand); // lexical 3+2+1
-$name = $make('m-name', 'Marble Name', 'granite', 'plain stone', 0, 5000);                  // lexical name-only
-$feat = $make('m-feat', 'Marble Feat', 'granite', 'plain stone', 1, 5000);                  // + featured
-$sale = $make('m-sale', 'Marble Sale', 'granite', 'plain stone', 0, 5000);                  // + sales metric
-$nostock = $make('m-nostock', 'Marble Nostock', 'granite', 'plain stone', 0, 0);            // no stock
+$full = $make('m-full', 'Marble Full', 'marble premium', 'a marble slab', 0, 1, $brand); // lexical 3+2+1, in_stock
+$name = $make('m-name', 'Marble Name', 'granite', 'plain stone', 0, 0);                  // lexical name-only, out_of_stock
+$feat = $make('m-feat', 'Marble Feat', 'granite', 'plain stone', 1, 1);                  // + featured, in_stock
+$sale = $make('m-sale', 'Marble Sale', 'granite', 'plain stone', 0, 0);                  // + sales metric, out_of_stock
+$nostock = $make('m-nostock', 'Marble Nostock', 'granite', 'plain stone', 0, 2);            // no stock → made_to_order
 $twin1 = $make('m-twin1', 'Marble Twin', 'granite', 'plain stone', 0, 5000);                // identical to twin2
 $twin2 = $make('m-twin2', 'Marble Twin', 'granite', 'plain stone', 0, 5000);
 $pdo->prepare('INSERT INTO product_daily_metrics (product_id,metric_date,orders_net,updated_at) VALUES (?,?,?,?)')
