@@ -90,27 +90,84 @@ body[data-page] main input[type=checkbox],body[data-page] main input[type=radio]
 
 /* ---------------------------------------------------------------------------
    2. Header count badges
-   A small pill that sits on the icon's shoulder, ringed in the header colour so
-   it stays legible over the glyph. An empty bag or shortlist shows nothing.
+   Fixed-size icon boxes so the heart / bag never shrink when the number appears.
    --------------------------------------------------------------------------- */
-header .header-actions .icon b{
-  position:absolute;top:-6px;right:-9px;
-  min-width:17px;height:17px;padding:0 4px;
-  display:grid;place-items:center;
-  background:var(--teal);color:#fff;
-  font-size:10.5px;font-weight:700;line-height:1;letter-spacing:0;
-  font-variant-numeric:tabular-nums;
-  border-radius:999px;border:2px solid #fbfcfc;
-  box-shadow:0 1px 3px #06192633;
+
+/* Stable icon box — size never changes whether badge is visible or not */
+header .header-actions .icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  flex-shrink: 0;
 }
-header .header-actions .icon b.is-zero{display:none}
-header .header-actions .icon:hover b{background:var(--clay)}
-@media(max-width:650px){
-  header .header-actions .icon b{top:-5px;right:-7px;min-width:16px;height:16px;font-size:10px;border-width:1.5px}
+
+header .header-actions .icon svg {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
 }
-/* In the mobile drawer the icons sit in a list, so the count reads inline instead. */
-#site-drawer .header-actions .icon b{
-  position:static;margin-left:auto;border:0;box-shadow:none;background:var(--ice);color:var(--deep);
+
+/* Badge sits on the corner and never affects the icon box size */
+header .header-actions .icon b {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  background: var(--teal);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  border: 2px solid #fbfcfc;
+  box-shadow: 0 1px 3px #06192633;
+  pointer-events: none;
+  z-index: 1;
+}
+
+header .header-actions .icon b.is-zero {
+  display: none;
+}
+
+header .header-actions .icon:hover b {
+  background: var(--clay);
+}
+
+/* Mobile */
+@media (max-width: 650px) {
+  header .header-actions .icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  header .header-actions .icon b {
+    top: -1px;
+    right: -3px;
+    min-width: 16px;
+    height: 16px;
+    font-size: 10px;
+    border-width: 1.5px;
+  }
+}
+
+/* In the mobile drawer the icons sit in a list, so the count reads inline */
+#site-drawer .header-actions .icon b {
+  position: static;
+  margin-left: auto;
+  border: 0;
+  box-shadow: none;
+  background: var(--ice);
+  color: var(--deep);
+  pointer-events: auto;
 }
 
 /* ---------------------------------------------------------------------------
