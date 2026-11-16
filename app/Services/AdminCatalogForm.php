@@ -5,48 +5,55 @@ final class AdminCatalogForm
 {
     public static function product(array $post): array
     {
-        $data=[];$errors=[];
-        $read=static function(string $field,callable $convert)use(&$errors){try{return $convert();}catch(RequestRejected $e){$errors[$field]=$e->getMessage();return null;}};
+        $data = [];
+        $errors = [];
+        $read = static function(string $field, callable $convert) use (&$errors){
+            try{
+                return $convert();
+            }catch(RequestRejected $e){
+                $errors[$field] = $e->getMessage();
+                return null;
+            }
+        };
         foreach(['name'=>190,'slug'=>120,'description'=>10000,'tags'=>1000] as $field=>$max){
             $data[$field]=$read($field,fn()=> $field==='slug'?CommerceValues::slug($post[$field]??null):CommerceValues::text($post[$field]??'', $max,$field,in_array($field,['description','tags'],true)));
         }
-        if(isset($post['details']))$data['details']=$read('details',fn()=>is_array($post['details'])?ProductDetailService::validate($post['details']):CommerceValues::invalid('details'));
-        if(!empty($post['id']))$data['id']=$read('id',fn()=>CommerceValues::id($post['id']));
         $data['category_id']=$read('category_id',fn()=>CommerceValues::id($post['category_id']??null,'category_id'));
         $data['brand_id']=($post['brand_id']??'')===''?null:$read('brand_id',fn()=>CommerceValues::id($post['brand_id'],'brand_id'));
-        $data['status']=$post['status']??'draft';if(!in_array($data['status'],['draft','active','archived'],true))$errors['status']='Select draft, active or archived.';
+        $data['status']=$post['status']??'active';if(!in_array($data['status'],['draft','active','archived'],true))$errors['status']='Select draft, active or archived.';
         $data['featured']=$read('featured',fn()=>CommerceValues::flag($post['featured']??0,'featured'));
-        // Advance payment: blank inherits (null), 0 forces full payment, a percent becomes basis points.
-        $data['advance_bps']=($post['advance_rate']??'')===''?null:$read('advance_rate',fn()=>CommerceValues::decimal($post['advance_rate'],2,10000,'advance_rate'));
-        $rows=$post['variants']??null;$data['variants']=[];
-        if(!is_array($rows)||count($rows)<1||count($rows)>20){$errors['variants']='Add between 1 and 20 variants.';return compact('data','errors');}
-        if(($post['form_complete']??'')!=='1'||(string)count($rows)!==($post['variant_count']??''))$errors['variants']='The form was incomplete. Reload and try again; no variants were saved.';
-        foreach(array_values($rows) as $i=>$row){
-            if(!is_array($row)){$errors['variants']='Invalid variant row.';continue;}
-            $variant=[];
-            foreach(['sku'=>80,'finish'=>80] as $field=>$max)$variant[$field]=$read("variants.$i.$field",fn()=>CommerceValues::text($row[$field]??'', $max,$field,$field==='finish'));
-            if(!empty($row['id']))$variant['id']=$read("variants.$i.id",fn()=>CommerceValues::id($row['id'],'variant_id'));
-            $variant['sell_unit']=$row['sell_unit']??'';if(!in_array($variant['sell_unit'],['sqft','slab','box'],true))$errors["variants.$i.sell_unit"]='Select a selling unit.';
-            $variant['enabled']=$read("variants.$i.enabled",fn()=>CommerceValues::flag($row['enabled']??0,'enabled'));
-            foreach(['original_price'=>['original_price_minor',2,CommerceValues::MAX_MONEY], 'price'=>['unit_price_minor',2,CommerceValues::MAX_MONEY], 'increment'=>['qty_increment_milli',3,1000000], 'coverage'=>['coverage_sqft_milli',3,1000000000], 'thickness'=>['thickness_mm_milli',3,1000000000], 'length'=>['length_mm_milli',3,1000000000], 'width'=>['width_mm_milli',3,1000000000]] as $field=>[$target,$places,$max]){
-                if(!in_array($field,['price','increment'],true)&&($row[$field]??'')===''){$variant[$target]=null;continue;}
-                $variant[$target]=$read("variants.$i.$field",fn()=>CommerceValues::decimal($row[$field]??null,$places,$max,$field));
-                if(!in_array($field,['price','original_price'],true)&&$variant[$target]===0)$errors["variants.$i.$field"]='Enter a value greater than zero.';
-            }
-            if(in_array($variant['sell_unit'],['box','slab'],true)){
-                if($variant['qty_increment_milli']!==null&&$variant['qty_increment_milli']%1000!==0)$errors["variants.$i.increment"]='Boxes and slabs require a whole-unit increment.';
-                if(!$variant['coverage_sqft_milli'])$errors["variants.$i.coverage"]='Enter the square-foot coverage of one box or slab.';
-            }
-            $data['variants'][]=$variant;
-        }
+        // Price in paise (INR), dimensions in millimetres
+        $data['price_minor']=$read('price_minor',fn()=>CommerceValues::integer($post['price_minor']??null,0,10000000000,'price_minor'));
+        $data['thickness_mm_milli']=$read('thickness_mm_milli',fn()=>CommerceValues::integer($post['thickness_mm_milli']??null,1,1000000000,'thickness_mm_milli'));
+        $data['width_mm_milli']=$read('width_mm_milli',fn()=>CommerceValues::integer($post['width_mm_milli']??null,1,1000000000,'width_mm_milli'));
+        $data['length_mm_milli']=$read('length_mm_milli',fn()=>CommerceValues::integer($post['length_mm_milli']??null,1,1000000000,'length_mm_milli'));
+        // Sell unit validation (done after read to avoid arrow function block body issues)
+        $sell_unit=$post['sell_unit']??'';
+        if(!in_array($sell_unit,['sqft','slab','box'],true))$errors['sell_unit']='Select a selling unit.';
+        $data['sell_unit']=$sell_unit;
+        $data['qty_increment_milli']=$read('qty_increment_milli',fn()=>CommerceValues::integer($post['qty_increment_milli']??1000,1,1000000000,'qty_increment_milli'));
+        $data['coverage_sqft_milli']=$read('coverage_sqft_milli',fn()=>CommerceValues::integer($post['coverage_sqft_milli']??null,1,1000000000,'coverage_sqft_milli'));
         return compact('data','errors');
     }
     public static function display(array $product): array
     {
-        foreach($product['variants'] as &$variant){
-            foreach(['original_price'=>['original_price_minor',2],'price'=>['unit_price_minor',2],'increment'=>['qty_increment_milli',3],'coverage'=>['coverage_sqft_milli',3],'thickness'=>['thickness_mm_milli',3],'length'=>['length_mm_milli',3],'width'=>['width_mm_milli',3]] as $field=>[$source,$places])$variant[$field]=($variant[$source]??null)===null?'':AdminReadService::decimal($variant[$source],$places);
-        }unset($variant);
-        $product['advance_rate']=($product['advance_bps']??null)===null?'':AdminReadService::decimal($product['advance_bps'],2);
-        return $product;
+        return [
+            'id' => $product['id'] ?? '',
+            'name' => $product['name'] ?? '',
+            'slug' => $product['slug'] ?? '',
+            'description' => $product['description'] ?? '',
+            'tags' => $product['tags'] ?? '',
+            'category_id' => $product['category_id'] ?? '',
+            'brand_id' => $product['brand_id'] ?? '',
+            'status' => $product['status'] ?? 'active',
+            'featured' => $product['featured'] ?? 0,
+            'price_minor' => ($product['price_minor']??null)===null?'':AdminReadService::decimal($product['price_minor'],2),
+            'thickness_mm_milli' => ($product['thickness_mm_milli']??null)===null?'':AdminReadService::integer($product['thickness_mm_milli'],0,1000000000,'thickness'),
+            'width_mm_milli' => ($product['width_mm_milli']??null)===null?'':AdminReadService::integer($product['width_mm_milli'],0,1000000000,'width'),
+            'length_mm_milli' => ($product['length_mm_milli']??null)===null?'':AdminReadService::integer($product['length_mm_milli'],0,1000000000,'length'),
+            'sell_unit' => $product['sell_unit'] ?? 'sqft',
+            'qty_increment_milli' => ($product['qty_increment_milli']??1000)===1000?'':AdminReadService::integer($product['qty_increment_milli'],1,1000000000,'increment'),
+            'coverage_sqft_milli' => ($product['coverage_sqft_milli']??null)===null?'':AdminReadService::integer($product['coverage_sqft_milli'],1,1000000000,'coverage'),
+        ];
     }
 }
