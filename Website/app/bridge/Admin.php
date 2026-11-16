@@ -24,7 +24,7 @@ class Admin extends StorefrontController
         $actor=CommerceAccess::actor();
         // Anonymous visitors go to staff sign-in; signed-in customers keep the permission guard's 403.
         if(!$actor)return false;
-        if(!array_filter($actor['permissions'],static fn($p)=>str_starts_with($p,'admin.')))return true;
+        if(!array_filter($actor['permissions'],static fn($p)=>str_starts_with($p,'admin.'))){return false;}
         if(($_SESSION['admin_id']??null)===(int)$actor['id']&&time()-(int)($_SESSION['admin_seen']??0)<=self::ELEVATION_IDLE){
             $_SESSION['admin_seen']=time();return true;
         }
