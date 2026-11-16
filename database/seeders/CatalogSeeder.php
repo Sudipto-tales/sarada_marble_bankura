@@ -60,7 +60,7 @@ final class CatalogSeeder
 
     private function downloadProductImage(string $searchQuery): string
     {
-        $unsplashUrl = "https://unsplash.it/800/600?random&#".md5($searchQuery);
+        $unsplashUrl = "https://unsplash.it/800/600?random=" . md5($searchQuery);
         $filename = md5($searchQuery) . '.jpg';
         $savePath = $this->assetsDir . '/' . $filename;
 

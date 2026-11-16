@@ -211,6 +211,14 @@ final class ProductService
             'brands'=>$this->query('SELECT * FROM brands'.$where.' ORDER BY name,id LIMIT 1000')->fetchAll()];
     }
 
+    public function categoryTypeImage(string $slug): string
+    {
+        $mapping = [
+            'general' => '/assets/storefront/assets/textures/marble/bianco_dolomite.webp',
+        ];
+        return $mapping[$slug] ?? '/assets/storefront/assets/textures/marble/calacatta_gold.webp';
+    }
+
     private function hydrate(array $products, bool $staff = false): array
     {
         return DeveloperTrace::span(__METHOD__,fn()=>$this->hydrateObserved($products,$staff));
