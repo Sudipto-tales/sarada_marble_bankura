@@ -20,13 +20,13 @@ class CustomerCarts extends Migration
             active_owner_key VARCHAR(80) GENERATED ALWAYS AS (CASE WHEN status='active' THEN owner_key ELSE NULL END) VIRTUAL,
             FOREIGN KEY(user_id) REFERENCES users_tbl(id) ON DELETE RESTRICT, FOREIGN KEY(merged_cart_id) REFERENCES carts(id) ON DELETE RESTRICT,
             CHECK((user_id IS NOT NULL AND guest_token_hash IS NULL) OR (user_id IS NULL AND guest_token_hash IS NOT NULL)), CHECK(owner_key=($owner)))$suffix");
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS cart_items (id $id, cart_id INT NOT NULL, variant_id INT NOT NULL, qty_milli BIGINT NOT NULL,
-            FOREIGN KEY(cart_id) REFERENCES carts(id) ON DELETE CASCADE, FOREIGN KEY(variant_id) REFERENCES product_variants(id) ON DELETE RESTRICT,
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS cart_items (id $id, cart_id INT NOT NULL, product_id INT NOT NULL, qty_milli BIGINT NOT NULL,
+            FOREIGN KEY(cart_id) REFERENCES carts(id) ON DELETE CASCADE, FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE RESTRICT,
             CHECK(qty_milli>0))$suffix");
         foreach([['addresses','idx_address_default',['default_user_id'],true],['addresses','idx_address_owner',['user_id','enabled','id'],false],
             ['carts','idx_cart_active_owner',['active_owner_key'],true],['carts','idx_cart_guest',['guest_token_hash','id'],false],
             ['carts','idx_cart_user',['user_id','id'],false],['carts','idx_cart_expiry',['status','expires_at','id'],false],
-            ['cart_items','idx_cart_line',['cart_id','variant_id'],true]] as [$table,$name,$columns,$unique]) MigrationSchema::ensureIndex($this->pdo,$table,$name,$columns,$unique);
+            ['cart_items','idx_cart_line',['cart_id','product_id'],true]] as [$table,$name,$columns,$unique]) MigrationSchema::ensureIndex($this->pdo,$table,$name,$columns,$unique);
         $this->cartLink($mysql);
         $this->verify();
     }
@@ -57,8 +57,8 @@ class CustomerCarts extends Migration
         MigrationSchema::verifyDefinition($this->pdo,'carts',['id'=>'id','user_id'=>'?int','guest_token_hash'=>'?varchar(64)','owner_key'=>'varchar(80)','status'=>'varchar(16)','revision'=>'bigint','expires_at'=>'bigint','merged_cart_id'=>'?int','created_at'=>'bigint','active_owner_key'=>'?varchar(80)'],
             [[['active_owner_key'],true],[['guest_token_hash','id'],false],[['user_id','id'],false],[['status','expires_at','id'],false]],
             [['user_id','users_tbl','id','RESTRICT'],['merged_cart_id','carts','id','RESTRICT']]);
-        MigrationSchema::verifyDefinition($this->pdo,'cart_items',['id'=>'id','cart_id'=>'int','variant_id'=>'int','qty_milli'=>'bigint'],[[['cart_id','variant_id'],true]],
-            [['cart_id','carts','id','CASCADE'],['variant_id','product_variants','id','RESTRICT']]);
+        MigrationSchema::verifyDefinition($this->pdo,'cart_items',['id'=>'id','cart_id'=>'int','product_id'=>'int','qty_milli'=>'bigint'],[[['cart_id','product_id'],true]],
+            [['cart_id','carts','id','CASCADE'],['product_id','products','id','RESTRICT']]);
         if($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql') {
             MigrationSchema::verifyDefinition($this->pdo,'inventory_reservations',['cart_id'=>'?int'],[],[['cart_id','carts','id','RESTRICT']]);
         } else {

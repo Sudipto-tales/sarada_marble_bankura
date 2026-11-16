@@ -63,7 +63,23 @@ final class MigrationRunner
             return $count;
         } catch (Throwable $error) {
             if ($this->pdo->inTransaction()) $this->pdo->rollBack();
-            // Do not expose SQL errors, DSNs or row values on the command line.
+            // Show the actual error for debugging
+            $previous = $error->getPrevious();
+            $msg = "Migration stopped at {$current}.\n";
+            $msg .= "Error class: " . get_class($error) . "\n";
+            $msg .= "Error message: " . $error->getMessage() . "\n";
+            if ($previous) {
+                $msg .= "Previous error class: " . get_class($previous) . "\n";
+                $msg .= "Previous error message: " . $previous->getMessage() . "\n";
+            }
+            // Get trace
+            $trace = $error->getTrace();
+            $msg .= "Trace (first 5 frames):\n";
+            foreach (array_slice($trace, 0, 5) as $i => $frame) {
+                $msg .= "  #$i " . (isset($frame["file"])?basename($frame["file"]):"unknown") . ":" . (isset($frame["line"])?$frame["line"]:"?") . " " . (isset($frame["function"])?$frame["function"]:"?") . "\n";
+            }
+            // Write to stderr
+            fwrite(STDERR, $msg . "\n---\n");
             throw new MigrationRunException("Migration stopped at {$current}. No failed step was recorded. Inspect its schema and source, repair incompatibilities, then rerun php vayu migrate.", 0, $error);
         } finally {
             $release();
