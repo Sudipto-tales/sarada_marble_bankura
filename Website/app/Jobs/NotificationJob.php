@@ -28,7 +28,7 @@ final class NotificationJob
                 if(!filter_var($ops,FILTER_VALIDATE_EMAIL)) throw new JobExecutionException('ops_recipient_missing');
                 $alert=$q('SELECT * FROM low_stock_alerts WHERE id=?'.$lock,[$target])->fetch();
                 if(!$alert) throw new JobExecutionException('alert_missing',true);
-                $variant=$q('SELECT v.sku,p.name FROM product_variants v JOIN products p ON p.id=v.product_id WHERE v.id=?',[$alert['variant_id']])->fetch();
+                $variant=$q('SELECT p.sku,p.name FROM products WHERE id=?',[$alert['variant_id']])->fetch();
                 if(!$variant) throw new JobExecutionException('alert_variant_missing',true);
                 $fmt=static fn($milli)=>intdiv((int)$milli,1000).'.'.str_pad((string)((int)$milli%1000),3,'0',STR_PAD_LEFT);
                 $subject='Low stock alert: '.$variant['sku'];

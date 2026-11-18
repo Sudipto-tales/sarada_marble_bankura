@@ -16,6 +16,10 @@ abstract class StorefrontController extends BaseController
         header('Content-Type: ' . ($api ? 'application/json' : 'text/html') . '; charset=utf-8');
         try { $action(); }
         catch (Throwable $error) {
+            if (!$error instanceof RequestRejected) {
+                error_log(sprintf('[503] %s %s: %s at %s:%d', $_SERVER['REQUEST_URI'] ?? '-', get_class($error),
+                    $error->getMessage(), $error->getFile(), $error->getLine()));
+            }
             $status = $error instanceof RequestRejected ? $error->status : 503;
             $code = $error instanceof RequestRejected ? $error->errorCode : 'service_unavailable';
             $message = $error instanceof RequestRejected ? $error->getMessage() : 'The store is temporarily unavailable. Please retry.';

@@ -49,8 +49,7 @@ final class EventService
         }
         if ($type === 'add_to_cart') {
             $variantId = CommerceValues::id($input['variant_id'] ?? null, 'variant_id');
-            $variant = $this->query("SELECT v.id,v.product_id,p.category_id FROM product_variants v JOIN products p ON p.id=v.product_id
-                WHERE v.id=? AND v.enabled=1 AND p.status='active'", [$variantId])->fetch();
+            $variant = $this->query("SELECT id,category_id FROM products WHERE id=? AND status='active'", [$variantId])->fetch();
             if (!$variant) throw new RequestRejected(404, 'not_found', 'Variant not found.');
             return ['product_id' => (int) $variant['product_id'], 'variant_id' => $variantId,
                 'category_id' => (int) $variant['category_id'], 'payload' => []];

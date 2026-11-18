@@ -55,7 +55,7 @@ class StorefrontTools extends StorefrontController
             $variant = null;
             if (isset($_GET['variant_id']) && $_GET['variant_id'] !== '') {
                 $id = CommerceValues::id($_GET['variant_id']);
-                $productId = CommerceDatabase::query($this->pdo, 'SELECT product_id FROM product_variants WHERE id=? AND enabled=1', [$id])->fetchColumn();
+                $productId = CommerceDatabase::query($this->pdo, 'SELECT id FROM products WHERE id=? AND status=\'active\'', [$id])->fetchColumn();
                 $selected = $productId ? (new ProductService($this->pdo))->selection([(int)$productId]) : [];
                 foreach ($selected[0]['variants'] ?? [] as $candidate) if ((int)$candidate['id'] === $id) $variant = $candidate;
                 if ($variant === null) throw new RequestRejected(404, 'not_found', 'Variant not found.');

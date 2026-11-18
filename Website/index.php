@@ -5,6 +5,7 @@ try {
 } catch (Throwable $error) {
     // SQL, filesystem and provider exceptions must never reach a public response.
     $rejected = $error instanceof RequestRejected;
+    if (!$rejected) error_log(sprintf('[503] %s: %s at %s:%d', get_class($error), $error->getMessage(), $error->getFile(), $error->getLine()));
     http_response_code($rejected ? $error->status : 503);
     header('Cache-Control: no-store');
     $message = $rejected ? $error->getMessage() : 'Service is temporarily unavailable.';
