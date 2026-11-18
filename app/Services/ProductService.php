@@ -195,7 +195,7 @@ final class ProductService
             CommerceAccess::requirePermission('admin.products.edit',$actorId);
             if (!$this->query('SELECT id FROM products WHERE id=?'.CommerceDatabase::lock($this->pdo),[$productId])->fetchColumn()) throw new RequestRejected(404,'not_found','Product not found.');
             if ((int)$this->query('SELECT COUNT(*) FROM product_images WHERE product_id=?',[$productId])->fetchColumn()>=12) CommerceValues::invalid('images');
-            $this->query('INSERT INTO product_images (product_id,variant_id,path,mime,width,height,position,alt_text) VALUES (?,NULL,?,?,?,?,?,?)',[$productId,$path,$mime,$width,$height,$position,$alt]);
+            $this->query('INSERT INTO product_images (product_id,path,mime,width,height,position,alt_text) VALUES (?,?,?,?,?,?,?)',[$productId,$path,$mime,$width,$height,$position,$alt]);
             $id=(int)$this->pdo->lastInsertId(); self::advanceVersion($this->pdo);
             StaffAudit::record($this->pdo,$actorId,'image.save','product',$productId,$key,['image_id'=>$id]);
             return $id;
@@ -260,7 +260,7 @@ final class ProductService
     public function visualizerMaterials(?int $selectedId = null): array
     {
         if ($selectedId !== null) $selectedId = CommerceValues::id($selectedId);
-        $image = "SELECT pi.path FROM product_images pi WHERE pi.product_id=p.id AND pi.variant_id IS NULL ORDER BY pi.position,pi.id LIMIT 1";
+        $image = "SELECT pi.path FROM product_images pi WHERE pi.product_id=p.id ORDER BY pi.position,pi.id LIMIT 1";
         return $this->query("SELECT p.id,p.name,p.slug,($image) AS image_path
             FROM products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id
             WHERE p.status='active' AND c.enabled=1 AND (p.brand_id IS NULL OR b.enabled=1)

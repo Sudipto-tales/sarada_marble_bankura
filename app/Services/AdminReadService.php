@@ -37,13 +37,13 @@ final class AdminReadService
         $config=match($table) {
             'coupons'=>['coupons p','p.id,p.code,p.kind,p.value,p.used_count,p.usage_limit,p.enabled',['p.code','p.kind','p.value','p.used_count','p.usage_limit','p.enabled'],['p.code']],
             'products'=>['products p JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id',
-                'p.id,p.name,c.name AS category_name,b.name AS brand_name,p.status,p.updated_at,(SELECT MIN(v.unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS price',
-                ['p.name','c.name','b.name','p.status','price','p.updated_at'],['p.name','p.slug','c.name','b.name'], "p.id IN (SELECT product_id FROM product_variants WHERE sku LIKE ? ESCAPE '!')"],
+                'p.id,p.name,c.name AS category_name,b.name AS brand_name,p.status,p.updated_at,p.price_minor AS price',
+                ['p.name','c.name','b.name','p.status','price','p.updated_at'],['p.name','p.slug','c.name','b.name'], "p.slug LIKE ? ESCAPE '!'"],
             'categories'=>['categories p LEFT JOIN category_types t ON t.id=p.type_id','p.id,p.name,p.slug,t.name AS type_name,p.enabled',['p.name','p.slug','t.name','p.enabled'],['p.name','p.slug']],
             'category-types'=>['category_types p','p.id,p.name,p.slug,p.position,p.enabled',['p.name','p.slug','p.position','p.enabled'],['p.name','p.slug']],
             'brands'=>['brands p','p.id,p.name,p.slug,p.enabled',['p.name','p.slug','p.enabled'],['p.name','p.slug']],
-            'inventory'=>['inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id','v.id,p.name,v.sku,v.sell_unit,i.on_hand_milli AS on_hand,i.reserved_milli AS reserved,(i.on_hand_milli-i.reserved_milli) AS available',
-                ['p.name','v.sku','v.sell_unit','i.on_hand_milli','i.reserved_milli','available'],['p.name','v.sku']],
+            'inventory'=>['inventory i JOIN products p ON p.id=i.product_id','p.id,p.name,p.slug AS sku,p.sell_unit,i.on_hand_milli AS on_hand,i.reserved_milli AS reserved,(i.on_hand_milli-i.reserved_milli) AS available',
+                ['p.name','p.slug','p.sell_unit','i.on_hand_milli','i.reserved_milli','available'],['p.name','p.slug']],
             'orders'=>['orders o JOIN users_tbl u ON u.id=o.user_id','o.id,o.order_number,u.name AS customer,o.status,o.total_minor AS total,o.payment_status,o.created_at AS created',
                 ['o.order_number','u.name','o.status','o.total_minor','o.payment_status','o.created_at'],['o.order_number','u.name','u.email','o.status','o.payment_status']],
             'customers'=>['users_tbl p','p.id,p.name,p.email,p.status,p.email_verify',['p.name','p.email','p.status','p.email_verify'],['p.name','p.email']],
@@ -66,7 +66,7 @@ final class AdminReadService
         $order=$input['order'][0]??['column'=>0,'dir'=>'asc'];
         $column=CommerceValues::integer($order['column']??0,0,count($sorts)-1,'sort_column');
         $direction=$order['dir']??'asc';if(!in_array($direction,['asc','desc'],true))CommerceValues::invalid('sort_direction');
-        $id=match($table){'inventory'=>'v.id','orders'=>'o.id',default=>'p.id'};
+        $id=match($table){'inventory'=>'p.id','orders'=>'o.id',default=>'p.id'};
         $rows=CommerceDatabase::query($this->pdo,"SELECT $columns FROM $from$where ORDER BY {$sorts[$column]} $direction,$id ASC LIMIT $length OFFSET $start",$args)->fetchAll();
         foreach($rows as &$row){
             $row['id']=(string)$row['id'];
@@ -89,15 +89,15 @@ final class AdminReadService
         $where='';$args=[];
         if($search!==''){
             $like='%'.str_replace(['!','%','_'],['!!','!%','!_'],$search).'%';
-            $where=" WHERE (p.name LIKE ? ESCAPE '!' OR p.slug LIKE ? ESCAPE '!' OR c.name LIKE ? ESCAPE '!' OR b.name LIKE ? ESCAPE '!' OR EXISTS (SELECT 1 FROM product_variants sv WHERE sv.product_id=p.id AND sv.sku LIKE ? ESCAPE '!'))";
+            $where=" WHERE (p.name LIKE ? ESCAPE '!' OR p.slug LIKE ? ESCAPE '!' OR c.name LIKE ? ESCAPE '!' OR b.name LIKE ? ESCAPE '!' OR EXISTS (SELECT 1 FROM product_images pi WHERE pi.product_id=p.id AND pi.sku LIKE ? ESCAPE '!'))";
             $args=[$like,$like,$like,$like,$like];
         }
         $total=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM '.$from)->fetchColumn();
         $filtered=(int)CommerceDatabase::query($this->pdo,'SELECT COUNT(*) FROM '.$from.$where,$args)->fetchColumn();
         $sql="SELECT p.id,p.name,p.slug,p.status,c.name AS category_name,b.name AS brand_name,
-            (SELECT v.sku FROM product_variants v WHERE v.product_id=p.id ORDER BY v.enabled DESC,v.id LIMIT 1) AS sku,
-            (SELECT MIN(v.unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS min_price,
-            (SELECT MAX(v.unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS max_price,
+            p.slug AS sku,
+            p.price_minor AS min_price,
+            p.price_minor AS max_price,
             (SELECT pi.path FROM product_images pi WHERE pi.product_id=p.id ORDER BY pi.position,pi.id LIMIT 1) AS image_path
             FROM $from$where ORDER BY p.updated_at DESC,p.id DESC LIMIT $length OFFSET $start";
         $rows=CommerceDatabase::query($this->pdo,$sql,$args)->fetchAll();
@@ -111,7 +111,7 @@ final class AdminReadService
     public function stock(int $actor,int $id): array
     {
         CommerceAccess::requirePermission('admin.inventory.view',$actor);
-        $row=CommerceDatabase::query($this->pdo,'SELECT i.*,v.sku,v.sell_unit,v.qty_increment_milli,p.name FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE i.variant_id=?',[$id])->fetch();
+        $row=CommerceDatabase::query($this->pdo,'SELECT i.*,p.slug AS sku,p.sell_unit,p.qty_increment_milli,p.name FROM inventory i JOIN products p ON p.id=i.product_id WHERE i.product_id=?',[$id])->fetch();
         if(!$row)throw new RequestRejected(404,'not_found','Stock not found.');return $row;
     }
     public function reports(int $actorId,string $from,string $to):array
@@ -133,10 +133,9 @@ final class AdminReadService
             FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.payment_status='paid' AND o.created_at>=? AND o.created_at<?
             GROUP BY oi.product_id,oi.name ORDER BY revenue_minor DESC,oi.name LIMIT 20",[$start,$end])->fetchAll();
         // Current operational stock state (point-in-time, not range): enabled variants within five increments of empty.
-        $lowStock=CommerceDatabase::query($this->pdo,"SELECT v.id AS variant_id,p.name,v.sku,v.sell_unit,v.qty_increment_milli,(i.on_hand_milli-i.reserved_milli) AS available_milli
-            FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id
-            WHERE v.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli*5
-            ORDER BY available_milli ASC,p.name,v.id LIMIT 50")->fetchAll();
+        $lowStock=CommerceDatabase::query($this->pdo,"SELECT v.id AS variant_id,p.name,v.sku,v.sell_unit,(i.on_hand_milli-i.reserved_milli) AS available_milli
+            FROM inventory i JOIN products p ON p.id=i.product_id WHERE p.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<p.qty_increment_milli*5
+            ORDER BY available_milli ASC,p.name,p.id LIMIT 50")->fetchAll();
         $sales['revenue_minor']=CommerceValues::integer($sales['revenue_minor'],0,PHP_INT_MAX,'revenue_minor');
         foreach($coupons as &$row)$row['discount_minor']=CommerceValues::integer($row['discount_minor'],0,PHP_INT_MAX,'discount_minor');unset($row);
         foreach($statuses as &$row)$row['value_minor']=CommerceValues::integer($row['value_minor'],0,PHP_INT_MAX,'value_minor');unset($row);
@@ -149,9 +148,8 @@ final class AdminReadService
         CommerceAccess::requirePermission('admin.analytics.view',$actorId);
         $offset=max(0,$offset);$limit=max(1,min(100,$limit));$fetch=$limit+1;
         $rows=CommerceDatabase::query($this->pdo,"SELECT v.id AS variant_id,p.name,v.sku,v.sell_unit,(i.on_hand_milli-i.reserved_milli) AS available_milli
-            FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id
-            WHERE v.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli*5
-            ORDER BY available_milli ASC,p.name,v.id LIMIT $fetch OFFSET $offset")->fetchAll();
+            FROM inventory i JOIN products p ON p.id=i.product_id WHERE p.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<p.qty_increment_milli*5
+            ORDER BY available_milli ASC,p.name,p.id LIMIT $fetch OFFSET $offset")->fetchAll();
         $hasMore=count($rows)>$limit;
         if($hasMore)array_pop($rows);
         $data=array_map(static fn(array $row):array=>['variant_id'=>(int)$row['variant_id'],'name'=>$row['name'],'sku'=>$row['sku'],'sell_unit'=>$row['sell_unit'],'available'=>self::decimal($row['available_milli'],3)],$rows);
@@ -180,7 +178,7 @@ final class AdminReadService
         $previousViews=max(0,(int)$previousMetrics['views']);
         $revenue=(int)$current['sales']['revenue_minor'];
         $activeProducts=(int)CommerceDatabase::query($this->pdo,"SELECT COUNT(*) FROM products WHERE status='active'")->fetchColumn();
-        $lowStock=(int)CommerceDatabase::query($this->pdo,"SELECT COUNT(*) FROM inventory i JOIN product_variants v ON v.id=i.variant_id JOIN products p ON p.id=v.product_id WHERE v.enabled=1 AND p.status='active' AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli*5")->fetchColumn();
+        $lowStock=(int)CommerceDatabase::query($this->pdo,"SELECT COUNT(*) FROM inventory i JOIN products p ON p.id=i.product_id WHERE p.status='active' AND i.on_hand_milli-i.reserved_milli<p.qty_increment_milli*5")->fetchColumn();
         $daily=CommerceDatabase::query($this->pdo,"SELECT (created_at-(created_at%86400)) AS day_epoch,COUNT(*) AS order_count,
             SUM(CASE WHEN payment_status='paid' THEN 1 ELSE 0 END) AS paid_order_count,
             COALESCE(SUM(CASE WHEN payment_status='paid' THEN total_minor ELSE 0 END),0) AS revenue_minor
@@ -289,7 +287,7 @@ final class AdminReadService
         $add('admin.orders.view','Orders to fulfil','orders','Active orders not yet delivered',"SELECT COUNT(*) FROM orders WHERE status IN ($open)");
         $add('admin.products.view','Reviews to moderate','product-reviews','Customer reviews awaiting approval',"SELECT COUNT(*) FROM product_reviews WHERE status='pending'");
         $add('admin.orders.view','Store visit enquiries','enquiries','Showroom visit leads from the website',"SELECT COUNT(*) FROM store_visit_enquiries");
-        $add('admin.inventory.view','Out of stock variants','inventory','Enabled variants with nothing sellable',"SELECT COUNT(*) FROM inventory i JOIN product_variants v ON v.id=i.variant_id WHERE v.enabled=1 AND i.on_hand_milli-i.reserved_milli<v.qty_increment_milli");
+        $add('admin.inventory.view','Out of stock variants','inventory','Enabled variants with nothing sellable',"SELECT COUNT(*) FROM inventory i JOIN products p ON p.id=i.product_id WHERE p.status='active' AND i.on_hand_milli-i.reserved_milli<p.qty_increment_milli");
         return $items;
     }
     public function overview(array $actor): array

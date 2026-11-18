@@ -69,9 +69,9 @@ final class RecommendationService
         $now = CommerceDatabase::clock($this->pdo); $cutoff = $now - self::WINDOW_DAYS * 86400;
         $this->query('DELETE FROM rec_suggestions WHERE generation=?', [$generation]); // clear any prior shadow attempt
         $sources = $this->query("SELECT p.id,p.category_id,p.brand_id,
-            (SELECT MIN(unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1) AS price
+            p.price_minor AS price
             FROM products p JOIN categories c ON c.id=p.category_id
-            WHERE p.status='active' AND c.enabled=1 AND EXISTS(SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1)
+            WHERE p.status='active' AND c.enabled=1
             ORDER BY p.id")->fetchAll();
         $built = 0;
         foreach ($sources as $src) {
@@ -101,7 +101,7 @@ final class RecommendationService
             WHERE s.source_product_id=? AND s.created_at>=? AND s.target_product_id<>?
             AND (s.order_id IS NULL OR o.status<>'cancelled')
             AND p.status='active' AND c2.enabled=1
-            AND EXISTS(SELECT 1 FROM product_variants v JOIN inventory i ON i.variant_id=v.id WHERE v.product_id=p.id AND v.enabled=1 AND i.on_hand_milli-i.reserved_milli>=v.qty_increment_milli)
+            AND EXISTS(SELECT 1 FROM inventory i WHERE i.product_id=p.id AND p.status='active' AND i.on_hand_milli-i.reserved_milli>=p.qty_increment_milli)
             GROUP BY s.target_product_id HAVING COUNT(*)>=" . self::MIN_SUPPORT . "
             ORDER BY c DESC, s.target_product_id ASC LIMIT " . self::MAX_RESULTS, [$source, $cutoff, $source])->fetchAll();
         $result = array_map(static fn(array $r): int => (int) $r['target_product_id'], $rows);
@@ -121,9 +121,9 @@ final class RecommendationService
         $marks = implode(',', array_fill(0, count($excluded), '?'));
         $rows = $this->query("SELECT p.id FROM products p JOIN categories c ON c.id=p.category_id
             WHERE p.status='active' AND c.enabled=1 AND p.category_id=? AND p.id NOT IN ($marks)
-            AND EXISTS(SELECT 1 FROM product_variants v JOIN inventory i ON i.variant_id=v.id WHERE v.product_id=p.id AND v.enabled=1 AND i.on_hand_milli-i.reserved_milli>=v.qty_increment_milli)
+            AND EXISTS(SELECT 1 FROM inventory i WHERE i.product_id=p.id AND p.status='active' AND i.on_hand_milli-i.reserved_milli>=p.qty_increment_milli)
             ORDER BY (CASE WHEN p.brand_id=? THEN 0 ELSE 1 END),
-            ABS(COALESCE((SELECT MIN(unit_price_minor) FROM product_variants v WHERE v.product_id=p.id AND v.enabled=1),0)-?), p.id
+            ABS(p.price_minor), p.id
             LIMIT " . self::MAX_RESULTS, array_merge([(int) $src['category_id']], $excluded, [$src['brand_id'] === null ? 0 : (int) $src['brand_id'], (int) ($src['price'] ?? 0)]))->fetchAll(PDO::FETCH_COLUMN);
         return array_map('intval', $rows);
     }
@@ -138,7 +138,7 @@ final class RecommendationService
             $ids = array_map('intval', $this->query('SELECT target_product_id FROM rec_suggestions WHERE generation=? AND source_product_id=? ORDER BY position LIMIT ' . self::MAX_RESULTS, [$generation, $productId])->fetchAll(PDO::FETCH_COLUMN));
         }
         if (!$ids) {
-            $src = $this->query('SELECT id,category_id,brand_id,(SELECT MIN(unit_price_minor) FROM product_variants v WHERE v.product_id=id AND v.enabled=1) AS price FROM products WHERE id=?', [$productId])->fetch();
+            $src = $this->query('SELECT id,category_id,brand_id,p.price_minor AS price FROM products WHERE id=?', [$productId])->fetch();
             if ($src) $ids = $this->fallback($productId, $src, []);
         }
         if (!$ids) return [];

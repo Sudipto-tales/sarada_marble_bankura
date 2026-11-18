@@ -71,9 +71,8 @@ final class CartService
             if($id!==null) throw new RequestRejected(404,'not_found','Cart not found.');
             return ['id'=>null,'revision'=>0,'items'=>[],'subtotal_minor'=>0,'savings_minor'=>0,'currency'=>'INR'];
         }
-        $items=$this->query('SELECT ci.variant_id,ci.qty_milli,v.*,(SELECT MIN(original_price_minor) FROM variant_reference_prices rp WHERE rp.variant_id=v.id) AS original_price_minor,p.name,p.slug,p.status,p.category_id,c.enabled AS category_enabled,b.enabled AS brand_enabled,i.on_hand_milli,i.reserved_milli
-            FROM cart_items ci JOIN product_variants v ON v.id=ci.variant_id JOIN products p ON p.id=v.product_id JOIN categories c ON c.id=p.category_id
-            LEFT JOIN brands b ON b.id=p.brand_id LEFT JOIN inventory i ON i.variant_id=v.id WHERE ci.cart_id=? ORDER BY ci.variant_id',[$row['id']])->fetchAll();
+        $items=$this->query('SELECT ci.variant_id,ci.qty_milli,v.*,(SELECT MIN(original_price_minor) FROM variant_reference_prices rp WHERE rp.product_id=v.id) AS original_price_minor,v.name,v.slug,v.status,v.category_id,c.enabled AS category_enabled,b.enabled AS brand_enabled,i.on_hand_milli,i.reserved_milli
+            FROM cart_items ci JOIN products v ON v.id=ci.variant_id LEFT JOIN brands b ON b.id=v.brand_id LEFT JOIN inventory i ON i.product_id=v.id WHERE ci.cart_id=? ORDER BY ci.variant_id',[$row['id']])->fetchAll();
         $amounts=[]; $savings=[];
         // Default-off dynamic pricing: when enabled, show the effective price so display and checkout agree.
         $pricingOn=PricingService::enabled();$pricing=$pricingOn?new PricingService($this->pdo):null;
@@ -98,10 +97,9 @@ final class CartService
     private function variants(array $ids):array
     {
         if(!$ids) return [];sort($ids,SORT_NUMERIC); $marks=implode(',',array_fill(0,count($ids),'?'));
-        $products=$this->query("SELECT DISTINCT product_id FROM product_variants WHERE id IN ($marks) ORDER BY product_id",$ids)->fetchAll(PDO::FETCH_COLUMN);
+        $products=$this->query("SELECT DISTINCT id FROM products WHERE id IN ($marks) ORDER BY id",$ids)->fetchAll(PDO::FETCH_COLUMN);
         foreach($products as $product) $this->query('SELECT id FROM products WHERE id=?'.CommerceDatabase::lock($this->pdo),[$product])->fetch();
-        $rows=$this->query("SELECT v.*,p.status,c.enabled AS category_enabled,b.enabled AS brand_enabled FROM product_variants v JOIN products p ON p.id=v.product_id
-            JOIN categories c ON c.id=p.category_id LEFT JOIN brands b ON b.id=p.brand_id WHERE v.id IN ($marks) ORDER BY v.id".CommerceDatabase::lock($this->pdo),$ids)->fetchAll();
+        $rows=$this->query("SELECT v.*,p.status,c.enabled AS category_enabled,b.enabled AS brand_enabled FROM products v LEFT JOIN categories c ON c.id=v.category_id LEFT JOIN brands b ON b.id=v.brand_id WHERE v.id IN ($marks) ORDER BY v.id".CommerceDatabase::lock($this->pdo),$ids)->fetchAll();
         $result=[];foreach($rows as $v) $result[(int)$v['id']]=$v; return $result;
     }
     public function change(string $principal,int $variantId,$quantity,int $expectedRevision,?int $cartId=null,bool $remove=false):array

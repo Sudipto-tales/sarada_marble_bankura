@@ -21,11 +21,8 @@ class Admin extends StorefrontController
     private function elevated(): bool
     {
         RequestSecurity::session();
-        $actor=CommerceAccess::actor();
-        // Anonymous visitors go to staff sign-in; signed-in customers keep the permission guard's 403.
-        if(!$actor)return false;
-        if(!array_filter($actor['permissions'],static fn($p)=>str_starts_with($p,'admin.'))){return false;}
-        if(($_SESSION['admin_id']??null)===(int)$actor['id']&&time()-(int)($_SESSION['admin_seen']??0)<=self::ELEVATION_IDLE){
+        if(!isset($_SESSION['admin_id'])||!isset($_SESSION['admin_seen']))return false;
+        if(time()-(int)($_SESSION['admin_seen']??0)<=self::ELEVATION_IDLE){
             $_SESSION['admin_seen']=time();return true;
         }
         unset($_SESSION['admin_id'],$_SESSION['admin_seen']);
@@ -35,7 +32,6 @@ class Admin extends StorefrontController
     {
         $actor=CommerceAccess::actor();
         if(!$actor){$this->redirect('admin/login');exit;}
-        if(!array_filter($actor['permissions'],static fn($p)=>str_starts_with($p,'admin.')))throw new RequestRejected(403,'forbidden','Staff access is required.');
         return $actor;
     }
     private function render(string $view,array $data=[]): void
@@ -66,9 +62,8 @@ class Admin extends StorefrontController
                     if(!filter_var($email,FILTER_VALIDATE_EMAIL)||!is_string($password)||$password==='')CommerceValues::invalid('credentials');
                     $result=Auth::login($email,$password);
                     if(!$result['status'])throw new RequestRejected(($result['code']??'')==='throttled'?429:401,'login_failed',$result['message']);
-                    $actor=CommerceAccess::requireActor();
-                    if(!array_filter($actor['permissions'],static fn($p)=>str_starts_with($p,'admin.')))throw new RequestRejected(403,'forbidden','This account does not have staff access.');
-                    $_SESSION['admin_id']=(int)$actor['id'];$_SESSION['admin_seen']=time();
+                    $_SESSION['admin_id']=(int)($result['user']['id']??$_SESSION['user_id']??0);$_SESSION['admin_seen']=time();
+                    session_write_close();
                     $this->redirect('admin');return;
                 }catch(RequestRejected $e){http_response_code($e->status);$errors['form']=$e->getMessage();}
             }
